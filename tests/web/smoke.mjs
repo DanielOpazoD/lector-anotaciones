@@ -377,10 +377,39 @@ try {
   check((await p2.$eval('.ficha .etiquetas button', (b) => b.textContent)) === '#carmen' && !(await p2.$eval('#f-etiqueta', (s) => s.hidden)), 'las #etiquetas de la nota se vuelven chips y un selector');
   await p2.selectOption('#f-etiqueta', 'carmen');
   check((await p2.$$('.ficha')).length === 1, 'el filtro por etiqueta deja las fichas con esa etiqueta');
+  await p2.click('.filtro[data-f="conservar"]');
   await p2.fill('#buscar', 'cinética');
   await p2.press('#buscar', 'Enter');
   await p2.waitForSelector('.res.anot');
   check(true, 'la búsqueda encuentra el texto de una nota');
+  await p2.click('.res.anot');
+  await p2.waitForSelector('.ficha.foco textarea');
+  const trasResultado = await p2.evaluate(() => ({ tab: document.querySelector('.tab.activa').getAttribute('data-tab'), filtro: document.querySelector('.filtro.on').getAttribute('data-f'), nota: document.querySelector('.ficha.foco textarea').value }));
+  check(trasResultado.tab !== 'buscar' && trasResultado.filtro === 'todas' && /cinética/.test(trasResultado.nota), `pulsar el resultado abre la ficha, saliendo de la búsqueda y del filtro que la escondía (${trasResultado.tab}, ${trasResultado.filtro})`);
+  // copiar una selección que empieza en un marcador del margen o con la palabra «Cambió» del manuscrito
+  const copiaMarcador = await p2.evaluate(async () => {
+    const p = document.querySelector('article.seccion:not([hidden]) .bloque.cambiado');
+    const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); let tn = w.nextNode();
+    while (tn && tn.parentNode.closest('.pg, .marca-cambio')) tn = w.nextNode();
+    const r = document.createRange(); r.setStart(p, 0); r.setEnd(tn, Math.min(12, tn.textContent.length));
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    const bruto = r.toString();
+    document.querySelector('#sel-copiar').click();
+    await new Promise((res) => setTimeout(res, 200));
+    return { bruto, copia: await navigator.clipboard.readText() };
+  });
+  check(/^cambió/.test(copiaMarcador.bruto) && copiaMarcador.copia.split('\n')[1] === '«' + copiaMarcador.bruto.replace(/^cambió/, '') + '»', `la copia omite el marcador «cambió» del margen (${JSON.stringify(copiaMarcador.copia.split('\n')[1])})`);
+  const copiaPalabra = await p2.evaluate(async () => {
+    const p = Array.from(document.querySelectorAll('article.seccion:not([hidden]) p.bloque')).find((x) => /^Cambió la frase/.test(x.textContent.replace(/^(p\. \d+)?(cambió)?/, '')));
+    const tn = Array.from(p.childNodes).find((x) => x.nodeType === 3);
+    const r = document.createRange(); r.setStart(tn, 0); r.setEnd(tn, 15);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.querySelector('#sel-copiar').click();
+    await new Promise((res) => setTimeout(res, 200));
+    return navigator.clipboard.readText();
+  });
+  check(copiaPalabra.split('\n')[1] === '«Cambió la frase»', `y conserva la palabra «Cambió» cuando es del manuscrito (${JSON.stringify(copiaPalabra.split('\n')[1])})`);
+  await p2.evaluate(() => window.getSelection().removeAllRanges());
   // deshacer un borrado
   await p2.click('.tab[data-tab="todas"]');
   await p2.click('.ficha .acciones button:has-text("Borrar")');
@@ -454,8 +483,37 @@ try {
   check(respaldo.n >= 3 && JSON.parse(respaldo.anotaciones).length === respaldo.n, `se escribió el respaldo diario en la colección «respaldos» (${respaldo.n} anotaciones)`);
   const copiaResp = await (async () => { await ctx3.grantPermissions(['clipboard-read', 'clipboard-write']); await p3.click('.ficha[data-id="atendida"] .acciones button:has-text("Copiar")'); return p3.evaluate(() => navigator.clipboard.readText()).catch(() => ''); })();
   check(/Respuesta \(atendida, abc1234\): Quitado en el párrafo 3\./.test(copiaResp), 'copiar una ficha incluye la respuesta y su cierre');
+  await p3.click('.ficha[data-id="ajena"] .acciones button:has-text("Borrar")');
+  await p3.click('.ficha[data-id="ajena"] .confirmar button:has-text("Sí")');
+  await p3.waitForFunction(() => !window.__docs.ajena && /^Conectado/.test(document.querySelector('#estado').textContent));
+  check(!!(await p3.$('#deshacer')), 'el enlace de deshacer sobrevive al eco de la base que confirma el borrado');
+  await p3.click('#deshacer');
+  await p3.waitForFunction(() => !!window.__docs.ajena);
+  check(true, 'deshacer devuelve la anotación a la base');
   check(errores3.length === 0, `sin errores de página con base y usuario${errores3.length ? ': ' + errores3.join(' | ') : ''}`);
   await ctx3.close();
+
+  // ---------------------------------------------------------------- lectura en voz alta: cambiar de sección mientras suena
+  const ctxVoz = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxVoz.addInitScript(sinBase);
+  await ctxVoz.addInitScript(() => {
+    // Un sintetizador que acepta hablar y nunca termina, para probar el estado sin depender de voces reales.
+    window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+    Object.defineProperty(window, 'speechSynthesis', { value: { speak: function (u) { this.actual = u; if (u.onstart) u.onstart(); }, cancel: function () { this.actual = null; }, getVoices: function () { return []; } }, configurable: true });
+  });
+  const pv = await ctxVoz.newPage();
+  await pv.goto(base + '#cap-01');
+  await pv.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pv.click('#sec-cap-01 button[data-escuchar]');
+  check((await pv.$eval('#sec-cap-01 button[data-escuchar]', (b) => b.textContent)) === 'Detener' && (await pv.$$('#sec-cap-01 .bloque.leyendo')).length === 1, 'escuchar ilumina el párrafo que suena');
+  await pv.evaluate(() => { location.hash = '#cap-02'; });
+  await pv.waitForSelector('#sec-cap-02:not([hidden])');
+  await pv.click('#sec-cap-02 button[data-escuchar]');
+  const botones = await pv.evaluate(() => ({ uno: document.querySelector('#sec-cap-01 button[data-escuchar]').textContent, dos: document.querySelector('#sec-cap-02 button[data-escuchar]').textContent, leyendo: document.querySelectorAll('#sec-cap-02 .bloque.leyendo').length }));
+  check(botones.uno === 'Escuchar' && botones.dos === 'Detener' && botones.leyendo === 1, `escuchar otra sección cambia la lectura en vez de sólo detenerla (${botones.uno} / ${botones.dos})`);
+  await pv.click('#sec-cap-02 button[data-escuchar]');
+  check((await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar', 'pulsar en la misma sección detiene');
+  await ctxVoz.close();
 
   // ---------------------------------------------------------------- ancho de teléfono
   const movil = await browser.newContext({ viewport: { width: 400, height: 800 } });

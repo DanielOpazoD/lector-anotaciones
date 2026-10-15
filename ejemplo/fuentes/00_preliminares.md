@@ -52,4 +52,6 @@ Una inferencia es un paso desde lo observado hacia lo no observado. Puede ser co
 
 La incertidumbre que importa es la que cambiaría la conducta si se resolviera en un sentido o en otro. Las demás pueden esperar. Por eso conviene escribirla.
 
+Cambió la frase y cambió el diagnóstico: eso es lo que este ejemplo quiere mostrar.
+
 Esta frase existe para que la capa de frases largas tenga algo que señalar en el ejemplo, y por eso se alarga más de lo razonable con subordinadas que no aportan nada, con incisos que podrían haberse cortado, con enumeraciones que repiten la idea de la enumeración anterior y con un final que llega tarde, cuando el lector ya olvidó cómo empezaba.

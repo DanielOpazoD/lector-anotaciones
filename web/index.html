@@ -181,7 +181,8 @@ nav a.sec.leida .n::before { content: "✓ "; color: var(--hl-conservar-ink); }
 #lightbox.abierto { display: flex; }
 #lightbox img { max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.5); background: #fff; }
 figure img { cursor: zoom-in; }
-#deshacer { margin-left: 6px; color: var(--acento); cursor: pointer; text-decoration: underline; }
+#deshacer-zona:empty { display: none; }
+#deshacer { margin-left: 6px; color: var(--acento); cursor: pointer; text-decoration: underline; font-size: 13px; }
 #atajos { position: fixed; right: 16px; bottom: 16px; background: var(--marco); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 12px; z-index: 25; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.18); line-height: 1.9; }
 #atajos.abierto { display: block; }
 #atajos kbd { font-family: var(--sans); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; background: var(--bg-2); margin-right: 4px; }
@@ -212,7 +213,7 @@ figure img { cursor: zoom-in; }
     <button class="btn peq" id="b-foco" type="button" title="Modo concentración: sólo el texto (tecla F)">Concentración</button>
     <details id="capas" class="capas-det" hidden><summary class="btn peq" title="Señales editoriales calculadas al construir el libro">Capas</summary><div class="capas-menu" id="capas-menu"></div></details>
     <button class="btn peq" id="b-atajos" type="button" title="Atajos de teclado (tecla ?)" aria-label="Atajos de teclado">?</button>
-    <span id="estado">Cargando…</span>
+    <span id="estado">Cargando…</span><span id="deshacer-zona"></span>
   </header>
   <main class="mesa">
     <nav class="indice" id="indice" aria-label="Índice"></nav>
@@ -704,7 +705,10 @@ figure img { cursor: zoom-in; }
   function enfocar(id, editar) {
     fichaFoco = id;
     var a = anots[id]; if (!a) return;
-    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) { tab = 'todas'; $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === tab); }); }
+    if (tab === 'buscar') tab = 'todas';
+    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) tab = 'todas';
+    if (lista().indexOf(a) < 0) { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; $$('.filtro').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-f') === 'todas'); }); }
+    $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === tab); });
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
     var f = $('.ficha[data-id="' + id + '"]'); if (f) { f.scrollIntoView({ block: 'nearest' }); if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); } }
     if (window.innerWidth <= 1000 && editar) $('#panel').classList.add('abierta');
@@ -747,7 +751,12 @@ figure img { cursor: zoom-in; }
     var s = SEC_BY_ID[BLOQUE_SEC[pA.getAttribute('data-pid')]] || {};
     var ref = (s.titulo || '') + (pA.getAttribute('data-pg') ? ' · p. ' + pA.getAttribute('data-pg') : '') + ' · ' + pA.getAttribute('data-src')
       + (pB && pB !== pA ? ' → ' + pB.getAttribute('data-src') : '');
-    var texto = sel.toString().replace(/^\s*(p\. \d+\s*)?(cambió\s*)?/, '').replace(/\n\s*(p\. \d+\s*)?(cambió\s*)?/g, '\n').trim();
+    // Los marcadores del margen (número de página, «cambió») son elementos, no texto del libro: se quitan
+    // de una copia de la selección, para no tocar ninguna palabra del manuscrito.
+    var frag = r.cloneContents();
+    Array.prototype.slice.call(frag.querySelectorAll('.pg, .marca-cambio')).forEach(function (x) { x.remove(); });
+    var bloques = Array.prototype.slice.call(frag.querySelectorAll('[data-pid]'));
+    var texto = (bloques.length ? bloques.map(function (b) { return b.textContent; }).join('\n') : frag.textContent || '').replace(/[ \t]*\n[ \t]*/g, '\n').trim();
     copiar('[' + ref + ']\n«' + texto + '»', boton);
   }
   function exportarJSON() { return JSON.stringify({ libro: LIBRO.titulo, generado: LIBRO.generado, exportado: ahora(), anotaciones: Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; }) }, null, 2); }
@@ -990,7 +999,7 @@ figure img { cursor: zoom-in; }
   }
   function leerSeccion(sid, boton) {
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { estado('Este navegador no lee en voz alta', true); return; }
-    if (lectura) { window.speechSynthesis.cancel(); detenerLectura(); if (lectura === null) return; }
+    if (lectura) { var misma = lectura.sid === sid; window.speechSynthesis.cancel(); detenerLectura(); if (misma) return; }
     var s = SEC_BY_ID[sid]; if (!s) return;
     var cola = s.bloques.filter(function (b) { return b.t !== 'figure' && textoPlano(b.id).trim(); });
     lectura = { sid: sid, boton: boton, i: 0 };
@@ -1015,12 +1024,15 @@ figure img { cursor: zoom-in; }
 
   // ------------------------------------------------------------ deshacer y respaldo
   function ofrecerDeshacer(a) {
+    // El enlace vive en su propia zona, no en el texto de estado: el eco de la base que confirma el
+    // borrado reescribe ese texto y se llevaría el enlace antes de los ocho segundos.
     ultimoBorrado = a;
-    var e = $('#estado'); e.textContent = 'Anotación borrada. '; e.className = 'aviso';
-    var u = el('span', { id: 'deshacer', text: 'Deshacer', role: 'button', tabindex: '0' });
-    u.addEventListener('click', function () { if (ultimoBorrado) { guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada'); } });
-    e.appendChild(u);
-    setTimeout(function () { if (ultimoBorrado === a) { ultimoBorrado = null; if ($('#deshacer')) estado(col ? 'Conectado · ' + Object.keys(anots).length + ' anotaciones' : 'Guardado sólo en este navegador', !col); } }, 8000);
+    estado('Anotación borrada', true);
+    var z = $('#deshacer-zona'); z.innerHTML = '';
+    var u = el('span', { id: 'deshacer', text: 'Deshacer borrado', role: 'button', tabindex: '0', title: 'Recuperar la anotación borrada' });
+    u.addEventListener('click', function () { if (ultimoBorrado) { guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada'); } z.innerHTML = ''; });
+    z.appendChild(u);
+    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.firstChild === u) z.innerHTML = ''; }, 8000);
   }
   function respaldar() {
     // Una copia diaria de todas las anotaciones en la colección «respaldos», por si alguna vez hay que volver atrás.
