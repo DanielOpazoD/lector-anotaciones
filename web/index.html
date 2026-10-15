@@ -454,16 +454,18 @@ figure img { cursor: zoom-in; }
     marcasPagina();
   }
   function conservarSinGuardar(id, codigo) {
-    // La base no la tiene y no es un rechazo de permiso: sigue en memoria marcada «sin guardar», con copia en el
-    // navegador y en la cola de pendientes, y la ficha ofrece reintentar. Nada que la página mostró se pierde.
+    // La base no la tiene: sigue en memoria marcada «sin guardar», con copia en el navegador y en la cola de
+    // pendientes, y la ficha ofrece reintentar (o sólo copiar, en sólo lectura). Nada que la página mostró se pierde.
     SIN_GUARDAR[id] = codigo;
     if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id);
     guardarLocal([id]);
   }
   function rechazoEscritura(e, id, previa, verbo) {
     // La base no aceptó la escritura: la memoria vuelve a lo que la base tiene, para que no queden anotaciones
-    // fantasma que se pintan, se cuentan y se exportan. Una anotación que la base no tiene sólo se retira de la
-    // memoria ante un rechazo de permiso; ante cualquier otro se conserva marcada «sin guardar».
+    // fantasma que se pintan, se cuentan y se exportan. Una anotación que la base no tiene (nueva, o un «Deshacer
+    // borrado» cuando el borrado ya se confirmó) nunca se retira: se conserva marcada «sin guardar», con copia en
+    // el navegador, también ante un rechazo de permiso, que además pasa la página a sólo lectura; ahí la ficha ya
+    // no ofrece reintentar, pero sí copiarla.
     var codigo = (e && e.code) || 'error', permiso = esDePermiso(codigo, id, previa, verbo), conservada = false;
     if (verbo === 'borrar') {
       if (previa) { anots[id] = previa; var ub = ubicar(previa); if (ub) UBIC[id] = ub; pintar(previa); }
@@ -471,11 +473,11 @@ figure img { cursor: zoom-in; }
       if (ultimoBorrado && ultimoBorrado.id === id) { ultimoBorrado = null; var z = $('#deshacer-zona'); if (z) z.innerHTML = ''; }
     }
     else if (previa) { anots[id] = previa; var u2 = ubicar(previa); if (u2) UBIC[id] = u2; pintar(previa); }
-    else if (permiso) quitarDeMemoria(id);
     else { conservarSinGuardar(id, codigo); conservada = true; }
     renderPanel(); renderCuentas();
     if (permiso) activarSoloLectura();
-    if (conservada) estado('No se pudo guardar en la base (' + codigo + '); la anotación sigue aquí y en este navegador: reintenta desde la ficha o copia tus anotaciones con el botón', true);
+    if (conservada && permiso) estado('No se pudo guardar en la base (' + codigo + '): sin permiso para escribir; la anotación sigue aquí y en este navegador, copia tus anotaciones con el botón', true);
+    else if (conservada) estado('No se pudo guardar en la base (' + codigo + '); la anotación sigue aquí y en este navegador: reintenta desde la ficha o copia tus anotaciones con el botón', true);
     else estado('No se pudo ' + verbo + ' (' + codigo + '); copia tus anotaciones con el botón', true);
   }
   function activarSoloLectura() {
@@ -784,6 +786,10 @@ figure img { cursor: zoom-in; }
     return 'Nota general';
   }
   function ficha(a) {
+    // Las clausuras de la ficha leen la anotación viva, no la copia con que se dibujó: un guardado silencioso (nota,
+    // réplica) sustituye el objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o el estado después
+    // deben llevar lo recién escrito.
+    var actual = function () { return anots[a.id] || a; };
     var f = el('div', { 'class': 'ficha t-' + a.tipo + (a.color ? ' c-' + a.color : '') + (a.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === a.id ? ' foco' : '') + (SIN_GUARDAR[a.id] ? ' sin-guardar' : ''), 'data-id': a.id, tabindex: '-1' });
     var cab = el('div', { 'class': 'cab' }, [el('span', { text: etiqueta(a) })]);
     if (a.autor && (a.autor !== ME || variosAutores())) cab.firstChild.appendChild(chipAutor(a.autor));
@@ -791,7 +797,7 @@ figure img { cursor: zoom-in; }
     var u = UBIC[a.id];
     if ((a.pid && !(u && u.estado === 'perdido')) || (a.tipo === 'pagina' && a.pagina) || a.tipo === 'capitulo') {
       var ir = el('button', { 'class': 'enlace', type: 'button', text: 'ir al texto', 'data-accion': 'ir' });
-      ir.addEventListener('click', function () { irAAnot(a); });
+      ir.addEventListener('click', function () { irAAnot(actual()); });
       cab.appendChild(ir);
     }
     f.appendChild(cab);
@@ -812,7 +818,7 @@ figure img { cursor: zoom-in; }
       if (a.replica) f.appendChild(el('div', { 'class': 'nota-texto', text: a.replica }));
       var accSL = el('div', { 'class': 'acciones' });
       var copSL = el('button', { 'class': 'btn peq copiar', type: 'button', text: 'Copiar', title: 'Copiar esta anotación como texto', 'data-accion': 'copiar' });
-      copSL.addEventListener('click', function () { copiar(textoAnotacion(a), copSL); });
+      copSL.addEventListener('click', function () { copiar(textoAnotacion(actual()), copSL); });
       accSL.appendChild(copSL); f.appendChild(accSL);
       return f;
     }
@@ -845,16 +851,16 @@ figure img { cursor: zoom-in; }
       ['revisar', 'cortar', 'duda', 'conservar'].forEach(function (c) {
         var b = el('button', { 'class': 'col-btn c-' + c + (a.color === c ? ' on' : ''), type: 'button', title: c, 'aria-label': c, 'data-accion': 'color', 'data-c': c });
         // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
-        b.addEventListener('click', function () { guardar(Object.assign({}, anots[a.id] || a, { color: c })); });
+        b.addEventListener('click', function () { guardar(Object.assign({}, actual(), { color: c })); });
         cols.appendChild(b);
       });
       acc.appendChild(cols);
     }
     var res = el('button', { 'class': 'btn peq', type: 'button', text: a.estado === 'resuelta' ? 'Reabrir' : 'Resuelta', 'data-accion': 'estado' });
-    res.addEventListener('click', function () { var ac = anots[a.id] || a; guardar(Object.assign({}, ac, { estado: ac.estado === 'resuelta' ? 'abierta' : 'resuelta' })); });
+    res.addEventListener('click', function () { var ac = actual(); guardar(Object.assign({}, ac, { estado: ac.estado === 'resuelta' ? 'abierta' : 'resuelta' })); });
     acc.appendChild(res);
     var cop = el('button', { 'class': 'btn peq copiar', type: 'button', text: 'Copiar', title: 'Copiar esta anotación como texto para pegarla en el chat', 'data-accion': 'copiar' });
-    cop.addEventListener('click', function () { copiar(textoAnotacion(a), cop); });
+    cop.addEventListener('click', function () { copiar(textoAnotacion(actual()), cop); });
     acc.appendChild(cop);
     var del = el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar', 'data-accion': 'borrar' });
     del.addEventListener('click', function () {
@@ -922,6 +928,9 @@ figure img { cursor: zoom-in; }
   // ------------------------------------------------------------ exportar
   // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
   // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
+  // Lo que la base no tiene sale de la página con una señal, para que quien lo reciba sepa que no lo verá en la base.
+  function senalSinGuardar(a) { return SIN_GUARDAR[a.id] ? ' · sin guardar en la base (' + SIN_GUARDAR[a.id] + ')' : ''; }
+  function conSenal(a) { return SIN_GUARDAR[a.id] ? Object.assign({}, a, { sin_guardar: SIN_GUARDAR[a.id] }) : a; }
   function textoAnotacion(a) {
     var tipos = { pagina: 'nota de página', capitulo: 'nota de sección', general: 'nota general' };
     // La referencia que se copia es la del bloque donde la cita está HOY (ubicar puede haberla movido tras
@@ -937,7 +946,7 @@ figure img { cursor: zoom-in; }
       }
     }
     var cab = '[' + (a.tipo === 'subrayado' ? a.color : tipos[a.tipo] || a.tipo) + (a.estado === 'resuelta' ? ', resuelta' : '') + '] '
-      + (secTitulo || 'General') + (pagina ? ' · p. ' + pagina : '') + (src ? ' · ' + src : '') + aviso;
+      + (secTitulo || 'General') + (pagina ? ' · p. ' + pagina : '') + (src ? ' · ' + src : '') + aviso + senalSinGuardar(a);
     var out = [cab];
     if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
     if (a.nota) out.push('Nota: ' + a.nota);
@@ -973,7 +982,7 @@ figure img { cursor: zoom-in; }
     var texto = trozos.join('\n').replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{2,}/g, '\n').trim();
     copiar('[' + ref + ']\n«' + texto + '»', boton);
   }
-  function exportarJSON() { return JSON.stringify({ libro: LIBRO.titulo, generado: LIBRO.generado, exportado: ahora(), anotaciones: Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; }) }, null, 2); }
+  function exportarJSON() { return JSON.stringify({ libro: LIBRO.titulo, generado: LIBRO.generado, exportado: ahora(), anotaciones: Object.keys(anots).map(function (k) { return conSenal(anots[k]); }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; }) }, null, 2); }
   function exportarMD() {
     var L = Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
     var out = ['# Anotaciones · ' + LIBRO.titulo, '', 'Exportado: ' + ahora(), ''];
@@ -981,8 +990,8 @@ figure img { cursor: zoom-in; }
     L.forEach(function (a) {
       var st = a.sidTitulo || 'General';
       if (st !== sec) { sec = st; out.push('', '## ' + st, ''); }
-      if (a.tipo === 'subrayado') out.push('- [' + a.color + (a.estado === 'resuelta' ? ', resuelta' : '') + '] p. ' + (a.pagina || '?') + ' · ' + a.src + ' · «' + a.cita + '»' + (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : ''));
-      else out.push('- [' + a.tipo + (a.pagina ? ' p. ' + a.pagina : '') + (a.estado === 'resuelta' ? ', resuelta' : '') + '] ' + (a.nota || '(sin texto)').replace(/\n/g, ' '));
+      if (a.tipo === 'subrayado') out.push('- [' + a.color + (a.estado === 'resuelta' ? ', resuelta' : '') + '] p. ' + (a.pagina || '?') + ' · ' + a.src + ' · «' + a.cita + '»' + senalSinGuardar(a) + (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : ''));
+      else out.push('- [' + a.tipo + (a.pagina ? ' p. ' + a.pagina : '') + (a.estado === 'resuelta' ? ', resuelta' : '') + '] ' + (a.nota || '(sin texto)').replace(/\n/g, ' ') + senalSinGuardar(a));
       if (a.respuesta || a.cierre) out.push('  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' '));
       if (a.replica) out.push('  - Réplica: ' + a.replica.replace(/\n/g, ' '));
     });
@@ -1006,7 +1015,7 @@ figure img { cursor: zoom-in; }
     enAnots.forEach(function (a) {
       var r = el('div', { 'class': 'res anot', role: 'button', tabindex: '0' }, [el('div', { 'class': 'donde', text: 'En tus anotaciones · ' + etiqueta(a) }), el('div', { text: (a.nota || a.cita || '').slice(0, 160) })]);
       r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
-      r.addEventListener('click', function () { irAAnot(a); if (window.innerWidth <= 1000) lateral('panel', true); });
+      r.addEventListener('click', function () { irAAnot(anots[a.id] || a); if (window.innerWidth <= 1000) lateral('panel', true); });
       box.appendChild(r);
     });
     SECS.forEach(function (s) {
@@ -1338,6 +1347,16 @@ figure img { cursor: zoom-in; }
       USER = r[2] || null;
       var listoUsuario = USER ? Promise.all([USER.id(), USER.can('data.write')]).then(function (u) { ME = u[0] || null; if (u[1] === false) activarSoloLectura(); }).catch(function () {}) : Promise.resolve();
       listoUsuario.then(function () { renderPanel(); });
+      function marcarSinSubir() {
+        // Quien anotó antes de saber que es de sólo lectura (o cuya subida falló en otra sesión) no puede subir nada:
+        // lo pendiente sigue a la vista marcado «sin guardar», con su copia en el navegador, se cuenta aparte y se
+        // exporta con esa señal, para copiarlo antes de que se pierda.
+        var ids = pendientesBase.filter(function (id) { return !!anots[id]; });
+        if (!ids.length) return;
+        ids.forEach(function (id) { SIN_GUARDAR[id] = 'sólo lectura'; });
+        guardarLocal(ids); renderPanel();
+        estado(ids.length + (ids.length === 1 ? ' anotación no está en la base y en sólo lectura no puede subir; se conserva en este navegador. Usa «Copiar todo» para enviarla.' : ' anotaciones no están en la base y en sólo lectura no pueden subir; se conservan en este navegador. Usa «Copiar todo» para enviarlas.'), true);
+      }
       function recuperarYSubir() {
         // Con la primera foto de la base y el usuario ya conocido: lo que quedó en el navegador en otra sesión (anotado
         // sin conexión, o cuya subida falló) vuelve a la memoria y a la cola de subida; lo que la base ya tiene manda y
@@ -1350,7 +1369,7 @@ figure img { cursor: zoom-in; }
           rec.nuevas.forEach(function (id) { if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id); });
           if (rec.nuevas.length) { pintarTodo(); renderPanel(); renderCuentas(); }
           podarLocal(rec.existentes.filter(function (id) { return pendientesBase.indexOf(id) < 0; }));
-          if (SOLO_LECTURA) return;
+          if (SOLO_LECTURA) { marcarSinSubir(); return; }
           var ids = pendientesBase.splice(0).filter(function (id) { var a = anots[id]; if (!a) return false; if (!a.autor && ME) a.autor = ME; return true; });
           if (!ids.length) return;
           Promise.all(ids.map(function (id) { return col.doc(id).set(anots[id]).then(function () { return true; }).catch(function (e) { return (e && e.code) || 'error'; }); })).then(function (ok) {

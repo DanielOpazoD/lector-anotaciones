@@ -58,6 +58,7 @@ Una anotación es un documento JSON. La página las guarda una a una en la colec
 | `commit` | todos | Identificador del commit que aplicó el cambio, si lo hubo. |
 | `respondido` | todos | ISO 8601 de la respuesta. |
 | `replica` | todos | La respuesta del autor a una `pregunta`; la escribe en la ficha. |
+| `sin_guardar` | todos | Sólo en lo que produce «Copiar todo (JSON)», nunca en la base: el código del rechazo (`unavailable`, `not_granted`, `sólo lectura`…) de una anotación que la base no tiene y la página conserva sólo en el navegador. «Copiar todo (Markdown)» y «Copiar» en la ficha llevan la misma señal como texto (`sin guardar en la base (código)`). |
 
 ## Los cuatro colores
 

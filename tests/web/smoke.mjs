@@ -8,7 +8,9 @@
 //   3. Con la base simulada: un cambio llegado de fuera no interrumpe la nota que se está escribiendo; una
 //      escritura rechazada vuelve a lo que la base tiene (color, estado, nota, réplica) o, si la base no la tenía,
 //      se conserva marcada «sin guardar» con reintento; un rechazo transitorio se reintenta solo; un rechazo de
-//      permiso pasa a sólo lectura, señalado donde el eco de la base no lo pisa; el respaldo se mide en bytes.
+//      permiso pasa a sólo lectura, señalado donde el eco de la base no lo pisa, sin retirar lo nuevo de la vista;
+//      lo que un lector de sólo lectura anotó antes de saberlo queda marcado y se exporta con esa señal; los botones
+//      de la ficha llevan lo recién escrito; el respaldo se mide en bytes.
 //   4. Teclado y pantalla estrecha: el foco sobrevive al redibujo (marcas, resultados, colores, «Borrar»); índice y
 //      panel cerrados quedan inertes; el marcador «cambió» se puede tocar.
 //
@@ -52,6 +54,11 @@ let fallas = 0;
 function check(cond, msg) {
   if (cond) console.log(`ok   ${msg}`);
   else { fallas++; console.log(`FALLA ${msg}`); }
+}
+// Espera a que `fn` se cumpla en la página y dice si ocurrió: lo que no debe tardar se comprueba con un plazo corto
+// y un `check` que nombre lo que no pasó, en vez de abortar la prueba entera a los 30 s.
+async function esperar(page, fn, arg = null, plazo = 5000) {
+  try { await page.waitForFunction(fn, arg, { timeout: plazo }); return true; } catch { return false; }
 }
 
 // Sin base: window.claude.use('db') devuelve null.
@@ -656,9 +663,9 @@ try {
   await seleccionar(p3, 8);
   await p3.waitForSelector('#sel-tb', { state: 'visible' });
   await p3.click('#sel-tb .col-btn[data-c="cortar"]');
-  await p3.waitForFunction(() => /No se pudo guardar en la base \(quota_exceeded\)/.test(document.querySelector('#estado').textContent));
+  const llenaAvisada = await esperar(p3, () => /No se pudo guardar en la base \(quota_exceeded\)/.test(document.querySelector('#estado').textContent));
   const llena = await p3.evaluate(() => ({ marca: document.querySelectorAll('mark.hl.c-cortar').length, ficha: !!document.querySelector('.ficha.sin-guardar.c-cortar .aviso-guardar'), enBase: Object.values(window.__docs).some((d) => d.color === 'cortar'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /cortar/.test(localStorage.getItem(k))), sl: document.body.classList.contains('solo-lectura'), intentos: window.__intentos.anotaciones }));
-  check(llena.marca === 1 && llena.ficha && !llena.enBase && llena.local && !llena.sl, `si la base rechaza la escritura por estar llena, la anotación sigue aquí marcada «sin guardar», con copia en el navegador, y la página sigue editable (marcas ${llena.marca}, en base ${llena.enBase})`);
+  check(llenaAvisada && llena.marca === 1 && llena.ficha && !llena.enBase && llena.local && !llena.sl, `si la base rechaza la escritura por estar llena, la anotación sigue aquí marcada «sin guardar», con copia en el navegador, y la página sigue editable (avisada en 5 s ${llenaAvisada}, marcas ${llena.marca}, en base ${llena.enBase})`);
   // un cambio de color o de estado rechazado vuelve a lo que la base tiene: `previa` se toma antes de mutar
   await p3.evaluate(() => { window.getSelection().removeAllRanges(); document.querySelector('#estado').textContent = ''; });
   await p3.click(`.ficha[data-id="${mio.id}"] .col-btn[data-c="revisar"]`);
@@ -717,6 +724,7 @@ try {
   await ctxF.close();
 
   // ---------------------------------------------------------------- rechazo transitorio: reintento, conservación y reintento manual
+  // Lo que aquí no ocurre a tiempo es una FALLA con nombre, no un abort a los 30 s.
   const ctxRe = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxRe.addInitScript(conBase);
   const pre = await ctxRe.newPage();
@@ -725,46 +733,127 @@ try {
   await pre.goto(base);
   await pre.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pre.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
-  // la base rechaza una vez con unavailable: la página reintenta sola y la anotación llega
+  // la base rechaza una sola vez con unavailable: la página reintenta sola (segundo intento) y la anotación llega
   await pre.evaluate(() => { window.__rechazarUnaVez = 'unavailable'; window.__intentos = {}; });
   await pre.click('#b-nota-cap');
   await pre.waitForSelector('.ficha.t-capitulo textarea');
-  await pre.waitForFunction(() => Object.values(window.__docs).some((d) => d.tipo === 'capitulo'));
-  const reintento = await pre.evaluate(() => ({ intentos: window.__intentos.anotaciones, sinGuardar: document.querySelectorAll('.ficha.sin-guardar').length }));
-  check(reintento.intentos === 2 && reintento.sinGuardar === 0, `un rechazo transitorio se reintenta una vez tras un retardo corto y la anotación llega a la base (${reintento.intentos} intentos)`);
+  const reintentado = await esperar(pre, () => window.__intentos.anotaciones === 2 && Object.values(window.__docs).some((d) => d.tipo === 'capitulo'));
+  const reintento = await pre.evaluate(() => ({ intentos: window.__intentos.anotaciones, sinGuardar: document.querySelectorAll('.ficha.sin-guardar').length, enBase: Object.values(window.__docs).some((d) => d.tipo === 'capitulo') }));
+  check(reintentado && reintento.intentos === 2 && reintento.sinGuardar === 0, `un rechazo transitorio se reintenta una vez tras un retardo corto y la anotación llega a la base (${reintento.intentos} intentos en 5 s, en base ${reintento.enBase})`);
   await pre.fill('.ficha.t-capitulo textarea', 'Nota de sección valiosa');
   await pre.$eval('.ficha.t-capitulo textarea', (t) => t.blur());
-  await pre.waitForFunction(() => Object.values(window.__docs).some((d) => d.tipo === 'capitulo' && d.nota === 'Nota de sección valiosa'));
-  const idCap = await pre.evaluate(() => Object.values(window.__docs).find((d) => d.tipo === 'capitulo').id);
+  check(await esperar(pre, () => Object.values(window.__docs).some((d) => d.tipo === 'capitulo' && d.nota === 'Nota de sección valiosa')), 'la nota escrita después llega a la base');
+  const idCap = await pre.evaluate(() => (Object.values(window.__docs).find((d) => d.tipo === 'capitulo') || Object.values(window.__docs)[0] || {}).id);
   // la base sigue sin responder: la anotación nueva no se pierde (memoria, ficha marcada, copia local, reintento a mano)
   await pre.evaluate(() => { window.__rechazar = 'unavailable'; window.__intentos = {}; });
   await pre.click('#b-nota-gen');
-  await pre.waitForSelector('.ficha.sin-guardar.t-general');
-  await pre.focus('.ficha.sin-guardar.t-general textarea');
-  await pre.keyboard.type('Texto que no se pierde', { delay: 5 });
-  await pre.$eval('.ficha.sin-guardar.t-general textarea', (t) => t.blur());
-  await pre.waitForFunction(() => Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Texto que no se pierde/.test(localStorage.getItem(k))));
-  const conservada2 = await pre.evaluate(() => ({ intentos: window.__intentos.anotaciones, cuadro: document.querySelector('.ficha.sin-guardar.t-general textarea').value, aviso: document.querySelector('.ficha.sin-guardar.t-general .aviso-guardar').textContent, reintentar: !!document.querySelector('.ficha.sin-guardar.t-general button[data-accion="reintentar"]'), enBase: Object.values(window.__docs).some((d) => d.tipo === 'general'), estado: document.querySelector('#estado').textContent }));
-  check(conservada2.intentos >= 2 && conservada2.cuadro === 'Texto que no se pierde' && /unavailable/.test(conservada2.aviso) && conservada2.reintentar && !conservada2.enBase && /sigue aquí y en este navegador/.test(conservada2.estado), `si el reintento también falla, la anotación nueva sigue en memoria con su texto, marcada «sin guardar», en el navegador y con reintento (${conservada2.intentos} intentos)`);
-  await pre.evaluate(() => { window.__rechazar = null; });
-  await pre.click('.ficha.sin-guardar.t-general button[data-accion="reintentar"]');
-  await pre.waitForFunction(() => Object.values(window.__docs).some((d) => d.tipo === 'general' && d.nota === 'Texto que no se pierde') && !document.querySelector('.ficha.sin-guardar') && !Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Texto que no se pierde/.test(localStorage.getItem(k))));
-  check(true, 'reintentar desde la ficha la sube con su texto, quita la marca y la retira de la copia local');
+  const conservadaVisible = await esperar(pre, () => !!document.querySelector('.ficha.sin-guardar.t-general textarea'));
+  check(conservadaVisible, 'si el reintento también falla, la anotación nueva sigue a la vista marcada «sin guardar» (en 5 s)');
+  if (conservadaVisible) {
+    await pre.focus('.ficha.sin-guardar.t-general textarea');
+    await pre.keyboard.type('Texto que no se pierde', { delay: 5 });
+    await pre.$eval('.ficha.sin-guardar.t-general textarea', (t) => t.blur());
+    const enLocal = await esperar(pre, () => Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Texto que no se pierde/.test(localStorage.getItem(k))));
+    const conservada2 = await pre.evaluate(() => ({ intentos: window.__intentos.anotaciones, cuadro: document.querySelector('.ficha.sin-guardar.t-general textarea').value, aviso: document.querySelector('.ficha.sin-guardar.t-general .aviso-guardar').textContent, reintentar: !!document.querySelector('.ficha.sin-guardar.t-general button[data-accion="reintentar"]'), enBase: Object.values(window.__docs).some((d) => d.tipo === 'general'), estado: document.querySelector('#estado').textContent }));
+    check(enLocal && conservada2.intentos >= 2 && conservada2.cuadro === 'Texto que no se pierde' && /unavailable/.test(conservada2.aviso) && conservada2.reintentar && !conservada2.enBase && /sigue aquí y en este navegador/.test(conservada2.estado), `la anotación conservada tiene su texto, la marca «sin guardar», copia en el navegador y reintento (${conservada2.intentos} intentos, en el navegador ${enLocal})`);
+    await pre.evaluate(() => { window.__rechazar = null; });
+    await pre.click('.ficha.sin-guardar.t-general button[data-accion="reintentar"]');
+    check(await esperar(pre, () => Object.values(window.__docs).some((d) => d.tipo === 'general' && d.nota === 'Texto que no se pierde') && !document.querySelector('.ficha.sin-guardar') && !Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Texto que no se pierde/.test(localStorage.getItem(k)))), 'reintentar desde la ficha la sube con su texto, quita la marca y la retira de la copia local');
+  }
   // deshacer un borrado cuando la base no responde: la anotación con su nota no se pierde
+  await pre.evaluate(() => { window.__rechazar = null; });
   await pre.click(`.ficha[data-id="${idCap}"] .acciones button:has-text("Borrar")`);
   await pre.click(`.ficha[data-id="${idCap}"] .confirmar button:has-text("Sí")`);
   await pre.waitForFunction((id) => !window.__docs[id] && !!document.querySelector('#deshacer'), idCap);
   await pre.evaluate(() => { window.__rechazar = 'unavailable'; });
   await pre.click('#deshacer');
-  await pre.waitForSelector(`.ficha[data-id="${idCap}"].sin-guardar`);
-  const deshecha = await pre.evaluate((id) => ({ cuadro: document.querySelector(`.ficha[data-id="${id}"] textarea`).value, local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Nota de sección valiosa/.test(localStorage.getItem(k))), enBase: !!window.__docs[id] }), idCap);
-  check(deshecha.cuadro === 'Nota de sección valiosa' && deshecha.local && !deshecha.enBase, 'si la base rechaza «Deshacer borrado», la anotación recuperada se conserva con su nota en memoria y en el navegador');
-  await pre.evaluate(() => { window.__rechazar = null; });
-  await pre.click(`.ficha[data-id="${idCap}"] button[data-accion="reintentar"]`);
-  await pre.waitForFunction((id) => window.__docs[id] && window.__docs[id].nota === 'Nota de sección valiosa', idCap);
-  check(true, 'y reintentar la devuelve a la base');
+  const deshechaVisible = await esperar(pre, (id) => !!document.querySelector(`.ficha[data-id="${id}"].sin-guardar textarea`), idCap);
+  const deshecha = await pre.evaluate((id) => ({ cuadro: (document.querySelector(`.ficha[data-id="${id}"] textarea`) || {}).value, local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Nota de sección valiosa/.test(localStorage.getItem(k))), enBase: !!window.__docs[id] }), idCap);
+  check(deshechaVisible && deshecha.cuadro === 'Nota de sección valiosa' && deshecha.local && !deshecha.enBase, `si la base rechaza «Deshacer borrado», la anotación recuperada se conserva con su nota en memoria y en el navegador (a la vista ${deshechaVisible}, en el navegador ${deshecha.local})`);
+  if (deshechaVisible) {
+    await pre.evaluate(() => { window.__rechazar = null; });
+    await pre.click(`.ficha[data-id="${idCap}"] button[data-accion="reintentar"]`);
+    check(await esperar(pre, (id) => !!window.__docs[id] && window.__docs[id].nota === 'Nota de sección valiosa', idCap), 'y reintentar la devuelve a la base');
+  }
   check(erroresRe.length === 0, `sin errores de página en los reintentos${erroresRe.length ? ': ' + erroresRe.join(' | ') : ''}`);
   await ctxRe.close();
+
+  // ---------------------------------------------------------------- las clausuras de la ficha leen la anotación viva
+  // Un guardado silencioso (nota, réplica) sustituye el objeto en memoria sin redibujar el panel: «Copiar» y los
+  // botones de color y estado de esa misma ficha deben llevar lo recién escrito, no la copia con que se dibujó.
+  const ctxCl = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxCl.addInitScript(conBase);
+  await ctxCl.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const pcl = await ctxCl.newPage();
+  await pcl.goto(base);
+  await pcl.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pcl.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await pcl.click('#b-nota-gen');
+  await pcl.waitForSelector('.ficha.t-general textarea');
+  await pcl.fill('.ficha.t-general textarea', 'Nota escrita después de crearla');
+  await pcl.$eval('.ficha.t-general textarea', (t) => t.blur());
+  check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'general' && d.nota === 'Nota escrita después de crearla')), 'la nota general escrita tras crearla llega a la base');
+  await pcl.click('.ficha.t-general button[data-accion="copiar"]');
+  const copiaViva = await pcl.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(/^\[nota general\] General\nNota: Nota escrita después de crearla$/.test(copiaViva), `«Copiar» en la ficha lleva la nota recién escrita (${JSON.stringify(copiaViva)})`);
+  await seleccionar(pcl, 14);
+  await pcl.waitForSelector('#sel-tb', { state: 'visible' });
+  await pcl.click('#sel-tb .col-btn[data-c="revisar"]');
+  check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado')), 'el subrayado llega a la base');
+  await pcl.fill('.ficha.t-subrayado textarea', 'Nota del subrayado');
+  await pcl.$eval('.ficha.t-subrayado textarea', (t) => t.blur());
+  check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.nota === 'Nota del subrayado')), 'la nota del subrayado llega a la base');
+  await pcl.click('.ficha.t-subrayado .col-btn[data-c="conservar"]');
+  const colorYNota = await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.color === 'conservar'));
+  const subrayadoCl = await pcl.evaluate(() => { const d = Object.values(window.__docs).find((x) => x.tipo === 'subrayado'); return { color: d.color, nota: d.nota, cuadro: document.querySelector('.ficha.t-subrayado textarea').value }; });
+  check(colorYNota && subrayadoCl.color === 'conservar' && subrayadoCl.nota === 'Nota del subrayado' && subrayadoCl.cuadro === 'Nota del subrayado', `cambiar el color tras escribir la nota manda a la base el color y la nota (color ${subrayadoCl.color}, nota ${JSON.stringify(subrayadoCl.nota)})`);
+  await pcl.click('.ficha.t-subrayado button[data-accion="estado"]');
+  check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.estado === 'resuelta' && d.color === 'conservar' && d.nota === 'Nota del subrayado')), 'y cambiar el estado conserva color y nota');
+  await ctxCl.close();
+
+  // ---------------------------------------------------------------- un rechazo de permiso no retira de la vista lo que la base no tiene
+  // Una anotación nueva rechazada con not_granted queda marcada «sin guardar», con copia en el navegador, en una
+  // página que pasa a sólo lectura y lo dice; se puede copiar, sola o con «Copiar todo», con esa señal.
+  const ctxNG = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxNG.addInitScript(conBase);
+  await ctxNG.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const png = await ctxNG.newPage();
+  await png.goto(base);
+  await png.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await png.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await png.evaluate(() => { window.__rechazar = 'not_granted'; });
+  await seleccionar(png, 10);
+  await png.waitForSelector('#sel-tb', { state: 'visible' });
+  await png.click('#sel-tb .col-btn[data-c="duda"]');
+  const negadaVisible = await esperar(png, () => document.body.classList.contains('solo-lectura') && !!document.querySelector('.ficha.sin-guardar.t-subrayado'));
+  const negada = await png.evaluate(() => ({ marca: document.querySelectorAll('mark.hl.c-duda').length, aviso: (document.querySelector('.ficha.sin-guardar .aviso-guardar') || {}).textContent || '', reintentar: !!document.querySelector('.ficha button[data-accion="reintentar"]'), cuadro: !!document.querySelector('.ficha textarea'), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), estado: document.querySelector('#estado').textContent, cuenta: document.querySelector('#n-panel').textContent }));
+  check(negadaVisible && negada.marca === 1 && /not_granted/.test(negada.aviso) && !negada.reintentar && !negada.cuadro && !negada.enBase && negada.local, `una anotación nueva rechazada por permiso sigue a la vista marcada «sin guardar», con copia en el navegador, sin reintentar y en sólo lectura (a la vista ${negadaVisible}, marcas ${negada.marca}, en el navegador ${negada.local})`);
+  check(/No se pudo guardar en la base \(not_granted\)/.test(negada.estado) && /copia tus anotaciones/.test(negada.estado) && /sólo lectura/.test(negada.estado), `la barra dice que no se pudo guardar y que se puede copiar (${negada.estado})`);
+  const copiaNegada = negadaVisible ? await png.click('.ficha.sin-guardar button[data-accion="copiar"]').then(() => png.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
+  await png.click('#b-copiar');
+  const todoNegado = await png.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  await png.click('#b-copiar-md');
+  const todoNegadoMD = await png.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(/sin guardar en la base \(not_granted\)/.test(copiaNegada) && /"sin_guardar": "not_granted"/.test(todoNegado) && /sin guardar en la base \(not_granted\)/.test(todoNegadoMD), `«Copiar» en la ficha y «Copiar todo» la incluyen con la señal de que la base no la tiene (${JSON.stringify(copiaNegada.split('\n')[0])})`);
+  await ctxNG.close();
+  // «Deshacer borrado» rechazado por permiso, con el borrado ya confirmado: la nota no se pierde
+  const ctxND = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxND.addInitScript(() => { window.__semilla = { valiosa: { id: 'valiosa', tipo: 'general', nota: 'Nota valiosa con mucho trabajo', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxND.addInitScript(conBase);
+  const pnd = await ctxND.newPage();
+  await pnd.goto(base);
+  await pnd.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pnd.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await pnd.click('.tab[data-tab="todas"]');
+  await pnd.click('.ficha[data-id="valiosa"] .acciones button:has-text("Borrar")');
+  await pnd.click('.ficha[data-id="valiosa"] .confirmar button:has-text("Sí")');
+  await pnd.waitForFunction(() => !window.__docs.valiosa && !!document.querySelector('#deshacer'));
+  await pnd.evaluate(() => { window.__rechazar = 'not_granted'; });
+  await pnd.click('#deshacer');
+  const deshechaNegadaVisible = await esperar(pnd, () => document.body.classList.contains('solo-lectura') && !!document.querySelector('.ficha[data-id="valiosa"].sin-guardar'));
+  const deshechaNegada = await pnd.evaluate(() => ({ texto: (document.querySelector('.ficha[data-id="valiosa"] .nota-texto') || {}).textContent, aviso: (document.querySelector('.ficha[data-id="valiosa"] .aviso-guardar') || {}).textContent || '', enBase: !!window.__docs.valiosa, local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /Nota valiosa con mucho trabajo/.test(localStorage.getItem(k))), estado: document.querySelector('#estado').textContent }));
+  check(deshechaNegadaVisible && deshechaNegada.texto === 'Nota valiosa con mucho trabajo' && /not_granted/.test(deshechaNegada.aviso) && !deshechaNegada.enBase && deshechaNegada.local && /No se pudo guardar en la base \(not_granted\)/.test(deshechaNegada.estado), `un «Deshacer borrado» rechazado por permiso conserva la anotación con su nota, marcada y en el navegador (a la vista ${deshechaNegadaVisible}, en el navegador ${deshechaNegada.local})`);
+  await ctxND.close();
 
   // ---------------------------------------------------------------- anotar mientras la base todavía conecta
   const ctxTarde = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -887,6 +976,7 @@ try {
   const ctxSLTarde = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxSLTarde.addInitScript(() => { window.__retrasoDb = 1500; window.__soloLectura = true; });
   await ctxSLTarde.addInitScript(conBase);
+  await ctxSLTarde.grantPermissions(['clipboard-read', 'clipboard-write']);
   const pst = await ctxSLTarde.newPage();
   await pst.goto(base);
   await pst.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
@@ -897,13 +987,20 @@ try {
   await pst.waitForSelector(`[data-pid="${pidSLT}"] mark.hl`);
   await pst.waitForFunction(() => document.body.classList.contains('solo-lectura'), null, { timeout: 10000 });
   await pst.waitForTimeout(300);
-  const antesRecarga = await pst.evaluate(() => ({ local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado') }));
+  // lo que no pudo subir queda marcado «sin guardar» (sin reintento, que no cabe en sólo lectura) y la barra lo dice
+  const marcadaSL = (p) => p.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), ficha: !!document.querySelector('.ficha.sin-guardar.t-subrayado'), aviso: (document.querySelector('.ficha.sin-guardar .aviso-guardar') || {}).textContent || '', reintentar: !!document.querySelector('.ficha button[data-accion="reintentar"]'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado'), estado: document.querySelector('#estado').textContent }));
+  const antesRecarga = await marcadaSL(pst);
+  check(antesRecarga.local && !antesRecarga.enBase && antesRecarga.ficha && /sólo lectura/.test(antesRecarga.aviso) && !antesRecarga.reintentar && /no puede subir/.test(antesRecarga.estado) && /Copiar todo/.test(antesRecarga.estado), `lo anotado antes de saber que se es de sólo lectura no sube y queda marcado «sin guardar», con aviso en la barra (${antesRecarga.estado.slice(0, 70)})`);
   await pst.reload();
   await pst.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pst.waitForFunction(() => document.body.classList.contains('solo-lectura'), null, { timeout: 10000 });
   await pst.waitForTimeout(300);
-  const trasRecarga = await pst.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado') }));
-  check(antesRecarga.local && !antesRecarga.enBase && trasRecarga.marca && trasRecarga.local && !trasRecarga.enBase, 'lo anotado antes de saber que se es de sólo lectura no sube, pero se conserva en el navegador y vuelve al recargar');
+  const trasRecarga = await marcadaSL(pst);
+  check(trasRecarga.marca && trasRecarga.local && !trasRecarga.enBase && trasRecarga.ficha && /sólo lectura/.test(trasRecarga.aviso) && /no puede subir/.test(trasRecarga.estado), 'se conserva en el navegador y vuelve al recargar, otra vez marcada');
+  await pst.click('#b-copiar');
+  const todoSL = await pst.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  const fichaSL = trasRecarga.ficha ? await pst.click('.ficha.sin-guardar button[data-accion="copiar"]').then(() => pst.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
+  check(/"sin_guardar": "sólo lectura"/.test(todoSL) && /sin guardar en la base \(sólo lectura\)/.test(fichaSL), `«Copiar todo» y «Copiar» en la ficha la incluyen con la señal de que la base no la tiene (${JSON.stringify(fichaSL.split('\n')[0])})`);
   await ctxSLTarde.close();
 
   // ---------------------------------------------------------------- lectura en voz alta: cambiar de sección mientras suena
