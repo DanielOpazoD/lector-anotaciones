@@ -13,6 +13,10 @@
 //      de la ficha llevan lo recién escrito; el respaldo se mide en bytes.
 //   4. Teclado y pantalla estrecha: el foco sobrevive al redibujo (marcas, resultados, colores, «Borrar»); índice y
 //      panel cerrados quedan inertes; el marcador «cambió» se puede tocar.
+//   5. Accesibilidad y salida de las fichas: roles y estados ARIA, «Saltar al texto», pestañas con flechas, filtros
+//      resumidos; un clic fuera de la ficha o Esc/Ctrl+Enter en la nota guarda y sale; atajos y figura como diálogos
+//      modales; ajustes de lectura recordados. En el teléfono: velo que cierra el cajón al tocar fuera, foco que entra
+//      y vuelve, barra de subrayado abajo con botones grandes, «Deshacer» a mano con el panel abierto.
 //
 // Uso: node tests/web/smoke.mjs   (antes: lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json)
 // Variables: LIBRO_JSON, FIGS_DIR, CHROMIUM (ruta a un ejecutable de Chromium, opcional).
@@ -99,6 +103,12 @@ const conBase = () => {
   window.__cambioExterno = (id, parche) => { Object.assign(coleccion('anotaciones')[id], parche); emitir('anotaciones', [{ type: 'modified', id }]); };
 };
 
+// Los filtros y la exportación viven en desplegables del panel: se abren antes de usarlos.
+async function abrirDe(page, sel) {
+  await page.evaluate((s) => { const n = document.querySelector(s); const d = n && n.closest('details'); if (d) d.open = true; }, sel);
+}
+async function pulsar(page, sel) { await abrirDe(page, sel); await page.click(sel); }
+
 async function seleccionar(page, n = 20) {
   // Selecciona los primeros n caracteres del primer párrafo visible y devuelve su pid.
   return page.evaluate((n) => {
@@ -181,9 +191,9 @@ try {
   await page.reload();
   await page.waitForSelector(`[data-pid="${pid}"] mark.hl.c-revisar`);
   check(true, 'tras recargar, el subrayado vuelve a pintarse');
-  await page.click('.filtro[data-f="notas"]');
+  await pulsar(page, '.filtro[data-f="notas"]');
   check((await page.$$('.ficha')).length === 1, 'el filtro «notas de página/sección» deja una ficha');
-  await page.click('.filtro[data-f="todas"]');
+  await pulsar(page, '.filtro[data-f="todas"]');
   check((await page.$$('.ficha')).length === 2, 'el filtro «todas» muestra las dos');
 
   await page.fill('#buscar', 'inferencia');
@@ -192,7 +202,7 @@ try {
   check((await page.$$('.res')).length >= 1, 'la búsqueda encuentra coincidencias');
 
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.click('#b-copiar');
+  await pulsar(page, '#b-copiar');
   const copiado = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   const json = (() => { try { return JSON.parse(copiado); } catch { return null; } })();
   check(json && Array.isArray(json.anotaciones) && json.anotaciones.length === 2, 'Copiar todo (JSON) produce {libro, anotaciones[]}');
@@ -235,7 +245,7 @@ try {
   }, { clave: guardado.clave, pid, pidSiguiente });
   await page.reload();
   await page.waitForSelector(`[data-pid="${pid}"] mark.hl`);
-  await page.click('.filtro[data-f="todas"]');
+  await pulsar(page, '.filtro[data-f="todas"]');
   const marcas = await page.$$eval(`[data-pid="${pid}"] mark.hl`, (ms) => ms.map((m) => ({ ids: m.getAttribute('data-aids').split(' '), texto: m.textContent })));
   const cubren = (id) => marcas.filter((m) => m.ids.includes(id)).map((m) => m.texto).join('');
   check(cubren('movida') === sub.cita, `con desplazamientos viejos, la marca vuelve a cubrir la cita exacta («${cubren('movida')}»)`);
@@ -420,7 +430,7 @@ try {
   await p2.waitForSelector('article.seccion:not([hidden]) mark.hl.c-cortar');
   check(true, 'la tecla 2 subraya la selección en «cortar»');
   await p2.keyboard.press('?');
-  check(await p2.$eval('#atajos', (a) => a.classList.contains('abierto')), 'la tecla ? muestra los atajos');
+  check(await p2.$eval('#atajos', (a) => a.open), 'la tecla ? muestra los atajos');
   await p2.keyboard.press('Escape');
   // etiquetas en la nota, filtro por etiqueta, búsqueda en notas
   await p2.click('.tab[data-tab="todas"]');
@@ -428,9 +438,9 @@ try {
   await p2.$eval('.ficha textarea', (t) => t.blur());
   await p2.waitForSelector('.ficha .etiquetas button');
   check((await p2.$eval('.ficha .etiquetas button', (b) => b.textContent)) === '#carmen' && !(await p2.$eval('#f-etiqueta', (s) => s.hidden)), 'las #etiquetas de la nota se vuelven chips y un selector');
-  await p2.selectOption('#f-etiqueta', 'carmen');
+  await abrirDe(p2, '#f-etiqueta'); await p2.selectOption('#f-etiqueta', 'carmen');
   check((await p2.$$('.ficha')).length === 1, 'el filtro por etiqueta deja las fichas con esa etiqueta');
-  await p2.click('.filtro[data-f="conservar"]');
+  await pulsar(p2, '.filtro[data-f="conservar"]');
   await p2.fill('#buscar', 'cinética');
   await p2.press('#buscar', 'Enter');
   await p2.waitForSelector('.res.anot');
@@ -579,9 +589,9 @@ try {
   await p2.goto(base + '#cap-01');
   await p2.waitForSelector('article.seccion:not([hidden]) figure img');
   await p2.click('article.seccion:not([hidden]) figure img');
-  check(await p2.$eval('#lightbox', (l) => l.classList.contains('abierto')), 'clic en una figura la amplía');
+  check(await p2.$eval('#lightbox', (l) => l.open), 'clic en una figura la amplía');
   await p2.keyboard.press('Escape');
-  check(!(await p2.$eval('#lightbox', (l) => l.classList.contains('abierto'))), 'Esc cierra la figura');
+  check(!(await p2.$eval('#lightbox', (l) => l.open)), 'Esc cierra la figura');
   await p2.click('article.seccion:not([hidden]) button[data-escuchar]');
   await p2.waitForTimeout(400); // en un navegador sin voces, el error llega enseguida y el botón vuelve solo
   const txtVoz = await p2.$eval('article.seccion:not([hidden]) button[data-escuchar]', (b) => b.textContent);
@@ -622,19 +632,19 @@ try {
   await p3.$eval('.ficha[data-id="conpregunta"] textarea.replica', (t) => t.blur());
   await p3.waitForFunction(() => window.__docs.conpregunta && window.__docs.conpregunta.replica === 'Al inicio.');
   check(true, 'la réplica del autor queda guardada en la base');
-  await p3.click('.filtro[data-f="preguntas"]');
+  await pulsar(p3, '.filtro[data-f="preguntas"]');
   check((await p3.$$('.ficha')).length === 1, 'el filtro «preguntas» deja sólo la pregunta');
-  await p3.click('.filtro[data-f="respondidas"]');
+  await pulsar(p3, '.filtro[data-f="respondidas"]');
   check((await p3.$$('.ficha')).length === 2, 'el filtro «con respuesta» deja las respondidas');
-  await p3.click('.filtro[data-f="todas"]');
+  await pulsar(p3, '.filtro[data-f="todas"]');
   check(!(await p3.$('.ficha[data-id="ajena"] .cab button.enlace')) && (await p3.$eval('.ficha[data-id="conpregunta"] .acciones button', (b) => b.tagName)) === 'BUTTON', 'las notas generales no llevan «ir al texto» y los controles son botones');
-  await p3.click('.filtro[data-f="todas"]');
+  await pulsar(p3, '.filtro[data-f="todas"]');
   await p3.waitForFunction(() => Array.from(document.querySelectorAll('.ficha[data-id="ajena"] .autor span')).some((s) => s.textContent === 'Lectora Invitada'));
   check(true, 'la ficha de otra lectora lleva su nombre resuelto por la capacidad user');
   check(!(await p3.$eval('#f-autor', (s) => s.hidden)) && (await p3.$$eval('#f-autor option', (os) => os.map((o) => o.textContent))).includes('Lectora Invitada'), 'con varios lectores aparece el selector de lector');
-  await p3.selectOption('#f-autor', 'u_otro');
+  await abrirDe(p3, '#f-autor'); await p3.selectOption('#f-autor', 'u_otro');
   check((await p3.$$('.ficha')).length === 2, 'el filtro por lector deja sus anotaciones');
-  await p3.selectOption('#f-autor', '');
+  await abrirDe(p3, '#f-autor'); await p3.selectOption('#f-autor', '');
   const pid3 = await seleccionar(p3, 12);
   await p3.waitForSelector('#sel-tb', { state: 'visible' });
   await p3.click('#sel-tb .col-btn[data-c="duda"]');
@@ -836,7 +846,7 @@ try {
   await pf.fill('.ficha[data-id="ajena"] textarea', 'Nota de otra lectora, cambiada sin permiso');
   await pf.$eval('.ficha[data-id="ajena"] textarea', (t) => t.blur());
   await pf.waitForFunction(() => document.body.classList.contains('solo-lectura'));
-  await pf.click('#b-copiar');
+  await pulsar(pf, '#b-copiar');
   const exportadoF = await pf.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   const fantasma = await pf.evaluate(() => ({ texto: (document.querySelector('.ficha[data-id="ajena"] .nota-texto') || {}).textContent, sinGuardar: !!document.querySelector('.ficha[data-id="ajena"].sin-guardar'), cuadro: !!document.querySelector('.ficha textarea'), base: window.__docs.ajena.nota, chip: getComputedStyle(document.querySelector('#sl-chip')).display !== 'none', tb: document.querySelector('#sel-tb').getAttribute('aria-label'), estado: document.querySelector('#estado').textContent }));
   check(fantasma.texto === 'Nota de otra lectora, cambiada sin permiso' && fantasma.sinGuardar && !fantasma.cuadro && fantasma.base === 'Nota de otra lectora' && (() => { try { const j = JSON.parse(exportadoF); const a = j.anotaciones.find((x) => x.id === 'ajena'); return a.nota === 'Nota de otra lectora, cambiada sin permiso' && a.sin_guardar === 'invalid_argument'; } catch (e) { return false; } })(), `una nota rechazada por falta de permiso conserva el borrador marcado «sin guardar», se exporta con esa señal, la base no cambia y la página pasa a sólo lectura (${JSON.stringify(fantasma.texto)})`);
@@ -953,9 +963,9 @@ try {
   check(negadaVisible && negada.marca === 1 && /not_granted/.test(negada.aviso) && !negada.reintentar && !negada.cuadro && !negada.enBase && negada.local, `una anotación nueva rechazada por permiso sigue a la vista marcada «sin guardar», con copia en el navegador, sin reintentar y en sólo lectura (a la vista ${negadaVisible}, marcas ${negada.marca}, en el navegador ${negada.local})`);
   check(/No se pudo guardar en la base \(not_granted\)/.test(negada.estado) && /copia tus anotaciones/.test(negada.estado) && /sólo lectura/.test(negada.estado), `la barra dice que no se pudo guardar y que se puede copiar (${negada.estado})`);
   const copiaNegada = negadaVisible ? await png.click('.ficha.sin-guardar button[data-accion="copiar"]').then(() => png.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
-  await png.click('#b-copiar');
+  await pulsar(png, '#b-copiar');
   const todoNegado = await png.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  await png.click('#b-copiar-md');
+  await pulsar(png, '#b-copiar-md');
   const todoNegadoMD = await png.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   check(/sin guardar en la base \(not_granted\)/.test(copiaNegada) && /"sin_guardar": "not_granted"/.test(todoNegado) && /sin guardar en la base \(not_granted\)/.test(todoNegadoMD), `«Copiar» en la ficha y «Copiar todo» la incluyen con la señal de que la base no la tiene (${JSON.stringify(copiaNegada.split('\n')[0])})`);
   await ctxNG.close();
@@ -1120,7 +1130,7 @@ try {
   await pst.waitForTimeout(300);
   const trasRecarga = await marcadaSL(pst);
   check(trasRecarga.marca && trasRecarga.local && !trasRecarga.enBase && trasRecarga.ficha && /sólo lectura/.test(trasRecarga.aviso) && /no puede subir/.test(trasRecarga.estado), 'se conserva en el navegador y vuelve al recargar, otra vez marcada');
-  await pst.click('#b-copiar');
+  await pulsar(pst, '#b-copiar');
   const todoSL = await pst.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   const fichaSL = trasRecarga.ficha ? await pst.click('.ficha.sin-guardar button[data-accion="copiar"]').then(() => pst.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
   check(/"sin_guardar": "sólo lectura"/.test(todoSL) && /sin guardar en la base \(sólo lectura\)/.test(fichaSL), `«Copiar todo» y «Copiar» en la ficha la incluyen con la señal de que la base no la tiene (${JSON.stringify(fichaSL.split('\n')[0])})`);
@@ -1155,6 +1165,121 @@ try {
   check((await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar' && (await pv.$$('.bloque.leyendo')).length === 0, 'cambiar de sección detiene la lectura');
   await ctxVoz.close();
 
+  // ---------------------------------------------------------------- accesibilidad y salir de las fichas (escritorio)
+  const ctxA = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxA.addInitScript(sinBase);
+  const pa = await ctxA.newPage();
+  const erroresA = [];
+  pa.on('pageerror', (e) => erroresA.push(String(e)));
+  pa.on('console', (m) => { if (m.type() === 'error') erroresA.push(m.text()); });
+  await pa.goto(base + '#cap-01');
+  await pa.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  await pa.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
+  const guardadoLocal = (page, texto) => page.evaluate((t) => Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && (localStorage.getItem(k) || '').includes(t)), texto);
+  const aria = await pa.evaluate(() => ({
+    estado: document.querySelector('#estado').getAttribute('role'),
+    tabs: (document.querySelector('.tabs') || {}).getAttribute ? document.querySelector('.tabs').getAttribute('role') : null,
+    seleccionadas: document.querySelectorAll('.tab[aria-selected="true"]').length,
+    actual: (document.querySelector('nav a.sec[aria-current="page"]') || {}).className || '',
+    filtros: document.querySelectorAll('.filtro[aria-pressed]').length,
+  }));
+  check(aria.estado === 'status' && aria.tabs === 'tablist' && aria.seleccionadas === 1 && /activa/.test(aria.actual) && aria.filtros >= 9, `el estado se anuncia, pestañas y filtros exponen su estado y el índice marca la sección actual (${JSON.stringify(aria)})`);
+  const salto = await pa.evaluate(() => { const s = document.querySelector('a.saltar'); const primero = document.querySelector('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'); return !!s && primero === s; });
+  if (salto) { await pa.focus('a.saltar'); await pa.keyboard.press('Enter'); }
+  check(salto && (await pa.evaluate(() => document.activeElement.id)) === 'lectura', 'lo primero del orden de Tab es «Saltar al texto», que lleva el foco a la lectura');
+  // pestañas con flechas
+  await pa.focus('.tab.activa');
+  await pa.keyboard.press('ArrowRight');
+  const tabTras = await pa.evaluate(() => ({ foco: document.activeElement.getAttribute('data-tab'), sel: (document.querySelector('.tab[aria-selected="true"]') || { getAttribute: () => null }).getAttribute('data-tab'), lista: document.querySelector('#lista').getAttribute('aria-labelledby') }));
+  check(tabTras.foco === 'todas' && tabTras.sel === 'todas' && tabTras.lista === 'tab-todas', `→ pasa a la pestaña siguiente y la selecciona (${JSON.stringify(tabTras)})`);
+  // un filtro sin resultados lo dice y ofrece quitarlo
+  await pulsar(pa, '.filtro[data-f="duda"]');
+  const filtrada = await pa.evaluate(() => ({ pulsado: document.querySelector('.filtro[data-f="duda"]').getAttribute('aria-pressed'), resumen: (document.querySelector('#filtro-resumen') || {}).textContent || '', quitar: !!Array.from(document.querySelectorAll('#lista button')).find((b) => /Quitar filtros/.test(b.textContent)) }));
+  check(filtrada.pulsado === 'true' && /duda/.test(filtrada.resumen) && filtrada.quitar, `el filtro activo se anuncia, se resume junto a «Filtros» y, sin resultados, ofrece quitarlo (${JSON.stringify(filtrada)})`);
+  if (filtrada.quitar) await pa.click('#lista button.enlace');
+  check((await pa.$eval('.filtro.on', (b) => b.getAttribute('data-f'))) === 'todas', '«Quitar filtros» vuelve a mostrarlo todo');
+  // subrayar con nota y salir con un clic en el texto
+  await pa.click('.tab[data-tab="capitulo"]');
+  await seleccionar(pa, 25);
+  await pa.keyboard.press('n');
+  await pa.waitForSelector('.ficha.foco textarea');
+  check(await pa.evaluate(() => document.activeElement.tagName === 'TEXTAREA'), 'N abre la nota del subrayado con el cursor en ella');
+  await pa.keyboard.type('Nota que se guarda al salir');
+  const cab = await pa.evaluate(() => ({ cat: (document.querySelector('.ficha.foco .cab .cat') || {}).textContent || '', pulsados: document.querySelectorAll('.ficha.foco .col-btn[aria-pressed="true"]').length }));
+  check(cab.cat === 'revisar' && cab.pulsados === 1, `la ficha nombra su categoría (no sólo el color) y el color actual se anuncia pulsado (${JSON.stringify(cab)})`);
+  // el centro de otro párrafo, sin subrayados
+  const pOtro = await pa.evaluate(() => { const ps = Array.from(document.querySelectorAll('article.seccion:not([hidden]) p.bloque[data-pid]')).filter((p) => !p.querySelector('mark')); const p = ps[ps.length - 1]; p.scrollIntoView({ block: 'center' }); const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await pa.mouse.click(pOtro.x, pOtro.y);
+  const fuera = await pa.evaluate(() => ({ ficha: document.querySelectorAll('.ficha.foco').length, marca: document.querySelectorAll('mark.hl.foco').length }));
+  check(fuera.ficha === 0 && fuera.marca === 0 && (await guardadoLocal(pa, 'Nota que se guarda al salir')), `un clic en el texto, fuera de la ficha, sale de ella y la nota queda guardada (${JSON.stringify(fuera)})`);
+  // Esc en la nota guarda, sale y devuelve el foco al pasaje
+  await pa.click('article.seccion:not([hidden]) mark.hl');
+  check((await pa.$$('.ficha.foco')).length === 1, 'clic en el subrayado vuelve a su ficha');
+  await pa.click('.ficha.foco textarea');
+  await pa.keyboard.press('End');
+  await pa.keyboard.type(' (y más)');
+  await pa.keyboard.press('Escape');
+  const trasEsc = await pa.evaluate(() => ({ tag: document.activeElement.tagName, foco: document.querySelectorAll('.ficha.foco, mark.hl.foco').length }));
+  check(trasEsc.tag === 'MARK' && trasEsc.foco === 0 && (await guardadoLocal(pa, '(y más)')), `Esc en la nota la guarda, sale de la ficha y devuelve el foco al pasaje (${JSON.stringify(trasEsc)})`);
+  // Enter en el pasaje vuelve a la ficha; Ctrl+Enter en la nota sale igual; Esc fuera de la nota también sale
+  await pa.keyboard.press('Enter');
+  await pa.focus('.ficha.foco textarea');
+  await pa.keyboard.press('End');
+  await pa.keyboard.type('!');
+  await pa.keyboard.press('Control+Enter');
+  const trasCtrl = await pa.evaluate(() => ({ tag: document.activeElement.tagName, foco: document.querySelectorAll('.ficha.foco').length, nota: (document.querySelector('.ficha textarea') || {}).value }));
+  check(trasCtrl.tag === 'MARK' && trasCtrl.foco === 0 && /!$/.test(trasCtrl.nota || ''), `Ctrl+Enter en la nota guarda y vuelve al texto (${JSON.stringify(trasCtrl)})`);
+  await pa.keyboard.press('Enter');
+  await pa.keyboard.press('Escape');
+  check((await pa.$$('.ficha.foco')).length === 0, 'Esc con la ficha enfocada (fuera de la nota) sale de ella');
+  // atajos: diálogo modal que se cierra con un clic en el fondo o con Esc, y devuelve el foco
+  await pa.keyboard.press('?');
+  const dlg = await pa.evaluate(() => { const d = document.querySelector('#atajos'); return { abierto: !!d.open, modal: d.matches(':modal'), foco: !!document.activeElement.closest('#atajos') }; });
+  await pa.mouse.click(5, 5);
+  check(dlg.abierto && dlg.modal && dlg.foco && !(await pa.$eval('#atajos', (d) => !!d.open)), `? abre los atajos como diálogo modal con el foco adentro, y un clic en el fondo lo cierra (${JSON.stringify(dlg)})`);
+  await pa.click('#b-atajos');
+  await pa.keyboard.press('Escape');
+  check(!(await pa.$eval('#atajos', (d) => !!d.open)) && (await pa.evaluate(() => document.activeElement.id)) === 'b-atajos', 'Esc cierra los atajos y el foco vuelve a su botón');
+  // figura ampliada con texto alternativo; un clic la cierra
+  await pa.click('article.seccion:not([hidden]) figure img');
+  const lb = await pa.evaluate(() => ({ abierto: !!document.querySelector('#lightbox').open, alt: document.querySelector('#lightbox img').alt }));
+  await pa.mouse.click(640, 450);
+  check(lb.abierto && lb.alt.length > 3 && !(await pa.$eval('#lightbox', (d) => !!d.open)), `la figura ampliada lleva su leyenda como texto alternativo y un clic la cierra (${lb.alt.slice(0, 40)})`);
+  // ajustes de lectura: tamaño, tema y letra, recordados al recargar
+  const tamTexto = () => pa.$eval('article.seccion:not([hidden]) p.bloque', (p) => parseFloat(getComputedStyle(p).fontSize));
+  const tam0 = await tamTexto();
+  let ajustesOk = false;
+  try {
+    await pa.click('#ajustes > summary');
+    await pa.click('#aj-mas'); await pa.click('#aj-mas');
+    await pa.check('input[name="aj-tema"][value="dark"]');
+    await pa.check('input[name="aj-letra"][value="sans"]');
+    ajustesOk = true;
+  } catch { ajustesOk = false; }
+  const tam1 = await tamTexto();
+  const oscuro = await pa.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const letra = await pa.$eval('article.seccion:not([hidden]) p.bloque', (p) => getComputedStyle(p).fontFamily);
+  await pa.keyboard.press('Escape');
+  const menuCerrado = await pa.evaluate(() => !document.querySelector('#ajustes').open && document.activeElement.tagName === 'SUMMARY');
+  check(ajustesOk && tam1 > tam0 && oscuro === 'rgb(21, 23, 27)' && /Plex/.test(letra) && menuCerrado, `«Aa» agranda el texto, cambia tema y letra, y Esc cierra el menú con el foco en su botón (${tam0} → ${tam1} px, ${oscuro})`);
+  await pa.reload();
+  await pa.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  check((await tamTexto()) === tam1 && (await pa.evaluate(() => document.documentElement.getAttribute('data-tema-lector'))) === 'dark', 'los ajustes de lectura se recuerdan al recargar');
+  if (ajustesOk) { await pa.click('#ajustes > summary'); await pa.check('input[name="aj-tema"][value=""]'); }
+  check(!(await pa.evaluate(() => document.documentElement.hasAttribute('data-tema-lector'))), '«sistema» devuelve el tema al del sistema');
+  await pa.mouse.click(640, 450);
+  // concentración anuncia su estado; borrar no deja el foco perdido
+  await pa.click('#b-foco');
+  const focoPulsado = await pa.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'));
+  await pa.click('#b-foco');
+  check(focoPulsado === 'true' && (await pa.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'))) === 'false', 'el botón de concentración anuncia si está activo');
+  await pa.click('.ficha button[data-accion="borrar"]');
+  await pa.click('.ficha button[data-accion="si"]');
+  const trasBorrarA = await pa.evaluate(() => ({ foco: document.activeElement !== document.body && !!document.activeElement.closest('#panel'), deshacer: !!document.querySelector('#deshacer') }));
+  check(trasBorrarA.foco && trasBorrarA.deshacer, `al borrar, el foco queda en el panel y aparece «Deshacer» (${JSON.stringify(trasBorrarA)})`);
+  check(erroresA.length === 0, `sin errores de consola en el recorrido de accesibilidad${erroresA.length ? ': ' + erroresA.join(' | ') : ''}`);
+  await ctxA.close();
+
   // ---------------------------------------------------------------- ancho de teléfono
   const movil = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
   await movil.addInitScript(sinBase);
@@ -1166,7 +1291,7 @@ try {
   check(anchos[0] <= anchos[1], `sin desborde horizontal a 400 px (${anchos.join(' / ')})`);
   await pm.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
   // índice y panel escondidos quedan fuera del orden de Tab; los botones dicen si están abiertos
-  await pm.focus('#buscar');
+  await pm.focus('#b-mas');
   const recorrido = [];
   for (let i = 0; i < 8; i++) { await pm.keyboard.press('Tab'); recorrido.push(await activo(pm)); }
   check(recorrido.every((a) => !a.enLateral && a.left >= 0), `a 400 px, Tab no entra en el índice ni en el panel escondidos (${recorrido.map((a) => a.tag + ':' + a.texto.slice(0, 12)).join(' → ')})`);
@@ -1191,6 +1316,67 @@ try {
   try { await pm.touchscreen.tap(marcaMovil.cx, marcaMovil.cy); await pm.waitForSelector('.diff', { timeout: 2000 }); tocado = true; } catch { tocado = false; }
   check(tocado, 'y un toque en su centro muestra la diferencia');
   await movil.close();
+
+  // ---------------------------------------------------------------- cajones del teléfono: velo, cierre, foco, notas
+  const ctxC = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true, isMobile: true });
+  await ctxC.addInitScript(sinBase);
+  const pc = await ctxC.newPage();
+  const erroresC = [];
+  pc.on('pageerror', (e) => erroresC.push(String(e)));
+  pc.on('console', (m) => { if (m.type() === 'error') erroresC.push(m.text()); });
+  await pc.goto(base + '#cap-01');
+  await pc.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  await pc.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
+  const tactil = await pc.evaluate(() => matchMedia('(pointer: coarse)').matches);
+  // un punto del velo que el cajón abierto no tapa, lejos de su borde (que puede estar todavía deslizándose)
+  const tocarFuera = async () => { const pt = await pc.evaluate(() => [[380, 60], [200, 60], [12, 400]].find(([x, y]) => document.elementFromPoint(x, y) === document.querySelector('#velo')) || [380, 60]); await pc.touchscreen.tap(pt[0], pt[1]); };
+  const estadoCajon = () => pc.evaluate(() => ({ panel: document.querySelector('#panel').classList.contains('abierta'), indice: document.querySelector('#indice').classList.contains('abierta'), velo: !!document.querySelector('#velo') && !document.querySelector('#velo').hidden, cabecera: !!document.querySelector('header.barra').inert, lectura: !!document.querySelector('#lectura').inert, foco: document.activeElement.id || document.activeElement.tagName, enPanel: !!document.activeElement.closest('#panel') }));
+  await pc.click('#b-panel');
+  const abiertoP = await estadoCajon();
+  const cerrarVisible = await pc.evaluate(() => { const b = document.querySelector('#panel .cerrar'); return !!b && b.getBoundingClientRect().width > 0; });
+  check(abiertoP.panel && abiertoP.velo && abiertoP.cabecera && abiertoP.lectura && abiertoP.enPanel && cerrarVisible, `en el teléfono, el panel abierto tiene velo detrás, deja inerte el resto, recibe el foco y muestra «cerrar» (${JSON.stringify(abiertoP)})`);
+  const fugas = [];
+  for (let i = 0; i < 12; i++) { await pc.keyboard.press('Tab'); fugas.push(await pc.evaluate(() => (document.activeElement.closest('header, #lectura, #indice') ? document.activeElement.tagName + ':' + document.activeElement.textContent.trim().slice(0, 12) : ''))); }
+  check(fugas.every((x) => !x), `con el panel abierto, Tab no llega a lo que está detrás (${fugas.filter(Boolean).join(' · ')})`);
+  await tocarFuera();
+  const trasVelo = await estadoCajon();
+  check(!trasVelo.panel && !trasVelo.velo && !trasVelo.cabecera && !trasVelo.lectura && trasVelo.foco === 'b-panel', `tocar fuera del panel (en el velo) lo cierra y devuelve el foco a su botón (${JSON.stringify(trasVelo)})`);
+  await pc.click('#b-indice');
+  const abiertoI = await estadoCajon();
+  if (await pc.$('#indice .cerrar')) await pc.click('#indice .cerrar');
+  const trasCerrarI = await estadoCajon();
+  check(abiertoI.indice && abiertoI.velo && !trasCerrarI.indice && trasCerrarI.foco === 'b-indice', `el índice se cierra con su botón «×» y el foco vuelve a «Índice» (${JSON.stringify(trasCerrarI)})`);
+  // subrayar con nota en el teléfono: la barra va abajo, la nota se abre en el panel y tocar fuera la guarda
+  await seleccionar(pc, 30);
+  await esperar(pc, () => getComputedStyle(document.querySelector('#sel-tb')).display === 'flex', null, 3000);
+  const barraT = await pc.evaluate(() => { const t = document.querySelector('#sel-tb'), r = t.getBoundingClientRect(), b = t.querySelector('.col-btn').getBoundingClientRect(); return { abajo: t.classList.contains('abajo'), bottom: Math.round(r.bottom), alto: Math.round(b.height) }; });
+  check(tactil && barraT.abajo && barraT.bottom >= 700 && barraT.alto >= 40, `en pantalla táctil la barra de subrayado va abajo, con botones de 40 px (${JSON.stringify(barraT)}, táctil: ${tactil})`);
+  await pc.tap('#sel-nota');
+  const notaAbierta = await esperar(pc, () => document.querySelector('#panel').classList.contains('abierta') && document.activeElement.tagName === 'TEXTAREA', null, 3000);
+  check(notaAbierta, '«+ con nota» abre el panel con el cursor en la nota');
+  await pc.keyboard.type('Nota escrita en el teléfono');
+  await tocarFuera();
+  const trasNota = await estadoCajon();
+  check(!trasNota.panel && !trasNota.velo && trasNota.foco === 'MARK' && (await guardadoLocal(pc, 'Nota escrita en el teléfono')), `tocar fuera tras escribir cierra el panel, guarda la nota y deja el foco en el pasaje nuevo (${JSON.stringify(trasNota)})`);
+  // tocar un subrayado abre su ficha; Esc en la nota cierra el panel y devuelve el foco al pasaje
+  await pc.tap('article.seccion:not([hidden]) mark.hl');
+  const conFicha = await esperar(pc, () => document.querySelector('#panel').classList.contains('abierta') && !!document.querySelector('#panel .ficha.foco'), null, 3000);
+  check(conFicha, 'tocar un subrayado abre el panel con su ficha');
+  if (conFicha) { await pc.focus('.ficha.foco textarea'); await pc.keyboard.press('Escape'); }
+  const trasEscM = await estadoCajon();
+  check(!trasEscM.panel && trasEscM.foco === 'MARK', `Esc en la nota cierra el panel y deja el foco en el pasaje (${JSON.stringify(trasEscM)})`);
+  // borrar con el panel abierto: «Deshacer» queda a mano, encima del velo
+  await pc.click('#b-panel');
+  await pc.click('#panel .ficha button[data-accion="borrar"]');
+  await pc.click('#panel .ficha button[data-accion="si"]');
+  const undo = await pc.evaluate(() => { const u = document.querySelector('#deshacer'); if (!u) return null; const r = u.getBoundingClientRect(); return { inerte: !!u.closest('[inert]'), dentro: r.width > 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth, encima: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === u }; });
+  check(!!undo && !undo.inerte && undo.dentro && undo.encima, `con el panel abierto, «Deshacer» sigue visible y se puede tocar (${JSON.stringify(undo)})`);
+  if (undo && undo.encima) await pc.click('#deshacer');
+  check((await pc.$$('#panel .ficha')).length === 1, 'y deshacer devuelve la ficha');
+  const anchosC = await pc.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+  check(anchosC[0] <= anchosC[1], `sin desborde horizontal con los cajones nuevos (${anchosC.join(' / ')})`);
+  check(erroresC.length === 0, `sin errores de consola en el recorrido del teléfono${erroresC.length ? ': ' + erroresC.join(' | ') : ''}`);
+  await ctxC.close();
 } finally {
   await browser.close();
   srv.close();

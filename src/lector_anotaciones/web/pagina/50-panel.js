@@ -25,11 +25,16 @@
     if (act && act.tagName === 'TEXTAREA' && act.id.indexOf('nota-') === 0) foco = { id: act.id, valor: act.value, ini: act.selectionStart, fin: act.selectionEnd, scroll: act.scrollTop };
     else if (act && act.tagName === 'BUTTON' && act.closest('.ficha')) focoBoton = { id: act.closest('.ficha').getAttribute('data-id'), accion: act.getAttribute('data-accion') || '', c: act.getAttribute('data-c') || '', texto: act.textContent };
     var box = $('#lista'), desplaz = box.scrollTop; box.innerHTML = '';
-    renderSelectores();
+    renderSelectores(); marcarFiltro();
     var L = lista();
     resolverPerfiles(L.map(function (a) { return a.autor; }).filter(Boolean));
     $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
-    if (!L.length) { box.appendChild(el('div', { 'class': 'vacio', text: tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' })); return; }
+    if (!L.length) {
+      var filtrado = filtro !== 'todas' || !!filtroAutor || !!filtroEtiqueta;
+      var vacio = el('div', { 'class': 'vacio', text: filtrado ? 'Ninguna anotación con estos filtros. ' : tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' });
+      if (filtrado) { var qf = el('button', { 'class': 'enlace', type: 'button', text: 'Quitar filtros' }); qf.addEventListener('click', function () { quitarFiltros(); renderPanel(); }); vacio.appendChild(qf); }
+      box.appendChild(vacio); return;
+    }
     L.forEach(function (a) { box.appendChild(ficha(a)); });
     box.scrollTop = desplaz;
     if (foco) {
@@ -54,7 +59,7 @@
     // deben llevar lo recién escrito.
     var actual = function () { return anots[a.id] || a; };
     var f = el('div', { 'class': 'ficha t-' + a.tipo + (a.color ? ' c-' + a.color : '') + (a.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === a.id ? ' foco' : '') + (SIN_GUARDAR[a.id] ? ' sin-guardar' : ''), 'data-id': a.id, tabindex: '-1' });
-    var cab = el('div', { 'class': 'cab' }, [el('span', { text: etiqueta(a) })]);
+    var cab = el('div', { 'class': 'cab' }, [el('span', {}, [a.tipo === 'subrayado' && a.color ? el('span', { 'class': 'cat', text: a.color }) : null, etiqueta(a)])]);
     if (a.autor && (a.autor !== ME || variosAutores())) cab.firstChild.appendChild(chipAutor(a.autor));
     if (a.cierre) cab.firstChild.appendChild(el('span', { 'class': 'cierre ' + a.cierre, text: a.cierre === 'atendida' ? 'atendida' : a.cierre === 'descartada' ? 'descartada' : 'pregunta' }));
     var u = UBIC[a.id];
@@ -85,12 +90,18 @@
       accSL.appendChild(copSL); f.appendChild(accSL);
       return f;
     }
+    // Esc o Ctrl/Cmd+Enter: guardar (al perder el foco) y volver al texto
+    var salirConTecla = function (ev) {
+      if (ev.key !== 'Escape' && !(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey))) return;
+      ev.preventDefault(); ev.stopPropagation(); ev.target.blur(); volverAlTexto(a.id);
+    };
     var ta = el('textarea', { placeholder: a.tipo === 'subrayado' ? 'Nota sobre este subrayado…' : 'Escribe la nota…', 'aria-label': 'Nota', id: 'nota-' + a.id });
     ta.value = a.nota || '';
     var timer = null;
     var guardarNota = function () { if (anots[a.id] && ta.value !== anots[a.id].nota) { guardarSilencioso(a.id, { nota: ta.value }, ta.id); pintarEtiquetas(f, anots[a.id]); } };
     ta.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(guardarNota, 900); });
     ta.addEventListener('blur', function () { clearTimeout(timer); guardarNota(); });
+    ta.addEventListener('keydown', salirConTecla);
     f.appendChild(ta);
     pintarEtiquetas(f, a);
     if (a.respuesta || a.cierre) {
@@ -106,13 +117,14 @@
       var guardarReplica = function () { if (anots[a.id] && rp.value !== (anots[a.id].replica || '')) guardarSilencioso(a.id, { replica: rp.value }, rp.id); };
       rp.addEventListener('input', function () { clearTimeout(tr); tr = setTimeout(guardarReplica, 900); });
       rp.addEventListener('blur', function () { clearTimeout(tr); guardarReplica(); });
+      rp.addEventListener('keydown', salirConTecla);
       f.appendChild(rp);
     }
     var acc = el('div', { 'class': 'acciones' });
     if (a.tipo === 'subrayado') {
       var cols = el('div', { 'class': 'colores' });
       ['revisar', 'cortar', 'duda', 'conservar'].forEach(function (c) {
-        var b = el('button', { 'class': 'col-btn c-' + c + (a.color === c ? ' on' : ''), type: 'button', title: c, 'aria-label': c, 'data-accion': 'color', 'data-c': c });
+        var b = el('button', { 'class': 'col-btn c-' + c + (a.color === c ? ' on' : ''), type: 'button', title: c, 'aria-label': 'Color: ' + c, 'aria-pressed': a.color === c ? 'true' : 'false', 'data-accion': 'color', 'data-c': c });
         // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
         b.addEventListener('click', function () { guardar(Object.assign({}, actual(), { color: c })); });
         cols.appendChild(b);
@@ -128,7 +140,13 @@
     var del = el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar', 'data-accion': 'borrar' });
     del.addEventListener('click', function () {
       // el confirmador recibe el foco (que estaba en el botón que se retira) y «No» lo devuelve a «Borrar»
-      var si = el('button', { 'class': 'btn peq', type: 'button', text: 'Sí', 'data-accion': 'si', onclick: function () { borrar(a.id); } });
+      var si = el('button', { 'class': 'btn peq', type: 'button', text: 'Sí', 'data-accion': 'si', onclick: function () {
+        // el foco pasa a la ficha vecina (o a la pestaña activa), no al cuerpo del documento
+        var vecina = f.nextElementSibling || f.previousElementSibling, idVecina = vecina && vecina.getAttribute('data-id');
+        borrar(a.id);
+        var destino = (idVecina && $('.ficha[data-id="' + idVecina + '"]')) || $('.tab.activa');
+        if (destino) destino.focus({ preventScroll: true });
+      } });
       var no = el('button', { 'class': 'btn peq', type: 'button', text: 'No', 'data-accion': 'no', onclick: function () { acc.replaceChild(del, c); del.focus({ preventScroll: true }); } });
       var c = el('span', { 'class': 'confirmar' }, [el('span', { text: '¿Borrar?' }), si, no]);
       acc.replaceChild(c, del); si.focus({ preventScroll: true });
@@ -153,27 +171,40 @@
     else if (a.pid) { if (a.sid) irA(a.sid); }
     else if (a.tipo === 'pagina') { var n = $('[data-pg="' + a.pagina + '"][data-pid]'); if (n) irA(BLOQUE_SEC[n.getAttribute('data-pid')], n.getAttribute('data-pid')); }
     else if (a.sid) irA(a.sid);
-    if (window.innerWidth <= 1000) lateral('panel', false);
+    if (mqMovil.matches) lateral('panel', false);
     enfocar(a.id);
   }
-  function enfocar(id, editar) {
+  // Enfoca la ficha de una anotación (y su pasaje). `editar` lleva el cursor a la nota; `mostrar` abre el panel en
+  // pantalla estrecha aunque no se vaya a escribir (al tocar un subrayado).
+  function enfocar(id, editar, mostrar) {
     var previo = fichaFoco && fichaFoco !== id && anots[fichaFoco] ? pidEfectivo(anots[fichaFoco]) : null;
     fichaFoco = id;
     var a = anots[id]; if (!a) return;
     if (previo) pintarPid(previo);
     if (tab === 'buscar') tab = 'todas';
     if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) tab = 'todas';
-    if (lista().indexOf(a) < 0) { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; $$('.filtro').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-f') === 'todas'); }); }
-    $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === tab); });
+    if (lista().indexOf(a) < 0) quitarFiltros();
+    marcarTab();
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
-    if (window.innerWidth <= 1000 && editar) lateral('panel', true);
+    if (mqMovil.matches && (editar || mostrar)) {
+      // en pantalla estrecha el panel sube desde abajo y el pasaje queda a la vista encima
+      var mk = $('mark.hl[data-aids~="' + id + '"]');
+      lateral('panel', true, mk);
+      if (mk) mk.scrollIntoView({ block: 'start' });
+    }
     var f = $('.ficha[data-id="' + id + '"]');
     if (f) {
       f.scrollIntoView({ block: 'nearest' });
-      if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); }
       // Si la activación vino de una marca del texto o de un resultado de búsqueda, el elemento pulsado ya no existe
-      // (se redibujó): el foco del teclado sigue en la ficha, no cae al cuerpo del documento.
-      if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
+      // (se redibujó): el foco del teclado sigue en la ficha, no cae al cuerpo del documento. Con el panel cerrado
+      // (pantalla estrecha) la ficha es inerte y el foco va al pasaje.
+      if (!f.closest('[inert]')) {
+        if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); }
+        if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
+      } else {
+        var m = $('mark.hl[data-aids~="' + id + '"]');
+        if (m) m.focus({ preventScroll: true });
+      }
     }
   }
   function renderCuentas() {

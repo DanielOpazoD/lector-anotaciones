@@ -1,6 +1,6 @@
   // ------------------------------------------------------------ libro
   function renderLibro() {
-    var ind = $('#indice'); ind.innerHTML = '';
+    var ind = $('#indice-lista'); ind.innerHTML = '';
     var lect = $('#lectura'); lect.innerHTML = '';
     var grupo = null;
     SECS.forEach(function (s) {
@@ -67,7 +67,7 @@
     if (!SEC_BY_ID[sid]) return;
     secActual = sid;
     $$('article.seccion').forEach(function (a) { a.hidden = a.id !== 'sec-' + sid; });
-    $$('nav a.sec').forEach(function (a) { a.classList.toggle('activa', a.getAttribute('data-sid') === sid); });
+    $$('nav a.sec').forEach(function (a) { var on = a.getAttribute('data-sid') === sid; a.classList.toggle('activa', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     var act = $('nav a.sec.activa'); if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     try { history.replaceState(null, '', '#' + sid); } catch (e) {}
     lsSet(LOCAL_KEY + ':ultima', sid);

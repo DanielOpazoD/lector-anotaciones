@@ -18,6 +18,7 @@
   --serif: "Literata", "Georgia", "Times New Roman", serif;
   --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --radius: 6px;
+  --escala: 1;  /* ajuste «tamaño del texto» del lector */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -35,12 +36,30 @@
   --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
   color-scheme: dark;
 }
+/* El tema que elige el lector en «Aa» manda sobre el del sistema y el de la página anfitriona (data-theme). */
+:root[data-tema-lector="light"] {
+  --bg: #fbfaf7; --bg-2: #f1efe9; --fg: #22252a; --fg-2: #5b6068; --line: #d9d5cc;
+  --tinta: #3d5a6c; --acento: #8c2f2f; --marco: #ffffff;
+  --hl-revisar: #ffe08a; --hl-cortar: #ffb3b3; --hl-duda: #bfe0ff; --hl-conservar: #c9ecc4;
+  --hl-revisar-ink: #7a5a00; --hl-cortar-ink: #8c2f2f; --hl-duda-ink: #1f4e79; --hl-conservar-ink: #2e6b2a;
+  color-scheme: light;
+}
+:root[data-tema-lector="dark"] {
+  --bg: #15171b; --bg-2: #1d2026; --fg: #e8e6e1; --fg-2: #a6a9b0; --line: #343941;
+  --tinta: #9fc0d4; --acento: #e08a8a; --marco: #1a1d22;
+  --hl-revisar: #5a4a10; --hl-cortar: #6a2a2a; --hl-duda: #1f3e5a; --hl-conservar: #244a24;
+  --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
+  color-scheme: dark;
+}
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
+.saltar { position: absolute; left: 8px; top: -60px; z-index: 50; background: var(--tinta); color: #fff; padding: 8px 12px; border-radius: var(--radius); text-decoration: none; }
+.saltar:focus { top: 8px; }
+section.lectura:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
@@ -56,7 +75,7 @@ header input[type=search] { min-width: 0; width: min(260px, 50vw); padding: 6px 
 .btn { border: 1px solid var(--line); background: var(--marco); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; line-height: 1.2; }
 .btn:hover { border-color: var(--tinta); }
 .btn.primario { background: var(--tinta); color: #fff; border-color: var(--tinta); }
-.btn.peq { padding: 3px 7px; font-size: 12px; }
+.btn.peq { padding: 3px 7px; font-size: 12px; min-height: 26px; }
 .chip { display: inline-block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--bg-2); color: var(--fg-2); }
 #estado { font-size: 12px; color: var(--fg-2); }
 #estado.aviso { color: var(--acento); }
@@ -72,7 +91,7 @@ nav a.sec .cuenta { font-size: 11px; background: var(--acento); color: #fff; bor
 nav a.sec.activa .cuenta { background: #fff; color: var(--tinta); }
 
 section.lectura { overflow: auto; padding-block: 28px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-article.seccion { max-width: 66ch; margin: 0 auto; position: relative; font-family: var(--serif); font-size: 18px; line-height: 1.62; padding-left: 56px; }
+article.seccion { max-width: 66ch; margin: 0 auto; position: relative; font-family: var(--serif); font-size: calc(18px * var(--escala)); line-height: 1.62; padding-left: 56px; }
 article h1.sec-titulo { font-size: 28px; line-height: 1.2; font-weight: 700; margin: 0 0 6px; text-wrap: balance; color: var(--tinta); }
 article .sec-meta { font-family: var(--sans); font-size: 12px; color: var(--fg-2); margin-bottom: 24px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 article .bloque { position: relative; margin: 0 0 1em; }
@@ -107,12 +126,24 @@ mark.hl.foco { outline: 2px solid var(--acento); }
 
 aside.panel { border-left: 1px solid var(--line); overflow: auto; background: var(--bg-2); display: flex; flex-direction: column; min-width: 0; }
 aside .panel-cab { padding: 10px 12px 8px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; position: sticky; top: 0; background: var(--bg-2); z-index: 2; }
-aside .tabs { display: flex; gap: 2px; width: 100%; }
+aside .panel-fila { display: flex; gap: 6px; width: 100%; align-items: center; }
+aside .tabs { display: flex; gap: 2px; width: 100%; flex: 1; }
+aside .panel-fila .cerrar { display: none; }
 aside .tab { flex: 1; padding: 6px; border: 1px solid var(--line); background: var(--marco); font-size: 12px; border-radius: var(--radius); }
 aside .tab.activa { background: var(--tinta); color: #fff; border-color: var(--tinta); }
-aside .filtros { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; }
+aside .filtros { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; margin: 6px 0; }
+aside .nuevas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
+aside .nota-pg input { width: 64px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--marco); }
+aside details.plegable { font-size: 12px; margin-right: 12px; }
+aside details.plegable[open] { width: 100%; margin-right: 0; }
+aside details.plegable > summary { cursor: pointer; color: var(--fg-2); padding: 2px 0; }
+aside details.plegable > summary:hover { color: var(--fg); }
+#filtro-resumen:not(:empty) { color: var(--acento); font-weight: 600; }
+aside .exportar { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.cajon-cab { display: none; }
 aside .filtro { border: 1px solid var(--line); background: var(--marco); border-radius: 999px; padding: 2px 9px; font-size: 11px; }
 aside .filtro.on { border-color: var(--fg); font-weight: 600; }
+aside .filtro.on::before { content: "✓ "; }
 aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; gap: 10px; }
 .ficha { background: var(--marco); border: 1px solid var(--line); border-left: 4px solid var(--hl-revisar-ink); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; }
 .ficha.c-cortar { border-left-color: var(--hl-cortar-ink); } .ficha.c-duda { border-left-color: var(--hl-duda-ink); } .ficha.c-conservar { border-left-color: var(--hl-conservar-ink); }
@@ -121,19 +152,21 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
 .ficha.foco { box-shadow: 0 0 0 2px var(--acento); }
 .ficha .cab { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; color: var(--fg-2); font-size: 11px; margin-bottom: 4px; }
 .ficha .cab a { color: var(--tinta); text-decoration: none; cursor: pointer; }
+.ficha .cat { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; margin-right: 6px; color: var(--hl-revisar-ink); font-weight: 600; }
+.ficha.c-cortar .cat { color: var(--hl-cortar-ink); } .ficha.c-duda .cat { color: var(--hl-duda-ink); } .ficha.c-conservar .cat { color: var(--hl-conservar-ink); }
 .ficha .aviso-ubic { font-family: var(--sans); font-size: 11px; color: var(--acento); margin: 2px 0 4px; }
 .ficha .cita { font-family: var(--serif); font-size: 14px; line-height: 1.4; margin: 2px 0 6px; border-left: 2px solid var(--line); padding-left: 8px; color: var(--fg); }
 .ficha textarea { width: 100%; min-height: 56px; resize: vertical; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; background: var(--bg); font-family: var(--sans); font-size: 13px; }
 .ficha .acciones { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
 .ficha .colores { display: inline-flex; gap: 3px; margin-right: auto; }
-.col-btn { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); padding: 0; }
+.col-btn { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); padding: 0; }
 .col-btn.c-revisar { background: var(--hl-revisar); } .col-btn.c-cortar { background: var(--hl-cortar); } .col-btn.c-duda { background: var(--hl-duda); } .col-btn.c-conservar { background: var(--hl-conservar); }
-.col-btn.on { border: 2px solid var(--fg); }
+.col-btn.on, .col-btn[aria-pressed="true"] { border: 2px solid var(--fg); box-shadow: inset 0 0 0 2px var(--marco); }
 .vacio { color: var(--fg-2); font-size: 13px; padding: 20px 6px; text-align: center; }
 .confirmar { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; }
 
 #sel-tb { position: fixed; z-index: 20; display: none; gap: 4px; padding: 6px; background: var(--marco); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.18); align-items: center; }
-#sel-tb .col-btn { width: 24px; height: 24px; }
+#sel-tb .col-btn { width: 28px; height: 28px; }
 #sel-tb .etq { font-size: 11px; color: var(--fg-2); margin: 0 4px; }
 .leyenda { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 11px; color: var(--fg-2); width: 100%; }
 .leyenda span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
@@ -167,10 +200,18 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
 .diff .etq { font-family: var(--sans); font-size: 11px; color: var(--fg-2); margin-bottom: 4px; }
 .capa { border-bottom: 2px solid transparent; }
 .capa.k-fl { border-bottom-color: var(--acento); } .capa.k-mu { border-bottom-color: var(--hl-revisar-ink); border-bottom-style: dotted; } .capa.k-tr { background: var(--hl-cortar); } .capa.k-rep { border-bottom-color: var(--hl-duda-ink); border-bottom-style: dashed; } .capa.k-cn { border-bottom-color: var(--fg-2); border-bottom-style: double; }
-details.capas-det { position: relative; } details.capas-det > summary { list-style: none; cursor: pointer; } details.capas-det > summary::-webkit-details-marker { display: none; }
-details.capas-det .capas-menu { position: absolute; top: 120%; left: 0; background: var(--marco); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; z-index: 30; min-width: 260px; box-shadow: 0 6px 20px rgba(0,0,0,.18); display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
-details.capas-det .capas-menu label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
-details.capas-det .capas-menu .muestra { width: 14px; height: 10px; display: inline-block; border-bottom: 2px solid; }
+details.menu-det { position: relative; } details.menu-det > summary { list-style: none; cursor: pointer; } details.menu-det > summary::-webkit-details-marker { display: none; }
+details.menu-det[open] > summary { border-color: var(--tinta); }
+details.menu-det .menu { position: absolute; top: 120%; right: 0; background: var(--marco); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; z-index: 30; min-width: 260px; max-width: calc(100vw - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.18); display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+details.menu-det .menu label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+#capas-menu .muestra { width: 14px; height: 10px; display: inline-block; border-bottom: 2px solid; }
+.ajuste { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; border: 0; margin: 0; padding: 4px 0; }
+.ajuste legend { padding: 0 0 2px; float: left; width: 100%; color: var(--fg-2); }
+fieldset.ajuste { justify-content: flex-start; gap: 4px 14px; }
+.ajuste > span:first-child { color: var(--fg-2); }
+.ajuste .pasos { display: inline-flex; gap: 6px; align-items: center; }
+.ajuste output { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+:root[data-letra="sans"] article.seccion { font-family: var(--sans); }
 .sec-herr { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: -14px 0 22px; font-family: var(--sans); font-size: 12px; color: var(--fg-2); }
 .sec-herr label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; color: var(--fg); }
 nav .progreso { height: 3px; background: var(--line); margin: 2px 12px 6px; border-radius: 2px; overflow: hidden; }
@@ -187,98 +228,178 @@ body.solo-lectura .pg { cursor: default; pointer-events: none; }
 .enlace { background: none; border: 0; padding: 0; color: var(--tinta); text-decoration: underline; cursor: pointer; font: inherit; }
 mark.hl:focus-visible, .res:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
 .bloque.leyendo { background: var(--bg-2); }
-#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.84); display: none; align-items: center; justify-content: center; z-index: 40; cursor: zoom-out; padding: 24px; }
-#lightbox.abierto { display: flex; }
-#lightbox img { max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.5); background: #fff; }
+dialog { color: var(--fg); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+#lightbox { border: 0; padding: 0; background: transparent; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: visible; cursor: zoom-out; }
+#lightbox::backdrop { background: rgba(0,0,0,.84); }
+#lightbox img { display: block; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); box-shadow: 0 10px 40px rgba(0,0,0,.5); background: #fff; }
+#lightbox .cerrar { position: fixed; top: max(12px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); min-width: 40px; min-height: 40px; font-size: 20px; }
+#velo { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 29; }
+#velo[hidden] { display: none; }
+.cerrar { font-size: 16px; line-height: 1; min-width: 28px; }
 figure img { cursor: zoom-in; }
+/* Aviso flotante con «Deshacer»: fuera de la barra, para que siga a mano con un cajón abierto en el teléfono. */
+#deshacer-zona { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 45; display: flex; gap: 10px; align-items: center; background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 13px; max-width: calc(100vw - 32px); }
 #deshacer-zona:empty { display: none; }
-#deshacer { margin-left: 6px; color: var(--acento); cursor: pointer; text-decoration: underline; font-size: 13px; }
-#atajos { position: fixed; right: 16px; bottom: 16px; background: var(--marco); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 12px; z-index: 25; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.18); line-height: 1.9; }
-#atajos.abierto { display: block; }
+#deshacer { color: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; font-size: 13px; min-height: 32px; }
+#atajos { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px 14px; background: var(--marco); font-size: 13px; line-height: 1.9; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+#atajos .dialogo-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
+#atajos h2 { font-size: 15px; margin: 0; font-family: var(--serif); }
 #atajos kbd { font-family: var(--sans); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; background: var(--bg-2); margin-right: 4px; }
 .filtros select { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px; background: var(--marco); max-width: 100%; }
 .res.anot { border-left: 3px solid var(--tinta); }
-#movil-barra { display: none; }
+#movil-barra, #b-mas { display: none; }
+.herramientas { display: contents; }
+#sel-nota { white-space: nowrap; }
 @media (max-width: 1000px) {
   main.mesa { grid-template-columns: 1fr; grid-template-rows: 1fr; }
   nav.indice, aside.panel { position: fixed; top: 0; bottom: 0; width: min(92vw, 380px); z-index: 30; box-shadow: 0 0 30px rgba(0,0,0,.3); transform: translateX(-105%); transition: transform .2s; padding-top: max(12px, env(safe-area-inset-top, 0px)); }
-  aside.panel { right: 0; left: auto; transform: translateX(105%); border-left: 1px solid var(--line); }
+  /* El panel es una hoja que sube desde abajo: deja ver arriba el pasaje que se anota, y tocar ahí la cierra. */
+  aside.panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; height: 64vh; height: 64dvh; max-height: 680px; transform: translateY(105%); border-left: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding-top: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  aside.panel .panel-cab { padding-top: 14px; border-radius: 14px 14px 0 0; }
+  aside .panel-fila .cerrar { display: inline-block; }
+  aside .nuevas { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  aside .nuevas > * { flex: none; }
+  /* con la hoja abierta el texto puede subir hasta arriba, aunque el pasaje esté al final de la sección */
+  section.lectura.con-hoja { padding-bottom: 75vh; }
+  aside.panel .panel-cab::before { content: ""; position: absolute; top: 5px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
+  nav.indice { width: min(85vw, 340px); }
+  #velo.claro { background: rgba(0,0,0,.18); }
   nav.indice.abierta, aside.panel.abierta { transform: none; }
+  .cajon-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
+  .cajon-cab .cajon-t { font-family: var(--serif); font-weight: 600; font-size: 15px; }
+  nav.indice .cajon-cab { position: sticky; top: 0; background: var(--bg); padding: 4px 0 8px 8px; z-index: 1; }
+  nav.indice { background: var(--bg); }
   #movil-barra { display: flex; gap: 6px; }
+  /* La barra se reduce a una fila: lo demás (búsqueda, concentración, capas, ajustes, atajos) se despliega con «⋯». */
+  header.barra { gap: 8px; }
+  #b-mas { display: inline-block; font-size: 16px; line-height: 1; }
+  .herramientas { display: none; width: 100%; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .herramientas.abierta { display: flex; }
+  details.menu-det[open] { width: 100%; }
+  details.menu-det .menu { position: static; margin-top: 6px; box-shadow: none; min-width: 0; max-width: none; }
+  #estado { width: 100%; }
+  #estado:empty { display: none; }
   header .titulo small { display: none; }
   header input[type=search] { width: 100%; }
-  article.seccion { padding-left: 0; font-size: 17px; }
+  article.seccion { padding-left: 0; font-size: calc(17px * var(--escala)); }
   .pg { position: static; display: inline-block; width: auto; margin-right: 6px; }
   /* sin margen izquierdo, el marcador «cambió» entra en el flujo como el número de página, con área táctil de 32 px */
   .marca-cambio { position: static; display: inline-block; width: auto; min-width: 32px; min-height: 32px; padding: 6px 8px; margin-right: 6px; vertical-align: middle; font-size: 12px; }
   .nav-pie { padding-left: 0; }
 }
+
+/* Pantallas táctiles: áreas de toque de 40 px y la barra de subrayado anclada abajo, lejos del menú nativo de la selección. */
+@media (pointer: coarse) {
+  .btn, .btn.peq, summary.btn, aside .tab, aside .filtro, .filtros select { min-height: 40px; }
+  .btn.peq, summary.btn { padding: 6px 10px; font-size: 13px; }
+  .col-btn { width: 36px; height: 36px; }
+  .cerrar { min-width: 40px; }
+  .pg { min-height: 32px; min-width: 40px; padding: 6px 6px; }
+  details.menu-det .menu label, aside details.plegable > summary { min-height: 40px; }
+  #sel-tb.abajo { left: 50% !important; right: auto; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px; gap: 8px; }
+  #sel-tb.abajo .col-btn { width: 40px; height: 40px; }
+  #deshacer-zona { bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 64px)); }
+}
+/* Alto contraste del sistema: los colores de fondo desaparecen, así que cada categoría se distingue también por la línea. */
+@media (forced-colors: active) {
+  mark.hl { forced-color-adjust: none; background: Mark; color: MarkText; text-decoration-line: underline; text-decoration-thickness: 2px; }
+  mark.hl.c-cortar { text-decoration-line: line-through; } mark.hl.c-duda { text-decoration-style: wavy; } mark.hl.c-conservar { text-decoration-style: double; }
+  mark.hl.foco, .ficha.foco { outline: 3px solid Highlight; }
+  .col-btn { forced-color-adjust: none; }
+  .ficha { border-left-width: 6px; }
+}
 </style>
 </head>
 <body>
+<a class="saltar" href="#lectura">Saltar al texto</a>
 <div id="app">
   <header class="barra">
     <div class="titulo">Lector <small id="sub">Cargando…</small></div>
     <span id="sl-chip" class="chip" hidden title="En este libro puedes leer y copiar, no anotar">sólo lectura</span>
     <div id="movil-barra"><button class="btn peq" id="b-indice" type="button" aria-controls="indice" aria-expanded="false">Índice</button><button class="btn peq" id="b-panel" type="button" aria-controls="panel" aria-expanded="false">Anotaciones <span id="n-panel"></span></button></div>
     <div class="espacio"></div>
+    <button class="btn peq" id="b-mas" type="button" aria-controls="herramientas" aria-expanded="false" aria-label="Buscar y más herramientas" title="Buscar, concentración, capas, ajustes y atajos">⋯</button>
+    <div class="herramientas" id="herramientas">
     <input type="search" id="buscar" placeholder="Buscar en el libro y en las notas…" aria-label="Buscar en el libro y en las notas">
-    <button class="btn peq" id="b-foco" type="button" title="Modo concentración: sólo el texto (tecla F)">Concentración</button>
-    <details id="capas" class="capas-det" hidden><summary class="btn peq" title="Señales editoriales calculadas al construir el libro">Capas</summary><div class="capas-menu" id="capas-menu"></div></details>
-    <button class="btn peq" id="b-atajos" type="button" title="Atajos de teclado (tecla ?)" aria-label="Atajos de teclado">?</button>
-    <span id="estado">Cargando…</span><span id="deshacer-zona"></span>
+    <button class="btn peq" id="b-foco" type="button" title="Modo concentración: sólo el texto (tecla F)" aria-pressed="false">Concentración</button>
+    <details id="capas" class="menu-det" hidden><summary class="btn peq" title="Señales editoriales calculadas al construir el libro">Capas</summary><div class="menu" id="capas-menu"></div></details>
+    <details id="ajustes" class="menu-det"><summary class="btn peq" title="Tamaño de letra, tema y tipografía" aria-label="Ajustes de lectura">Aa</summary><div class="menu" id="ajustes-menu">
+      <div class="ajuste" role="group" aria-labelledby="aj-tam-t"><span id="aj-tam-t">Tamaño del texto</span><span class="pasos"><button class="btn peq" type="button" id="aj-menos" aria-label="Letra más pequeña">A−</button><output id="aj-tam" aria-live="polite">100 %</output><button class="btn peq" type="button" id="aj-mas" aria-label="Letra más grande">A+</button></span></div>
+      <fieldset class="ajuste"><legend>Tema</legend><label><input type="radio" name="aj-tema" value="">sistema</label><label><input type="radio" name="aj-tema" value="light">claro</label><label><input type="radio" name="aj-tema" value="dark">oscuro</label></fieldset>
+      <fieldset class="ajuste"><legend>Letra del texto</legend><label><input type="radio" name="aj-letra" value="">con serifa</label><label><input type="radio" name="aj-letra" value="sans">sin serifa</label></fieldset>
+    </div></details>
+    <button class="btn peq" id="b-atajos" type="button" title="Atajos de teclado (tecla ?)" aria-label="Atajos de teclado" aria-haspopup="dialog">?</button>
+    </div>
+    <span id="estado" role="status">Cargando…</span>
   </header>
   <main class="mesa">
-    <nav class="indice" id="indice" aria-label="Índice"></nav>
-    <section class="lectura" id="lectura">
+    <nav class="indice cajon" id="indice" aria-label="Índice">
+      <div class="cajon-cab"><span class="cajon-t">Índice</span><button class="btn peq cerrar" type="button" data-cerrar="indice" aria-label="Cerrar el índice">×</button></div>
+      <div id="indice-lista"></div>
+    </nav>
+    <section class="lectura" id="lectura" tabindex="-1" aria-label="Texto del libro">
       <div class="vacio">Cargando el libro…</div>
     </section>
-    <aside class="panel" id="panel" aria-label="Anotaciones">
+    <aside class="panel cajon" id="panel" aria-label="Anotaciones">
       <div class="panel-cab">
-        <div class="tabs">
-          <button class="tab activa" type="button" data-tab="capitulo">Esta sección</button>
-          <button class="tab" type="button" data-tab="todas">Todas</button>
-          <button class="tab" type="button" data-tab="buscar">Búsqueda</button>
+        <div class="panel-fila">
+        <div class="tabs" role="tablist" aria-label="Qué anotaciones mostrar">
+          <button class="tab activa" type="button" role="tab" id="tab-capitulo" data-tab="capitulo" aria-controls="lista" aria-selected="true">Esta sección</button>
+          <button class="tab" type="button" role="tab" id="tab-todas" data-tab="todas" aria-controls="lista" aria-selected="false" tabindex="-1">Todas</button>
+          <button class="tab" type="button" role="tab" id="tab-buscar" data-tab="buscar" aria-controls="lista" aria-selected="false" tabindex="-1">Búsqueda</button>
         </div>
-        <button class="btn peq" id="b-nota-cap" type="button">+ Nota de la sección</button>
-        <span class="confirmar">p.&nbsp;<input type="number" id="pg-num" min="1" style="width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--marco)" aria-label="Número de página"> <button class="btn peq" id="b-nota-pg" type="button">+ Nota de página</button></span>
-        <button class="btn peq" id="b-nota-gen" type="button">+ Nota general</button>
-        <div class="filtros" id="filtros">
-          <button class="filtro on" type="button" data-f="todas">todas</button>
-          <button class="filtro" type="button" data-f="revisar">revisar</button>
-          <button class="filtro" type="button" data-f="cortar">cortar</button>
-          <button class="filtro" type="button" data-f="duda">duda</button>
-          <button class="filtro" type="button" data-f="conservar">conservar</button>
-          <button class="filtro" type="button" data-f="notas">notas de página/sección</button>
-          <button class="filtro" type="button" data-f="abiertas">sólo abiertas</button>
-          <button class="filtro" type="button" data-f="respondidas">con respuesta</button>
-          <button class="filtro" type="button" data-f="preguntas">preguntas</button>
-          <select id="f-autor" aria-label="Lector" hidden><option value="">todos los lectores</option></select>
-          <select id="f-etiqueta" aria-label="Etiqueta" hidden><option value="">todas las etiquetas</option></select>
+        <button class="btn peq cerrar" type="button" data-cerrar="panel" aria-label="Cerrar las anotaciones">×</button>
         </div>
-        <div class="leyenda"><span class="l-revisar">revisar o reescribir</span><span class="l-cortar">cortar</span><span class="l-duda">duda o verificar</span><span class="l-conservar">conservar, me gusta</span></div>
-        <div style="display:flex;gap:4px;width:100%"><button class="btn peq" id="b-copiar" type="button">Copiar todo (JSON)</button><button class="btn peq" id="b-copiar-md" type="button">Copiar todo (Markdown)</button></div>
+        <div class="nuevas">
+          <button class="btn peq" id="b-nota-cap" type="button">+ Nota de la sección</button>
+          <span class="confirmar nota-pg"><label for="pg-num">p.</label><input type="number" id="pg-num" min="1" inputmode="numeric" aria-label="Número de página"><button class="btn peq" id="b-nota-pg" type="button">+ Nota de página</button></span>
+          <button class="btn peq" id="b-nota-gen" type="button">+ Nota general</button>
+        </div>
+        <details class="plegable" id="filtros-det"><summary>Filtros <span id="filtro-resumen"></span></summary>
+          <div class="filtros" id="filtros" role="group" aria-label="Filtrar anotaciones">
+            <button class="filtro on" type="button" data-f="todas" aria-pressed="true">todas</button>
+            <button class="filtro" type="button" data-f="revisar" aria-pressed="false">revisar</button>
+            <button class="filtro" type="button" data-f="cortar" aria-pressed="false">cortar</button>
+            <button class="filtro" type="button" data-f="duda" aria-pressed="false">duda</button>
+            <button class="filtro" type="button" data-f="conservar" aria-pressed="false">conservar</button>
+            <button class="filtro" type="button" data-f="notas" aria-pressed="false">notas de página/sección</button>
+            <button class="filtro" type="button" data-f="abiertas" aria-pressed="false">sólo abiertas</button>
+            <button class="filtro" type="button" data-f="respondidas" aria-pressed="false">con respuesta</button>
+            <button class="filtro" type="button" data-f="preguntas" aria-pressed="false">preguntas</button>
+            <select id="f-autor" aria-label="Lector" hidden><option value="">todos los lectores</option></select>
+            <select id="f-etiqueta" aria-label="Etiqueta" hidden><option value="">todas las etiquetas</option></select>
+          </div>
+          <div class="leyenda"><span class="l-revisar">revisar o reescribir</span><span class="l-cortar">cortar</span><span class="l-duda">duda o verificar</span><span class="l-conservar">conservar, me gusta</span></div>
+        </details>
+        <details class="plegable" id="exportar-det"><summary>Exportar</summary>
+          <div class="exportar"><button class="btn peq" id="b-copiar" type="button">Copiar todo (JSON)</button><button class="btn peq" id="b-copiar-md" type="button">Copiar todo (Markdown)</button></div>
+        </details>
       </div>
-      <div class="lista" id="lista"><div class="vacio">Aún no hay anotaciones. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.</div></div>
+      <div class="lista" id="lista" role="tabpanel" aria-labelledby="tab-capitulo"><div class="vacio">Aún no hay anotaciones. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.</div></div>
     </aside>
   </main>
+  <div id="velo" hidden></div>
 </div>
-<div id="lightbox" role="dialog" aria-label="Figura ampliada"><img alt=""></div>
-<div id="atajos" role="dialog" aria-label="Atajos de teclado">
+<div id="deshacer-zona" role="status"></div>
+<dialog id="lightbox" aria-label="Figura ampliada"><img alt=""><button class="btn peq cerrar" type="button" aria-label="Cerrar la figura">×</button></dialog>
+<dialog id="atajos" aria-labelledby="atajos-t">
+  <div class="dialogo-cab"><h2 id="atajos-t">Atajos de teclado</h2><button class="btn peq cerrar" type="button" aria-label="Cerrar">×</button></div>
   <div class="anotar"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> subrayar la selección (revisar, cortar, duda, conservar)</div>
   <div class="anotar"><kbd>N</kbd> subrayar con nota</div>
   <div><kbd>C</kbd> copiar la selección con referencia</div>
   <div><kbd>J</kbd> / <kbd>K</kbd> sección siguiente / anterior · <kbd>L</kbd> marcar leída · <kbd>F</kbd> concentración</div>
-  <div><kbd>Esc</kbd> cerrar · <kbd>?</kbd> esta ayuda</div>
-</div>
+  <div class="anotar">En una nota: <kbd>Esc</kbd> o <kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda y vuelve al texto</div>
+  <div><kbd>Esc</kbd> cerrar · <kbd>?</kbd> esta ayuda · clic fuera de una ficha o un panel lo cierra</div>
+</dialog>
 <div id="sel-tb" role="toolbar" aria-label="Subrayar">
   <span class="etq">Subrayar</span>
-  <button class="col-btn c-revisar" type="button" data-c="revisar" title="revisar o reescribir" aria-label="revisar"></button>
-  <button class="col-btn c-cortar" type="button" data-c="cortar" title="cortar" aria-label="cortar"></button>
-  <button class="col-btn c-duda" type="button" data-c="duda" title="duda o verificar" aria-label="duda"></button>
-  <button class="col-btn c-conservar" type="button" data-c="conservar" title="conservar" aria-label="conservar"></button>
-  <button class="btn peq" type="button" id="sel-nota">+ con nota</button>
-  <button class="btn peq" type="button" id="sel-copiar" title="Copiar el texto seleccionado con sección, página y línea de origen">Copiar</button>
+  <button class="col-btn c-revisar" type="button" data-c="revisar" title="revisar o reescribir (1)" aria-label="Subrayar: revisar"></button>
+  <button class="col-btn c-cortar" type="button" data-c="cortar" title="cortar (2)" aria-label="Subrayar: cortar"></button>
+  <button class="col-btn c-duda" type="button" data-c="duda" title="duda o verificar (3)" aria-label="Subrayar: duda"></button>
+  <button class="col-btn c-conservar" type="button" data-c="conservar" title="conservar (4)" aria-label="Subrayar: conservar"></button>
+  <button class="btn peq" type="button" id="sel-nota" title="Subrayar y escribir una nota (N)">+ con nota</button>
+  <button class="btn peq" type="button" id="sel-copiar" title="Copiar el texto seleccionado con sección, página y línea de origen (C)">Copiar</button>
 </div>
 
 <script>
@@ -455,7 +576,7 @@ figure img { cursor: zoom-in; }
 
   // ------------------------------------------------------------ libro
   function renderLibro() {
-    var ind = $('#indice'); ind.innerHTML = '';
+    var ind = $('#indice-lista'); ind.innerHTML = '';
     var lect = $('#lectura'); lect.innerHTML = '';
     var grupo = null;
     SECS.forEach(function (s) {
@@ -522,7 +643,7 @@ figure img { cursor: zoom-in; }
     if (!SEC_BY_ID[sid]) return;
     secActual = sid;
     $$('article.seccion').forEach(function (a) { a.hidden = a.id !== 'sec-' + sid; });
-    $$('nav a.sec').forEach(function (a) { a.classList.toggle('activa', a.getAttribute('data-sid') === sid); });
+    $$('nav a.sec').forEach(function (a) { var on = a.getAttribute('data-sid') === sid; a.classList.toggle('activa', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     var act = $('nav a.sec.activa'); if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     try { history.replaceState(null, '', '#' + sid); } catch (e) {}
     lsSet(LOCAL_KEY + ':ultima', sid);
@@ -841,8 +962,8 @@ figure img { cursor: zoom-in; }
           cubren.sort(function (x, y) { return (x.creado < y.creado) ? -1 : 1; });
           var top = cubren[cubren.length - 1];
           nodo = el('mark', { 'class': 'hl c-' + top.color + (top.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === top.id ? ' foco' : ''), 'data-aids': cubren.map(function (a) { return a.id; }).join(' '), text: seg, tabindex: '0', role: 'button' });
-          nodo.addEventListener('click', function (ev) { ev.stopPropagation(); enfocar(top.id); });
-          nodo.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); enfocar(top.id); } });
+          nodo.addEventListener('click', function (ev) { ev.stopPropagation(); enfocar(top.id, false, true); });
+          nodo.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); enfocar(top.id, false, true); } });
         } else nodo = document.createTextNode(seg);
         if (ks.length) { var sp = el('span', { 'class': 'capa ' + ks.map(function (k) { return 'k-' + k; }).join(' '), title: ks.map(function (k) { return (LIBRO.capas || {})[k] || k; }).join(' · ') }); sp.appendChild(nodo); nodo = sp; }
         frag.appendChild(nodo);
@@ -898,11 +1019,16 @@ figure img { cursor: zoom-in; }
     if (act && act.tagName === 'TEXTAREA' && act.id.indexOf('nota-') === 0) foco = { id: act.id, valor: act.value, ini: act.selectionStart, fin: act.selectionEnd, scroll: act.scrollTop };
     else if (act && act.tagName === 'BUTTON' && act.closest('.ficha')) focoBoton = { id: act.closest('.ficha').getAttribute('data-id'), accion: act.getAttribute('data-accion') || '', c: act.getAttribute('data-c') || '', texto: act.textContent };
     var box = $('#lista'), desplaz = box.scrollTop; box.innerHTML = '';
-    renderSelectores();
+    renderSelectores(); marcarFiltro();
     var L = lista();
     resolverPerfiles(L.map(function (a) { return a.autor; }).filter(Boolean));
     $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
-    if (!L.length) { box.appendChild(el('div', { 'class': 'vacio', text: tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' })); return; }
+    if (!L.length) {
+      var filtrado = filtro !== 'todas' || !!filtroAutor || !!filtroEtiqueta;
+      var vacio = el('div', { 'class': 'vacio', text: filtrado ? 'Ninguna anotación con estos filtros. ' : tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' });
+      if (filtrado) { var qf = el('button', { 'class': 'enlace', type: 'button', text: 'Quitar filtros' }); qf.addEventListener('click', function () { quitarFiltros(); renderPanel(); }); vacio.appendChild(qf); }
+      box.appendChild(vacio); return;
+    }
     L.forEach(function (a) { box.appendChild(ficha(a)); });
     box.scrollTop = desplaz;
     if (foco) {
@@ -927,7 +1053,7 @@ figure img { cursor: zoom-in; }
     // deben llevar lo recién escrito.
     var actual = function () { return anots[a.id] || a; };
     var f = el('div', { 'class': 'ficha t-' + a.tipo + (a.color ? ' c-' + a.color : '') + (a.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === a.id ? ' foco' : '') + (SIN_GUARDAR[a.id] ? ' sin-guardar' : ''), 'data-id': a.id, tabindex: '-1' });
-    var cab = el('div', { 'class': 'cab' }, [el('span', { text: etiqueta(a) })]);
+    var cab = el('div', { 'class': 'cab' }, [el('span', {}, [a.tipo === 'subrayado' && a.color ? el('span', { 'class': 'cat', text: a.color }) : null, etiqueta(a)])]);
     if (a.autor && (a.autor !== ME || variosAutores())) cab.firstChild.appendChild(chipAutor(a.autor));
     if (a.cierre) cab.firstChild.appendChild(el('span', { 'class': 'cierre ' + a.cierre, text: a.cierre === 'atendida' ? 'atendida' : a.cierre === 'descartada' ? 'descartada' : 'pregunta' }));
     var u = UBIC[a.id];
@@ -958,12 +1084,18 @@ figure img { cursor: zoom-in; }
       accSL.appendChild(copSL); f.appendChild(accSL);
       return f;
     }
+    // Esc o Ctrl/Cmd+Enter: guardar (al perder el foco) y volver al texto
+    var salirConTecla = function (ev) {
+      if (ev.key !== 'Escape' && !(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey))) return;
+      ev.preventDefault(); ev.stopPropagation(); ev.target.blur(); volverAlTexto(a.id);
+    };
     var ta = el('textarea', { placeholder: a.tipo === 'subrayado' ? 'Nota sobre este subrayado…' : 'Escribe la nota…', 'aria-label': 'Nota', id: 'nota-' + a.id });
     ta.value = a.nota || '';
     var timer = null;
     var guardarNota = function () { if (anots[a.id] && ta.value !== anots[a.id].nota) { guardarSilencioso(a.id, { nota: ta.value }, ta.id); pintarEtiquetas(f, anots[a.id]); } };
     ta.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(guardarNota, 900); });
     ta.addEventListener('blur', function () { clearTimeout(timer); guardarNota(); });
+    ta.addEventListener('keydown', salirConTecla);
     f.appendChild(ta);
     pintarEtiquetas(f, a);
     if (a.respuesta || a.cierre) {
@@ -979,13 +1111,14 @@ figure img { cursor: zoom-in; }
       var guardarReplica = function () { if (anots[a.id] && rp.value !== (anots[a.id].replica || '')) guardarSilencioso(a.id, { replica: rp.value }, rp.id); };
       rp.addEventListener('input', function () { clearTimeout(tr); tr = setTimeout(guardarReplica, 900); });
       rp.addEventListener('blur', function () { clearTimeout(tr); guardarReplica(); });
+      rp.addEventListener('keydown', salirConTecla);
       f.appendChild(rp);
     }
     var acc = el('div', { 'class': 'acciones' });
     if (a.tipo === 'subrayado') {
       var cols = el('div', { 'class': 'colores' });
       ['revisar', 'cortar', 'duda', 'conservar'].forEach(function (c) {
-        var b = el('button', { 'class': 'col-btn c-' + c + (a.color === c ? ' on' : ''), type: 'button', title: c, 'aria-label': c, 'data-accion': 'color', 'data-c': c });
+        var b = el('button', { 'class': 'col-btn c-' + c + (a.color === c ? ' on' : ''), type: 'button', title: c, 'aria-label': 'Color: ' + c, 'aria-pressed': a.color === c ? 'true' : 'false', 'data-accion': 'color', 'data-c': c });
         // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
         b.addEventListener('click', function () { guardar(Object.assign({}, actual(), { color: c })); });
         cols.appendChild(b);
@@ -1001,7 +1134,13 @@ figure img { cursor: zoom-in; }
     var del = el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar', 'data-accion': 'borrar' });
     del.addEventListener('click', function () {
       // el confirmador recibe el foco (que estaba en el botón que se retira) y «No» lo devuelve a «Borrar»
-      var si = el('button', { 'class': 'btn peq', type: 'button', text: 'Sí', 'data-accion': 'si', onclick: function () { borrar(a.id); } });
+      var si = el('button', { 'class': 'btn peq', type: 'button', text: 'Sí', 'data-accion': 'si', onclick: function () {
+        // el foco pasa a la ficha vecina (o a la pestaña activa), no al cuerpo del documento
+        var vecina = f.nextElementSibling || f.previousElementSibling, idVecina = vecina && vecina.getAttribute('data-id');
+        borrar(a.id);
+        var destino = (idVecina && $('.ficha[data-id="' + idVecina + '"]')) || $('.tab.activa');
+        if (destino) destino.focus({ preventScroll: true });
+      } });
       var no = el('button', { 'class': 'btn peq', type: 'button', text: 'No', 'data-accion': 'no', onclick: function () { acc.replaceChild(del, c); del.focus({ preventScroll: true }); } });
       var c = el('span', { 'class': 'confirmar' }, [el('span', { text: '¿Borrar?' }), si, no]);
       acc.replaceChild(c, del); si.focus({ preventScroll: true });
@@ -1026,27 +1165,40 @@ figure img { cursor: zoom-in; }
     else if (a.pid) { if (a.sid) irA(a.sid); }
     else if (a.tipo === 'pagina') { var n = $('[data-pg="' + a.pagina + '"][data-pid]'); if (n) irA(BLOQUE_SEC[n.getAttribute('data-pid')], n.getAttribute('data-pid')); }
     else if (a.sid) irA(a.sid);
-    if (window.innerWidth <= 1000) lateral('panel', false);
+    if (mqMovil.matches) lateral('panel', false);
     enfocar(a.id);
   }
-  function enfocar(id, editar) {
+  // Enfoca la ficha de una anotación (y su pasaje). `editar` lleva el cursor a la nota; `mostrar` abre el panel en
+  // pantalla estrecha aunque no se vaya a escribir (al tocar un subrayado).
+  function enfocar(id, editar, mostrar) {
     var previo = fichaFoco && fichaFoco !== id && anots[fichaFoco] ? pidEfectivo(anots[fichaFoco]) : null;
     fichaFoco = id;
     var a = anots[id]; if (!a) return;
     if (previo) pintarPid(previo);
     if (tab === 'buscar') tab = 'todas';
     if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) tab = 'todas';
-    if (lista().indexOf(a) < 0) { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; $$('.filtro').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-f') === 'todas'); }); }
-    $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === tab); });
+    if (lista().indexOf(a) < 0) quitarFiltros();
+    marcarTab();
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
-    if (window.innerWidth <= 1000 && editar) lateral('panel', true);
+    if (mqMovil.matches && (editar || mostrar)) {
+      // en pantalla estrecha el panel sube desde abajo y el pasaje queda a la vista encima
+      var mk = $('mark.hl[data-aids~="' + id + '"]');
+      lateral('panel', true, mk);
+      if (mk) mk.scrollIntoView({ block: 'start' });
+    }
     var f = $('.ficha[data-id="' + id + '"]');
     if (f) {
       f.scrollIntoView({ block: 'nearest' });
-      if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); }
       // Si la activación vino de una marca del texto o de un resultado de búsqueda, el elemento pulsado ya no existe
-      // (se redibujó): el foco del teclado sigue en la ficha, no cae al cuerpo del documento.
-      if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
+      // (se redibujó): el foco del teclado sigue en la ficha, no cae al cuerpo del documento. Con el panel cerrado
+      // (pantalla estrecha) la ficha es inerte y el foco va al pasaje.
+      if (!f.closest('[inert]')) {
+        if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); }
+        if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
+      } else {
+        var m = $('mark.hl[data-aids~="' + id + '"]');
+        if (m) m.focus({ preventScroll: true });
+      }
     }
   }
   function renderCuentas() {
@@ -1135,7 +1287,7 @@ figure img { cursor: zoom-in; }
 
   // ------------------------------------------------------------ búsqueda
   function buscar(q) {
-    tab = 'buscar'; $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === 'buscar'); });
+    tab = 'buscar'; marcarTab();
     var box = $('#lista'); box.innerHTML = '';
     q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
     var norm = N.normalizar;
@@ -1145,7 +1297,7 @@ figure img { cursor: zoom-in; }
     enAnots.forEach(function (a) {
       var r = el('div', { 'class': 'res anot', role: 'button', tabindex: '0' }, [el('div', { 'class': 'donde', text: 'En tus anotaciones · ' + etiqueta(a) }), el('div', { text: (a.nota || a.cita || '').slice(0, 160) })]);
       r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
-      r.addEventListener('click', function () { irAAnot(anots[a.id] || a); if (window.innerWidth <= 1000) lateral('panel', true); });
+      r.addEventListener('click', function () { irAAnot(anots[a.id] || a); if (mqMovil.matches) lateral('panel', true); });
       box.appendChild(r);
     });
     SECS.forEach(function (s) {
@@ -1158,22 +1310,27 @@ figure img { cursor: zoom-in; }
         r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
         var frag = el('div'); frag.appendChild(document.createTextNode((ini ? '…' : '') + t.slice(ini, i))); frag.appendChild(el('b', { text: t.slice(i, i + nq.length) })); frag.appendChild(document.createTextNode(t.slice(i + nq.length, fin) + (fin < t.length ? '…' : '')));
         r.appendChild(frag);
-        r.addEventListener('click', function () { irA(s.id, b.id); if (window.innerWidth <= 1000) lateral('panel', false); });
+        r.addEventListener('click', function () { irA(s.id, b.id); if (mqMovil.matches) lateral('panel', false); });
         box.appendChild(r);
       });
     });
     box.insertBefore(el('div', { 'class': 'vacio', text: (enAnots.length ? enAnots.length + ' en las anotaciones · ' : '') + (n ? n + (n > 200 ? ' coincidencias en el libro (se muestran 200)' : ' coincidencias en el libro') : 'sin coincidencias en el libro') }), box.firstChild);
-    if (window.innerWidth <= 1000) lateral('panel', true);
+    if (mqMovil.matches) lateral('panel', true);
   }
 
   // ------------------------------------------------------------ barra de selección
   var tb = $('#sel-tb');
+  var mqTactil = window.matchMedia ? window.matchMedia('(pointer: coarse)') : { matches: false };
   function ocultarTb() { tb.style.display = 'none'; }
   function mostrarTb() {
     var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { ocultarTb(); return; }
     var r = sel.getRangeAt(0), ex = extremosDeRango(r); if (!ex.pA || !ex.pB) { ocultarTb(); return; }
     var rect = r.getBoundingClientRect(); if (!rect.width && !rect.height) { ocultarTb(); return; }
     tb.style.display = 'flex';
+    // En pantallas táctiles la barra va anclada abajo y con botones grandes: encima de la selección está el menú
+    // nativo (copiar, buscar…) y los tiradores, que la taparían.
+    tb.classList.toggle('abajo', !!mqTactil.matches);
+    if (mqTactil.matches) return;
     var w = tb.offsetWidth || 220, h = tb.offsetHeight || 40;
     var left = Math.min(Math.max(8, rect.left + rect.width / 2 - w / 2), window.innerWidth - w - 8);
     // Encima de la selección; si no cabe, debajo; y siempre dentro de la ventana (una selección más alta que la
@@ -1189,9 +1346,32 @@ figure img { cursor: zoom-in; }
   $('#sel-copiar').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
   $('#sel-copiar').addEventListener('click', function () { copiarSeleccion(this); });
 
+  // ------------------------------------------------------------ pestañas y filtros del panel
+  // Las pestañas siguen el patrón de WAI-ARIA: una sola en el orden de Tab, flechas para moverse entre ellas.
+  function marcarTab() {
+    $$('.tab').forEach(function (t) { var on = t.getAttribute('data-tab') === tab; t.classList.toggle('activa', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; });
+    $('#lista').setAttribute('aria-labelledby', 'tab-' + tab);
+  }
+  // El resumen junto a «Filtros» dice qué está escondiendo fichas aunque el desplegable esté cerrado.
+  function marcarFiltro() {
+    $$('.filtro').forEach(function (x) { var on = x.getAttribute('data-f') === filtro; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    var partes = [];
+    if (filtro !== 'todas') { var b = $('.filtro[data-f="' + filtro + '"]'); partes.push(b ? b.textContent : filtro); }
+    if (filtroAutor) { var o = $('#f-autor').selectedOptions; partes.push(o && o[0] ? o[0].textContent : 'un lector'); }
+    if (filtroEtiqueta) partes.push('#' + filtroEtiqueta);
+    $('#filtro-resumen').textContent = partes.length ? '· ' + partes.join(', ') : '';
+  }
+  function quitarFiltros() { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; }
+  $$('.tab').forEach(function (t) { t.addEventListener('click', function () { tab = t.getAttribute('data-tab'); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel(); }); });
+  $('.tabs').addEventListener('keydown', function (ev) {
+    var ts = $$('.tab'), i = ts.indexOf(document.activeElement); if (i < 0) return;
+    var j = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : ev.key === 'Home' ? 0 : ev.key === 'End' ? ts.length - 1 : null;
+    if (j === null) return;
+    ev.preventDefault(); j = (j + ts.length) % ts.length; ts[j].focus(); ts[j].click();
+  });
+  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); if (tab === 'buscar') { tab = 'todas'; marcarTab(); } renderPanel(); }); });
+
   // ------------------------------------------------------------ controles
-  $$('.tab').forEach(function (t) { t.addEventListener('click', function () { tab = t.getAttribute('data-tab'); $$('.tab').forEach(function (x) { x.classList.toggle('activa', x === t); }); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel(); }); });
-  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); $$('.filtro').forEach(function (x) { x.classList.toggle('on', x === f); }); if (tab === 'buscar') { tab = 'todas'; $$('.tab').forEach(function (x) { x.classList.toggle('activa', x.getAttribute('data-tab') === 'todas'); }); } renderPanel(); }); });
   $('#b-nota-cap').addEventListener('click', notaSeccion);
   $('#b-nota-gen').addEventListener('click', notaGeneral);
   $('#b-nota-pg').addEventListener('click', function () { notaPagina($('#pg-num').value, secActual); });
@@ -1199,40 +1379,119 @@ figure img { cursor: zoom-in; }
   $('#b-copiar').addEventListener('click', function () { copiar(exportarJSON(), this); });
   $('#b-copiar-md').addEventListener('click', function () { copiar(exportarMD(), this); });
   $('#buscar').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') buscar(this.value); });
-  // Índice y panel en pantalla estrecha: fuera de la vista cuando están cerrados, y entonces inertes (fuera del orden
-  // de Tab y del árbol de accesibilidad); sus botones dicen si están abiertos.
+
+  // ------------------------------------------------------------ índice y panel en pantalla estrecha
+  // Son cajones que se deslizan sobre el texto. Cerrados quedan fuera de la vista e inertes (fuera del orden de Tab y
+  // del árbol de accesibilidad). Abierto uno, el resto de la página queda detrás de un velo: tocar fuera lo cierra, el
+  // teclado no se escapa a lo que no se ve, y al cerrarlo el foco vuelve a donde estaba.
   var mqMovil = window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false };
+  var volverA = null;
+  function cajonAbierto() {
+    if (!mqMovil.matches) return null;
+    return ['indice', 'panel'].filter(function (c) { return $('#' + c).classList.contains('abierta'); })[0] || null;
+  }
   function sincronizarLaterales() {
+    var abierto = cajonAbierto();
     ['indice', 'panel'].forEach(function (cual) {
-      var n = $('#' + cual), abierto = n.classList.contains('abierta');
-      n.inert = !!mqMovil.matches && !abierto;
-      $('#b-' + cual).setAttribute('aria-expanded', abierto ? 'true' : 'false');
+      var n = $('#' + cual);
+      n.inert = !!mqMovil.matches && cual !== abierto;
+      $('#b-' + cual).setAttribute('aria-expanded', cual === abierto ? 'true' : 'false');
     });
+    $('#velo').hidden = !abierto; $('#velo').classList.toggle('claro', abierto === 'panel');
+    $('#lectura').classList.toggle('con-hoja', abierto === 'panel');
+    $('header.barra').inert = !!abierto;
+    $('#lectura').inert = !!abierto;
   }
-  function lateral(cual, abierto) {
-    var n = $('#' + cual);
-    n.classList.toggle('abierta', abierto === 'alternar' ? !n.classList.contains('abierta') : !!abierto);
+  // `origen`: a dónde vuelve el foco al cerrar, si no es el control que lo abrió (el pasaje de una nota recién creada).
+  function lateral(cual, abierto, origen) {
+    var n = $('#' + cual), antes = n.classList.contains('abierta');
+    var ahora = abierto === 'alternar' ? !antes : !!abierto;
+    if (ahora === antes) return;
+    var activo = document.activeElement;
+    if (ahora && mqMovil.matches) {
+      var otro = $('#' + (cual === 'indice' ? 'panel' : 'indice'));
+      if (otro.classList.contains('abierta')) otro.classList.remove('abierta');
+      else volverA = origen || (activo && activo !== document.body ? activo : null);
+    }
+    n.classList.toggle('abierta', ahora);
     sincronizarLaterales();
+    if (!mqMovil.matches) return;
+    if (ahora) {
+      if (!n.contains(document.activeElement)) {
+        var dentro = cual === 'indice' ? $('a.sec.activa', n) || $('a.sec', n) : $('.tab.activa', n);
+        (dentro || $('.cerrar', n)).focus({ preventScroll: true });
+      }
+    } else if (n.contains(activo) || !activo || activo === document.body) {
+      var destino = volverA && document.contains(volverA) && !volverA.closest('.cajon, [inert]') ? volverA : null;
+      if (!destino && cual === 'panel' && fichaFoco) destino = $('mark.hl[data-aids~="' + fichaFoco + '"]');
+      (destino || $('#b-' + cual)).focus({ preventScroll: true });
+      volverA = null;
+    }
   }
+  function cerrarCajones() { var c = cajonAbierto(); if (c) lateral(c, false); }
   if (mqMovil.addEventListener) mqMovil.addEventListener('change', sincronizarLaterales); else if (mqMovil.addListener) mqMovil.addListener(sincronizarLaterales);
   sincronizarLaterales();
-  $('#b-indice').addEventListener('click', function () { lateral('indice', 'alternar'); lateral('panel', false); });
-  $('#b-panel').addEventListener('click', function () { lateral('panel', 'alternar'); lateral('indice', false); });
+  $('#b-indice').addEventListener('click', function () { lateral('indice', 'alternar'); });
+  $('#b-panel').addEventListener('click', function () { lateral('panel', 'alternar'); });
+  $$('[data-cerrar]').forEach(function (b) { b.addEventListener('click', function () { lateral(b.getAttribute('data-cerrar'), false); }); });
+  $('#velo').addEventListener('click', function () { cerrarCajones(); salirDeFicha(); });
+  $('#b-mas').addEventListener('click', function () { var on = $('#herramientas').classList.toggle('abierta'); this.setAttribute('aria-expanded', on ? 'true' : 'false'); });
+
+  // ------------------------------------------------------------ salir de una ficha
+  // Deja de resaltar la ficha y su pasaje sin redibujar nada, para no mover el foco ni el desplazamiento; lo escrito en
+  // la nota ya se guardó al perder el foco.
+  function salirDeFicha() {
+    if (!fichaFoco) return;
+    fichaFoco = null;
+    $$('.ficha.foco, mark.hl.foco').forEach(function (n) { n.classList.remove('foco'); });
+  }
+  // Esc o Ctrl+Enter dentro de una nota: se guarda (al perder el foco), se sale de la ficha y el foco vuelve al pasaje
+  // subrayado, o a la ficha si no tiene pasaje; en pantalla estrecha se cierra además el panel.
+  function volverAlTexto(id) {
+    var m = $('mark.hl[data-aids~="' + id + '"]'), f = $('.ficha[data-id="' + id + '"]');
+    if (cajonAbierto() === 'panel') { volverA = m || null; lateral('panel', false); }
+    else if (m) m.focus({ preventScroll: true });
+    else if (f) f.focus({ preventScroll: true });
+    salirDeFicha();
+  }
+
+  // ------------------------------------------------------------ diálogos (atajos, figura ampliada)
+  // <dialog> modal: el navegador atrapa el foco, deja inerte el resto y cierra con Esc; un clic en el fondo también cierra.
+  function abrirDialogo(d) { if (d.open) return; try { d.showModal(); } catch (e) { d.setAttribute('open', ''); } }
+  function cerrarDialogo(d) { if (!d.open) return; try { d.close(); } catch (e) { d.removeAttribute('open'); } }
+  function alternarAtajos() { var d = $('#atajos'); if (d.open) cerrarDialogo(d); else abrirDialogo(d); }
+  $('#atajos').addEventListener('click', function (ev) { if (ev.target === this || ev.target.closest('.cerrar')) cerrarDialogo(this); });
+  $('#lightbox').addEventListener('click', function () { cerrarDialogo(this); });
+  $('#b-atajos').addEventListener('click', alternarAtajos);
+  $('#lectura').addEventListener('click', function (ev) {
+    var img = ev.target.closest('figure img'); if (!img) return;
+    var lb = $('#lightbox'), cap = img.closest('figure').querySelector('figcaption');
+    $('img', lb).src = img.src; $('img', lb).alt = cap ? cap.textContent : 'Figura';
+    abrirDialogo(lb);
+  });
+
   $('#f-autor').addEventListener('change', function () { filtroAutor = this.value; renderPanel(); });
   $('#f-etiqueta').addEventListener('change', function () { filtroEtiqueta = this.value; renderPanel(); });
   $('#b-foco').addEventListener('click', function () { alternarFoco(); });
-  $('#b-atajos').addEventListener('click', function () { $('#atajos').classList.toggle('abierto'); });
-  $('#lightbox').addEventListener('click', function () { this.classList.remove('abierto'); });
-  $('#lectura').addEventListener('click', function (ev) { var img = ev.target.closest('figure img'); if (img) { $('#lightbox img').src = img.src; $('#lightbox').classList.add('abierto'); } });
-  function alternarFoco() { var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; }
+  function alternarFoco() { var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false'); }
   var COLOR_TECLA = { '1': 'revisar', '2': 'cortar', '3': 'duda', '4': 'conservar' };
   document.addEventListener('keydown', function (ev) {
     var tg = ev.target || {}, tagName = tg.tagName || '';
+    if ($('dialog[open]')) return;  // el diálogo abierto atiende su propio Esc
     if (/TEXTAREA|SELECT/.test(tagName) || (tagName === 'INPUT' && !/checkbox|radio|button/.test(tg.type || ''))) return;
     if (ev.metaKey || ev.ctrlKey) return;
     var sel = window.getSelection(), haySel = sel && sel.rangeCount && !sel.isCollapsed && ancestroPid(sel.getRangeAt(0).startContainer);
     if (ev.key === 'ArrowRight' && ev.altKey) mover(1); else if (ev.key === 'ArrowLeft' && ev.altKey) mover(-1);
-    else if (ev.key === 'Escape') { ocultarTb(); lateral('indice', false); lateral('panel', false); $('#lightbox').classList.remove('abierto'); $('#atajos').classList.remove('abierto'); $('#capas').open = false; if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); } if ($('#app').classList.contains('foco')) alternarFoco(); }
+    else if (ev.key === 'Escape') {
+      // de a una capa por vez: menú abierto, cajón, concentración, ficha
+      var menu = $$('details.menu-det[open]');
+      if (menu.length) { menu.forEach(function (d) { d.open = false; $('summary', d).focus({ preventScroll: true }); }); return; }
+      ocultarTb();
+      if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); }
+      if (cajonAbierto()) { cerrarCajones(); salirDeFicha(); return; }
+      if ($('#app').classList.contains('foco')) { alternarFoco(); return; }
+      salirDeFicha();
+    }
     else if (COLOR_TECLA[ev.key] && haySel) { ev.preventDefault(); crearSubrayado(COLOR_TECLA[ev.key], false); }
     else if ((ev.key === 'n' || ev.key === 'N') && haySel) { ev.preventDefault(); crearSubrayado('revisar', true); }
     else if ((ev.key === 'c' || ev.key === 'C') && haySel) { ev.preventDefault(); copiarSeleccion($('#sel-copiar')); }
@@ -1240,11 +1499,43 @@ figure img { cursor: zoom-in; }
     else if (ev.key === 'k' || ev.key === 'K') mover(-1);
     else if (ev.key === 'l' || ev.key === 'L') alternarLeida(secActual);
     else if (ev.key === 'f' || ev.key === 'F') alternarFoco();
-    else if (ev.key === '?') $('#atajos').classList.toggle('abierto');
+    else if (ev.key === '?') alternarAtajos();
   });
-  document.addEventListener('click', function (ev) { if (!tb.contains(ev.target)) { var s = window.getSelection(); if (!s || s.isCollapsed) ocultarTb(); } if (!$('#capas').contains(ev.target)) $('#capas').open = false; });
+  // Un clic fuera cierra lo que flota: la barra de subrayado (si ya no hay selección), los menús de la barra y la ficha
+  // en edición. Fuera de una ficha quiere decir en el texto o en el fondo, no en un control: el botón que crea otra
+  // nota, por ejemplo, la enfoca él mismo.
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!tb.contains(t)) { var s = window.getSelection(); if (!s || s.isCollapsed) ocultarTb(); }
+    $$('details.menu-det[open]').forEach(function (d) { if (!d.contains(t)) d.open = false; });
+    if (fichaFoco && t && t.closest && !t.closest('.ficha, mark.hl, #sel-tb, dialog, #velo, button, a, input, select, textarea, label, summary, .res')) salirDeFicha();
+  });
+  // El enlace «Saltar al texto» lleva el foco a la lectura sin tocar el ancla (que guarda la sección abierta).
+  $('.saltar').addEventListener('click', function (ev) { ev.preventDefault(); $('#lectura').focus(); });
   window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (SEC_BY_ID[h] && h !== secActual) irA(h); });
-
+  // ------------------------------------------------------------ ajustes de lectura
+  // Tamaño del texto, tema y tipografía. Son de este navegador y valen para todos los libros. El tema elegido va en su
+  // propio atributo (data-tema-lector) para no pisar el data-theme que pueda poner la página anfitriona.
+  var AJUSTES_KEY = 'lector-anotaciones:ajustes', ESCALAS = [0.85, 0.92, 1, 1.1, 1.2, 1.32, 1.45];
+  var ajustes = (function () { try { return JSON.parse(lsGet(AJUSTES_KEY) || '{}') || {}; } catch (e) { return {}; } })();
+  function aplicarAjustes() {
+    var raiz = document.documentElement, i = ESCALAS.indexOf(ajustes.escala);
+    if (i < 0) { ajustes.escala = 1; i = ESCALAS.indexOf(1); }
+    raiz.style.setProperty('--escala', String(ajustes.escala));
+    if (ajustes.tema === 'light' || ajustes.tema === 'dark') raiz.setAttribute('data-tema-lector', ajustes.tema); else raiz.removeAttribute('data-tema-lector');
+    if (ajustes.letra === 'sans') raiz.setAttribute('data-letra', 'sans'); else raiz.removeAttribute('data-letra');
+    $('#aj-tam').textContent = Math.round(ajustes.escala * 100) + ' %';
+    $('#aj-menos').disabled = i <= 0; $('#aj-mas').disabled = i >= ESCALAS.length - 1;
+    $$('input[name="aj-tema"]').forEach(function (r) { r.checked = r.value === (ajustes.tema || ''); });
+    $$('input[name="aj-letra"]').forEach(function (r) { r.checked = r.value === (ajustes.letra || ''); });
+  }
+  function cambiarAjuste(clave, valor) { ajustes[clave] = valor; lsSet(AJUSTES_KEY, JSON.stringify(ajustes)); aplicarAjustes(); }
+  function pasoEscala(d) { var i = ESCALAS.indexOf(ajustes.escala), j = Math.max(0, Math.min(ESCALAS.length - 1, i + d)); if (j !== i) cambiarAjuste('escala', ESCALAS[j]); }
+  $('#aj-menos').addEventListener('click', function () { pasoEscala(-1); });
+  $('#aj-mas').addEventListener('click', function () { pasoEscala(1); });
+  $$('input[name="aj-tema"]').forEach(function (r) { r.addEventListener('change', function () { if (r.checked) cambiarAjuste('tema', r.value); }); });
+  $$('input[name="aj-letra"]').forEach(function (r) { r.addEventListener('change', function () { if (r.checked) cambiarAjuste('letra', r.value); }); });
+  aplicarAjustes();
   // ------------------------------------------------------------ lectores con identidad
   function chipAutor(id) {
     var p = PERFILES[id], c = el('span', { 'class': 'autor', title: 'Lector' }, [el('i', { style: 'background:' + ((p && p.color) || 'var(--fg-2)') }), el('span', { text: (p && p.name) || (id === ME ? 'yo' : 'otro lector') })]);
@@ -1398,6 +1689,7 @@ figure img { cursor: zoom-in; }
     ultimoBorrado = a;
     estado('Anotación borrada', true);
     var z = $('#deshacer-zona'); z.innerHTML = '';
+    z.appendChild(el('span', { text: 'Anotación borrada.' }));
     var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: 'Deshacer borrado', title: 'Recuperar la anotación borrada' });
     u.addEventListener('click', function () {
       if (ultimoBorrado) {
@@ -1407,7 +1699,7 @@ figure img { cursor: zoom-in; }
       z.innerHTML = '';
     });
     z.appendChild(u);
-    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.firstChild === u) z.innerHTML = ''; }, 8000);
+    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.contains(u)) z.innerHTML = ''; }, 8000);
   }
   function respaldar() {
     // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura

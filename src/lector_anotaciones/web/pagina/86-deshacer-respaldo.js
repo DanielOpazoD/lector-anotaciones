@@ -6,6 +6,7 @@
     ultimoBorrado = a;
     estado('Anotación borrada', true);
     var z = $('#deshacer-zona'); z.innerHTML = '';
+    z.appendChild(el('span', { text: 'Anotación borrada.' }));
     var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: 'Deshacer borrado', title: 'Recuperar la anotación borrada' });
     u.addEventListener('click', function () {
       if (ultimoBorrado) {
@@ -15,7 +16,7 @@
       z.innerHTML = '';
     });
     z.appendChild(u);
-    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.firstChild === u) z.innerHTML = ''; }, 8000);
+    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.contains(u)) z.innerHTML = ''; }, 8000);
   }
   function respaldar() {
     // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura
