@@ -67,13 +67,8 @@ function arrancar() {
         // Quien anotó antes de saber que es de sólo lectura (o cuya subida falló en otra sesión) no puede subir nada:
         // lo pendiente sigue a la vista marcado «sin guardar», con su copia en el navegador, se cuenta aparte y se
         // exporta con esa señal, para copiarlo antes de que se pierda.
-        var ids = pendientesBase.filter(function (id) {
-          return !!anots[id];
-        });
+        var ids = SINC.marcarSinSubir();
         if (!ids.length) return;
-        ids.forEach(function (id) {
-          SIN_GUARDAR[id] = 'sólo lectura';
-        });
         guardarLocal(ids);
         renderPanel();
         estado(
@@ -95,31 +90,20 @@ function arrancar() {
           var rec = cargarLocal(function (id, a) {
             return !(a.autor && ME && a.autor !== ME);
           });
-          rec.nuevas.forEach(function (id) {
-            if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id);
-          });
+          // lo recuperado va a la cola de subida; lo que la base ya tenía sobra en la copia local
+          var sobran = SINC.alRecuperar(rec);
           if (rec.nuevas.length) {
             pintarTodo();
             renderPanel();
             renderCuentas();
           }
-          var obsoletas = rec.existentes.filter(function (id) {
-            return pendientesBase.indexOf(id) < 0;
-          });
-          podarLocal(obsoletas);
-          obsoletas.forEach(function (id) {
-            limpiarCampos(id, anots[id]);
-          });
+          podarLocal(sobran);
+          escribirCampos(sobran);
           if (SOLO_LECTURA) {
             marcarSinSubir();
             return;
           }
-          var ids = pendientesBase.splice(0).filter(function (id) {
-            var a = anots[id];
-            if (!a) return false;
-            if (!a.autor && ME) a.autor = ME;
-            return true;
-          });
+          var ids = SINC.tomarPendientes(ME);
           if (!ids.length) return;
           var escritas = {};
           Promise.all(
@@ -136,29 +120,15 @@ function arrancar() {
                 });
             })
           ).then(function (ok) {
-            var subieron = ids.filter(function (id, i) {
-                return ok[i] === true;
-              }),
-              fallidas = ids.filter(function (id, i) {
-                return ok[i] !== true;
-              });
-            subieron.forEach(function (id) {
-              EN_BASE[id] = 1;
-              limpiarCampos(id, escritas[id]);
-            });
-            podarLocal(
-              subieron.filter(function (id) {
-                return anots[id] === escritas[id];
-              })
-            );
+            var r = SINC.alSubir(ids, ok, escritas),
+              fallidas = r.fallidas;
+            escribirCampos(ids);
+            podarLocal(r.soltar);
             if (!fallidas.length) {
               respaldar();
               return;
             }
             // la ficha de cada una lo dice y ofrece reintentar
-            fallidas.forEach(function (id) {
-              SIN_GUARDAR[id] = ok[ids.indexOf(id)];
-            });
             guardarLocal(fallidas);
             renderPanel();
             estado(
@@ -197,27 +167,12 @@ function arrancar() {
       var primeraFoto = true;
       col.onSnapshot(
         function (snap) {
-          var cambio = false;
-          snap.docChanges().forEach(function (ch) {
-            var d2 = ch.doc.data();
-            if (ch.type === 'removed') {
-              delete EN_BASE[ch.doc.id];
-              if (anots[ch.doc.id]) {
-                delete anots[ch.doc.id];
-                cambio = true;
-              }
-            } else if (d2) {
-              EN_BASE[ch.doc.id] = 1;
-              var nuevo = Object.assign({}, d2, { id: ch.doc.id });
-              // si aquí hay un borrador sin guardar de esa anotación, lo que llega de la base se funde debajo sin pisarlo
-              if (SIN_GUARDAR[ch.doc.id] && anots[ch.doc.id])
-                nuevo = fundirBorrador(nuevo, anots[ch.doc.id], CAMPOS_BORRADOR[ch.doc.id]);
-              if (!igual(anots[ch.doc.id], nuevo)) {
-                anots[ch.doc.id] = nuevo;
-                cambio = true;
-              }
-            }
-          });
+          // lo que llega de la base entra en la memoria; un borrador sin guardar de esa anotación queda encima
+          var cambio = SINC.alFoto(
+            snap.docChanges().map(function (ch) {
+              return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
+            })
+          );
           // qué es propio se sabe cuando se conoce al usuario: la cuenta y el aviso esperan a saberlo (y se registran antes
           // que la recuperación de lo que quedó en el navegador, para que su aviso, si lo hay, quede encima)
           if (!snap.metadata.fromCache)

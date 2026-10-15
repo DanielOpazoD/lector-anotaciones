@@ -1,17 +1,15 @@
 // ------------------------------------------------------------ anotaciones: persistencia
+// Las decisiones (qué escribir, qué hacer ante una confirmación o un rechazo, cómo fundir lo que llega) son del núcleo
+// (`SINC`, nucleo/65-sincronia.js, probado con node --test); aquí quedan las escrituras en la base y en el navegador,
+// los reintentos y lo que se ve.
 function guardar(a) {
   if (SOLO_LECTURA) {
     estado('Sólo lectura: en este libro puedes leer y copiar, no anotar', true);
     return;
   }
-  // `previa` es lo que la base tiene, para volver a ello si rechaza: se toma antes de tocar la memoria, y los
-  // manejadores de la ficha pasan una copia con el cambio, nunca el objeto de `anots` ya mutado. Una anotación
-  // que la base todavía no tiene (nueva, o rechazada y conservada) no tiene versión previa a la que volver.
-  var nueva = !anots[a.id] || !!SIN_GUARDAR[a.id],
-    previa = nueva ? null : JSON.parse(JSON.stringify(anots[a.id]));
-  if (anots[a.id]) marcarCampos(a.id, anots[a.id], a);
-  a.editado = ahora();
-  anots[a.id] = a;
+  // Los manejadores de la ficha pasan una copia con el cambio, nunca el objeto de `anots` ya mutado: la versión previa
+  // (lo que la base tiene, para volver a ello si rechaza) se toma antes de tocar la memoria.
+  var previa = SINC.cambiar(a, ahora()).previa;
   var u = ubicar(a);
   if (u) UBIC[a.id] = u;
   pintar(a);
@@ -21,81 +19,50 @@ function guardar(a) {
     escribirEnBase(a.id, previa);
   } else if (modo === 'cargando') {
     // La base todavía conecta: la anotación se funde en la copia local sin pisar lo que quedó ahí de otras sesiones.
-    if (pendientesBase.indexOf(a.id) < 0) pendientesBase.push(a.id);
+    if (SINC.pendientes.indexOf(a.id) < 0) SINC.pendientes.push(a.id);
     guardarLocal([a.id]);
   } else {
     guardarLocal();
   }
 }
-// Códigos de rechazo de la base (db.d.ts). Los transitorios se reintentan una vez; uno desconocido se trata como
-// `unavailable`, como manda el contrato. Los de permiso son definitivos para la visita: pasan a sólo lectura.
-var TRANSITORIOS = { unavailable: 1, resource_exhausted: 1 };
-var CONOCIDOS = {
-  invalid_argument: 1,
-  resource_exhausted: 1,
-  quota_exceeded: 1,
-  unavailable: 1,
-  revoked: 1,
-  not_granted: 1,
-  capability_disabled: 1,
-  capability_removed: 1,
-  transform_error: 1,
-};
-function esTransitorio(e) {
-  var c = e && e.code;
-  return !c || !!TRANSITORIOS[c] || !CONOCIDOS[c];
-}
-function esDePermiso(codigo, id, previa, verbo) {
-  return (
-    codigo === 'not_granted' ||
-    codigo === 'revoked' ||
-    (codigo === 'invalid_argument' && verbo !== 'respaldo' && JSON.stringify(previa || anots[id] || {}).length < 200000)
-  );
-}
 function escribirEnBase(id, previa, alRechazar, reintento) {
-  // Escribe lo que hay en memoria para esa id. Un rechazo transitorio se reintenta una sola vez tras un retardo corto
-  // y aleatorio; el segundo rechazo (o uno definitivo) lo decide `rechazoEscritura`. Si entre tanto la anotación se
-  // borró o la página pasó a sólo lectura, no hay nada que escribir.
-  var a = anots[id];
-  if (!a) {
-    delete EN_VUELO[id];
+  // Escribe lo que hay en memoria para esa id (`SINC.escritura`: los campos del lector con `update` si la base ya
+  // tiene el documento; si no, entera). Si `update` no encuentra el documento (otra sesión lo borró), se crea entero.
+  // Un rechazo transitorio se reintenta una sola vez tras un retardo corto y aleatorio; el segundo rechazo (o uno
+  // definitivo) lo decide `rechazoEscritura`. Si entre tanto la anotación se borró, no hay nada que escribir.
+  var e0 = SINC.escritura(id);
+  if (!e0) {
+    delete SINC.enVuelo[id];
     return;
   }
-  EN_VUELO[id] = 1;
+  SINC.enVuelo[id] = 1;
+  var a = e0.anotacion,
+    doc = col.doc(id);
   var rechazo = function (e) {
-    delete EN_VUELO[id];
     rechazoEscritura(e, id, previa, 'guardar');
     if (alRechazar) alRechazar(e);
   };
-  // Si la base ya tiene el documento, se escriben sólo los campos que el lector cambió (y `editado`) con `update`: lo
-  // que quien edita las fuentes escribió entre tanto (respuesta, cierre, respondido…) y todavía no llegó a esta
-  // página no se pisa. Si el documento ya no está (otra sesión lo borró), `update` lo rechaza y se crea entero.
   var escritura =
-    EN_BASE[id] && !SIN_GUARDAR[id]
-      ? col
-          .doc(id)
-          .update(camposDelLector(id, a))
-          .catch(function (e) {
-            if (e && e.code === 'invalid_argument') return col.doc(id).set(a);
-            throw e;
-          })
-      : col.doc(id).set(a);
+    e0.modo === 'update'
+      ? doc.update(e0.datos).catch(function (e) {
+          if (e && e.code === 'invalid_argument') return doc.set(a);
+          throw e;
+        })
+      : doc.set(a);
   enCurso(escritura)
     .then(function () {
-      delete EN_VUELO[id];
-      EN_BASE[id] = 1;
-      limpiarCampos(id, a);
-      // la copia local se suelta sólo si nada se editó después de esta escritura
-      if (SIN_GUARDAR[id]) {
-        delete SIN_GUARDAR[id];
-        if (anots[id] === a) podarLocal([id]);
+      var r = SINC.alConfirmar(id, a);
+      escribirCampos([id]);
+      if (r.estabaSinGuardar) {
+        // la copia local se suelta sólo si nada se editó después de esta escritura
+        if (r.soltarCopia) podarLocal([id]);
         renderPanel();
       }
       estado('Guardado ' + new Date().toLocaleTimeString());
       respaldar();
     })
     .catch(function (e) {
-      if (reintento || !esTransitorio(e)) {
+      if (reintento || !N.esTransitorio(e && e.code)) {
         rechazo(e);
         return;
       }
@@ -108,13 +75,6 @@ function escribirEnBase(id, previa, alRechazar, reintento) {
       );
     });
 }
-function camposDelLector(id, a) {
-  var p = { editado: a.editado };
-  Object.keys(CAMPOS_BORRADOR[id] || {}).forEach(function (k) {
-    p[k] = a[k] === undefined ? null : a[k];
-  });
-  return p;
-}
 function reintentar(id) {
   if (col && anots[id] && !SOLO_LECTURA) {
     estado('Reintentando…');
@@ -122,65 +82,47 @@ function reintentar(id) {
   }
 }
 function quitarDeMemoria(id) {
-  var a = anots[id],
-    u = UBIC[id];
-  delete anots[id];
+  var u = UBIC[id],
+    q = SINC.quitar(id);
   delete UBIC[id];
-  delete SIN_GUARDAR[id];
   if (u && u.pid) pintarPid(u.pid);
-  else if (a && a.pid) pintarPid(a.pid);
+  else if (q && q.anotacion.pid) pintarPid(q.anotacion.pid);
   marcasPagina();
-}
-function conservarSinGuardar(id, codigo) {
-  // La base no la tiene: sigue en memoria marcada «sin guardar», con copia en el navegador y en la cola de
-  // pendientes, y la ficha ofrece reintentar (o sólo copiar, en sólo lectura). Nada que la página mostró se pierde.
-  SIN_GUARDAR[id] = codigo;
-  if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id);
-  guardarLocal([id]);
+  return q;
 }
 function rechazoEscritura(e, id, previa, verbo) {
-  // La base no aceptó la escritura: la memoria vuelve a lo que la base tiene, para que no queden anotaciones
-  // fantasma que se pintan, se cuentan y se exportan. Una anotación que la base no tiene (nueva, o un «Deshacer
-  // borrado» cuando el borrado ya se confirmó) nunca se retira: se conserva marcada «sin guardar», con copia en
-  // el navegador, también ante un rechazo de permiso, que además pasa la página a sólo lectura; ahí la ficha ya
-  // no ofrece reintentar, pero sí copiarla.
+  // La base no aceptó la escritura (`SINC.alRechazar`): la memoria vuelve a lo que la base tiene, para que no queden
+  // anotaciones fantasma que se pintan, se cuentan y se exportan; una anotación que la base no tiene (nueva, o un
+  // «Deshacer borrado» cuando el borrado ya se confirmó) nunca se retira: se conserva marcada «sin guardar», con copia
+  // en el navegador, también ante un rechazo de permiso, que además pasa la página a sólo lectura; ahí la ficha ya no
+  // ofrece reintentar, pero sí copiarla.
   var codigo = (e && e.code) || 'error',
-    permiso = esDePermiso(codigo, id, previa, verbo),
-    conservada = false;
+    r = SINC.alRechazar(id, codigo, previa, verbo);
+  if (r.restaurada) {
+    var ub = ubicar(r.restaurada);
+    if (ub) UBIC[id] = ub;
+    pintar(r.restaurada);
+  }
   if (verbo === 'borrar') {
-    if (previa) {
-      anots[id] = previa;
-      var ub = ubicar(previa);
-      if (ub) UBIC[id] = ub;
-      pintar(previa);
-    }
     // el borrado no ocurrió: no hay nada que deshacer (salvo que el enlace ya sea de otro borrado posterior)
     if (ultimoBorrado && ultimoBorrado.id === id) {
       ultimoBorrado = null;
       var z = $('#deshacer-zona');
       if (z) z.innerHTML = '';
     }
-  } else if (previa) {
-    anots[id] = previa;
-    var u2 = ubicar(previa);
-    if (u2) UBIC[id] = u2;
-    pintar(previa);
-    limpiarCampos(id, previa);
-  } else {
-    conservarSinGuardar(id, codigo);
-    conservada = true;
-  }
+  } else if (r.restaurada) escribirCampos([id]);
+  else if (r.conservada) guardarLocal([id]);
   renderPanel();
   renderCuentas();
-  if (permiso) activarSoloLectura();
-  if (conservada && permiso)
+  if (r.permiso) activarSoloLectura();
+  if (r.conservada && r.permiso)
     estado(
       'No se pudo guardar en la base (' +
         codigo +
         '): sin permiso para escribir; la anotación sigue aquí y en este navegador, copia tus anotaciones con el botón',
       true
     );
-  else if (conservada)
+  else if (r.conservada)
     estado(
       'No se pudo guardar en la base (' +
         codigo +
@@ -207,55 +149,48 @@ function activarSoloLectura() {
 }
 function borrar(id) {
   if (SOLO_LECTURA) return;
-  var a = anots[id],
-    marca = SIN_GUARDAR[id];
-  if (!a) return;
-  var camposPrevios = CAMPOS_BORRADOR[id] ? Object.assign({}, CAMPOS_BORRADOR[id]) : null;
-  quitarDeMemoria(id);
+  var q = quitarDeMemoria(id);
+  if (!q) return;
+  var a = q.anotacion;
   renderPanel();
   renderCuentas();
   // Un borrado confirmado sale también de la copia local, para que una pendiente que no subió no vuelva al recargar;
   // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
   // (con su marca de «sin guardar», si la tenía) y la copia local, si la tenía, la sigue teniendo.
+  var borrada = function () {
+    SINC.alBorrar(id);
+    escribirCampos([id]);
+    podarLocal([id]);
+  };
   if (col) {
     enCurso(col.doc(id).delete())
       .then(function () {
-        delete EN_BASE[id];
-        podarLocal([id]);
-        limpiarCampos(id);
+        borrada();
         respaldar();
       })
       .catch(function (e) {
         if (e && e.code === 'not_found') {
-          delete EN_BASE[id];
-          podarLocal([id]);
-          limpiarCampos(id);
+          borrada();
           return;
         }
-        if (marca) SIN_GUARDAR[id] = marca;
+        if (q.marca) SINC.sinGuardar[id] = q.marca;
         rechazoEscritura(e, id, a, 'borrar');
       });
   } else if (modo === 'cargando') {
-    var i = pendientesBase.indexOf(id);
-    if (i >= 0) pendientesBase.splice(i, 1);
-    podarLocal([id]);
-    limpiarCampos(id);
+    borrada();
   } else {
     guardarLocal();
-    limpiarCampos(id);
+    SINC.alBorrar(id);
+    escribirCampos([id]);
   }
-  ofrecerDeshacer(a, camposPrevios);
-}
-var CAMPOS_BORRADOR = {}; // id -> campos que el lector cambió en esta sesión y la base todavía no tiene (se guarda junto a la copia local)
-function marcarCampos(id, antes, despues) {
-  N.marcarCampos(CAMPOS_BORRADOR[id] || (CAMPOS_BORRADOR[id] = {}), antes, despues);
+  ofrecerDeshacer(a, q.campos);
 }
 function escribirCampos(ids) {
   // Actualiza en la lista guardada sólo esas anotaciones; las demás entradas (borradores de otra sesión aún no
   // cargados, o de otra cuenta) se conservan tal como estaban.
   var guardados = lsJSON(LOCAL_KEY + ':campos');
   ids.forEach(function (id) {
-    var c = CAMPOS_BORRADOR[id];
+    var c = SINC.campos[id];
     if (c && Object.keys(c).length) guardados[id] = c;
     else delete guardados[id];
   });
@@ -265,7 +200,6 @@ function escribirCampos(ids) {
       localStorage.removeItem(LOCAL_KEY + ':campos');
     } catch (e) {}
 }
-var fundirBorrador = N.fundirBorrador;
 function leerLocal() {
   try {
     return JSON.parse(lsGet(LOCAL_KEY) || '{}') || {};
@@ -311,68 +245,39 @@ function podarLocal(ids) {
   });
   if (habia) escribirLocal(datos);
 }
-function limpiarCampos(id, enBase) {
-  // Quita las marcas de los campos que la base ya tiene con el valor de la memoria (`enBase`: lo que se escribió,
-  // o la versión de la base a la que se volvió); sin `enBase`, todas (la anotación se borró). Lo que se siguió
-  // editando después conserva su marca.
-  var c = CAMPOS_BORRADOR[id];
-  if (c) {
-    Object.keys(c).forEach(function (k) {
-      if (!enBase || !anots[id] || anots[id][k] === enBase[k]) delete c[k];
-    });
-    if (!Object.keys(c).length) delete CAMPOS_BORRADOR[id];
-  }
-  escribirCampos([id]);
-}
 function cargarLocal(filtro) {
-  // Pasa a memoria lo guardado en el navegador. `filtro(id, anotación)` puede dejar algo fuera: se queda en la copia
-  // local sin cargarse. Devuelve las ids cargadas (`nuevas`) y las que ya estaban en memoria (`existentes`).
+  // Pasa a memoria lo guardado en el navegador (`SINC.fusionarLocal`: manda la memoria, salvo un borrador local más
+  // reciente). `filtro(id, anotación)` puede dejar algo fuera: se queda en la copia local sin cargarse. Devuelve las ids
+  // cargadas (`nuevas`) y las que ya estaban en memoria (`existentes`).
   try {
     var j = leerLocal(),
       campos = lsJSON(LOCAL_KEY + ':campos');
     // Migración: anotaciones guardadas por versiones anteriores de la página bajo otra clave
     // (libro.json las declara en `claves_anteriores`). Se copian sin pisar las ya guardadas y la
     // clave vieja se retira para que un borrado posterior no las resucite.
-    var anteriores = (LIBRO && LIBRO.claves_anteriores) || [],
-      migradas = 0;
+    var anteriores = ((LIBRO && LIBRO.claves_anteriores) || []).filter(function (k) {
+        return k !== LOCAL_KEY;
+      }),
+      viejas = {};
     anteriores.forEach(function (k) {
-      if (k === LOCAL_KEY) return;
       try {
-        var v = JSON.parse(lsGet(k) || '{}');
-        Object.keys(v).forEach(function (id) {
-          if (!j[id]) {
-            j[id] = v[id];
-            migradas++;
-          }
-        });
+        viejas[k] = JSON.parse(lsGet(k) || '{}');
       } catch (e) {}
     });
-    var guardadas = true;
+    var migradas = N.migrarClaves(j, viejas),
+      guardadas = true;
     if (migradas) {
       guardadas = lsSet(LOCAL_KEY, JSON.stringify(j));
       // la clave vieja sólo se retira cuando la copia nueva quedó escrita de verdad; si no, sigue siendo la única copia
       if (guardadas)
         anteriores.forEach(function (k) {
-          if (k !== LOCAL_KEY)
-            try {
-              localStorage.removeItem(k);
-            } catch (e) {}
+          try {
+            localStorage.removeItem(k);
+          } catch (e) {}
         });
     }
-    // Lo que ya está en memoria (recién anotado, o traído de la base) manda sobre la copia local.
-    var nuevas = [],
-      existentes = [];
-    Object.keys(j).forEach(function (k) {
-      var masNueva = anots[k] && j[k] && j[k].editado && anots[k].editado && j[k].editado > anots[k].editado;
-      if (anots[k] && !masNueva) existentes.push(k);
-      else if (!filtro || filtro(k, j[k])) {
-        // un borrador local más reciente vuelve a subir, fundido sobre lo que la base tiene
-        if (campos[k]) CAMPOS_BORRADOR[k] = campos[k];
-        anots[k] = masNueva ? fundirBorrador(anots[k], j[k], campos[k]) : j[k];
-        nuevas.push(k);
-      }
-    });
-    return { migradas: migradas, guardadas: guardadas, nuevas: nuevas, existentes: existentes };
+    var r = SINC.fusionarLocal(j, campos, filtro);
+    return { migradas: migradas, guardadas: guardadas, nuevas: r.nuevas, existentes: r.existentes };
   } catch (e) {
     return { migradas: 0, guardadas: true, nuevas: [], existentes: [] };
   }

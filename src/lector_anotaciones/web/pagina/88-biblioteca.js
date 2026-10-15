@@ -196,7 +196,7 @@ function trocear(texto) {
 // Un rechazo pasajero se reintenta una vez, como en las anotaciones.
 function conReintento(fn) {
   return fn().catch(function (e) {
-    if (!esTransitorio(e)) throw e;
+    if (!N.esTransitorio(e && e.code)) throw e;
     return new Promise(function (r) {
       setTimeout(r, 200 + Math.random() * 400);
     }).then(fn);
@@ -366,7 +366,7 @@ function abrirLibro(tipo, id) {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); // guarda la nota en edición
   var inicio = Date.now();
   (function esperar() {
-    var vuelo = Object.keys(EN_VUELO).filter(function (k) {
+    var vuelo = Object.keys(SINC.enVuelo).filter(function (k) {
       return !!anots[k];
     });
     if ((ESCRIBIENDO > 0 || vuelo.length) && Date.now() - inicio < 4000) {

@@ -3,7 +3,6 @@ var LIBRO = null,
   SEC_BY_ID = {},
   BLOQUE_SEC = {},
   ORIG = {};
-var anots = {}; // id -> anotación
 var db = null,
   col = null,
   modo = 'cargando';
@@ -25,16 +24,17 @@ var CAPAS_ON = {},
 var ultimoBorrado = null,
   lectura = null;
 var SOLO_LECTURA = false,
-  pendientesBase = [],
   respaldoHoy = null,
   respaldoBloqueado = false;
 var avisoRevisar = false; // ya se anunció en esta visita que hay respuestas por revisar
-var EN_VUELO = {}; // id -> 1 mientras la base no confirma (o rechaza del todo) su escritura, reintento incluido
-var EN_BASE = {}; // id -> 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
 var ESCRIBIENDO = 0; // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
-var SIN_GUARDAR = {}; // id -> código del último rechazo de una anotación que la base todavía no tiene
 var RESPALDO_MAX = 180 * 1024; // bytes de cada documento de respaldo ya envuelto, con margen (la base admite 256 KiB)
 var N = window.LANucleo; // lógica pura (nucleo/*.js), probada con node --test
+// La sincronía de las anotaciones (nucleo/65-sincronia.js) es dueña de su estado: las anotaciones, los campos que el
+// lector cambió, lo «sin guardar», lo que está en vuelo o ya en la base y la cola de subida. `anots` es su mapa de
+// anotaciones (id → anotación), el mismo objeto.
+var SINC = N.crearSincronia();
+var anots = SINC.anots;
 var $ = function (s, r) {
   return (r || document).querySelector(s);
 };

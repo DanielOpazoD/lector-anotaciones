@@ -17,7 +17,7 @@ function ofrecerDeshacer(a, campos) {
   });
   u.addEventListener('click', function () {
     if (ultimoBorrado) {
-      if (ultimoBorrado === a && campos) CAMPOS_BORRADOR[a.id] = Object.assign({}, campos);
+      if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
       guardar(ultimoBorrado);
       ultimoBorrado = null;
       estado('Anotación recuperada');

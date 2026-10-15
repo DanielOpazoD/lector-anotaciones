@@ -7,10 +7,10 @@ function reabierta(a) {
 // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
 // Lo que la base no tiene sale de la página con una señal, para que quien lo reciba sepa que no lo verá en la base.
 function senalSinGuardar(a) {
-  return SIN_GUARDAR[a.id] ? ' · sin guardar en la base (' + SIN_GUARDAR[a.id] + ')' : '';
+  return SINC.sinGuardar[a.id] ? ' · sin guardar en la base (' + SINC.sinGuardar[a.id] + ')' : '';
 }
 function conSenal(a) {
-  return SIN_GUARDAR[a.id] ? Object.assign({}, a, { sin_guardar: SIN_GUARDAR[a.id] }) : a;
+  return SINC.sinGuardar[a.id] ? Object.assign({}, a, { sin_guardar: SINC.sinGuardar[a.id] }) : a;
 }
 function textoAnotacion(a) {
   var tipos = { pagina: 'nota de página', capitulo: 'nota de sección', general: 'nota general' };

@@ -327,7 +327,7 @@ function ficha(a) {
       (a.color ? ' c-' + a.color : '') +
       (a.estado === 'resuelta' ? ' resuelta' : '') +
       (fichaFoco === a.id ? ' foco' : '') +
-      (SIN_GUARDAR[a.id] ? ' sin-guardar' : '') +
+      (SINC.sinGuardar[a.id] ? ' sin-guardar' : '') +
       (pendiente ? ' por-revisar' : '') +
       (!pendiente && REVISADAS[a.id] ? ' revisada' : ''),
     'data-id': a.id,
@@ -368,10 +368,10 @@ function ficha(a) {
     cab.appendChild(ir);
   }
   f.appendChild(cab);
-  if (SIN_GUARDAR[a.id]) {
+  if (SINC.sinGuardar[a.id]) {
     var ag = el('div', {
       'class': 'aviso-guardar',
-      text: 'Sin guardar en la base (' + SIN_GUARDAR[a.id] + '); se conserva en este navegador. ',
+      text: 'Sin guardar en la base (' + SINC.sinGuardar[a.id] + '); se conserva en este navegador. ',
     });
     if (!SOLO_LECTURA) {
       var re = el('button', { 'class': 'enlace', type: 'button', text: 'Reintentar', 'data-accion': 'reintentar' });
@@ -671,10 +671,7 @@ function guardarSilencioso(id, parche) {
   // recargar, una copia local más reciente que la de la base vuelve a cargarse y a subir (`cargarLocal`).
   var ant = anots[id];
   if (!ant || SOLO_LECTURA) return;
-  var a = Object.assign({}, ant, parche);
-  a.editado = ahora();
-  marcarCampos(id, ant, a);
-  anots[id] = a;
+  SINC.cambiar(Object.assign({}, ant, parche), ahora());
   if (col) escribirEnBase(id, null);
   else guardarLocal(modo === 'cargando' ? [id] : undefined);
 }
