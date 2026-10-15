@@ -66,7 +66,7 @@ const conBase = () => {
     collection: (nombre) => ({
       doc: (id) => ({
         set: (data) => { if (window.__rechazar) return Promise.reject({ code: window.__rechazar, message: 'simulado' }); const docs = coleccion(nombre); const existia = !!docs[id]; docs[id] = JSON.parse(JSON.stringify(data)); setTimeout(() => emitir(nombre, [{ type: existia ? 'modified' : 'added', id }]), 30); return Promise.resolve(); },
-        delete: () => { delete coleccion(nombre)[id]; setTimeout(() => emitir(nombre, [{ type: 'removed', id }]), 30); return Promise.resolve(); },
+        delete: () => { if (window.__rechazar) return Promise.reject({ code: window.__rechazar, message: 'simulado' }); delete coleccion(nombre)[id]; setTimeout(() => emitir(nombre, [{ type: 'removed', id }]), 30); return Promise.resolve(); },
       }),
       onSnapshot: (cb) => { (oyentes[nombre] = oyentes[nombre] || []).push(cb); cb(snap(nombre, Object.keys(coleccion(nombre)).map((id) => ({ type: 'added', id })))); return () => {}; },
     }),
@@ -605,14 +605,20 @@ try {
   await pt2.waitForFunction(() => /no pudo subir/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });
   const conservada = await pt2.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado') }));
   check(conservada.marca && conservada.local && !conservada.enBase, 'una pendiente que no pudo subir sigue en memoria y en el navegador, y la barra lo dice');
-  // borrarla la saca también de la copia local: al recargar no vuelve
-  await pt2.evaluate(() => { window.__rechazar = null; });
+  // si la base rechaza el borrado, vuelve a la memoria y la copia local la sigue teniendo (no se pierde al recargar)
   await pt2.click('.tab[data-tab="todas"]');
   await pt2.click('.ficha .acciones button:has-text("Borrar")');
   await pt2.click('.ficha .confirmar button:has-text("Sí")');
+  await pt2.waitForFunction(() => /No se pudo borrar/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });
+  const trasRechazo = await pt2.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), ficha: !!document.querySelector('.ficha'), deshacer: !!document.querySelector('#deshacer'), local: Object.keys(localStorage).filter((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)).map((k) => localStorage.getItem(k)).join('') }));
+  check(trasRechazo.marca && trasRechazo.ficha && /subrayado/.test(trasRechazo.local) && !trasRechazo.deshacer, 'si la base rechaza el borrado de una pendiente, vuelve a la memoria, la copia local la conserva y no se ofrece deshacer');
+  // borrarla de verdad la saca también de la copia local: al recargar no vuelve
+  await pt2.evaluate(() => { window.__rechazar = null; });
+  await pt2.click('.ficha .acciones button:has-text("Borrar")');
+  await pt2.click('.ficha .confirmar button:has-text("Sí")');
   await pt2.waitForSelector('#deshacer');
-  const localTrasBorrar = await pt2.evaluate(() => Object.keys(localStorage).filter((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)).map((k) => localStorage.getItem(k)).join(''));
-  check(!/subrayado/.test(localTrasBorrar), 'borrar una pendiente que no subió la retira también de la copia local');
+  await pt2.waitForFunction(() => !Object.keys(localStorage).filter((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)).some((k) => /subrayado/.test(localStorage.getItem(k))), null, { timeout: 10000 });
+  check(true, 'borrar una pendiente que no subió la retira también de la copia local, una vez que la base confirma');
   await pt2.reload();
   await pt2.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pt2.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });

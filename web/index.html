@@ -419,7 +419,11 @@ figure img { cursor: zoom-in; }
     // La base no aceptó la escritura: la memoria vuelve a lo que la base tiene, para que no queden
     // anotaciones fantasma que se pintan, se cuentan y se exportan.
     var codigo = (e && e.code) || 'error';
-    if (verbo === 'borrar') { if (previa) { anots[id] = previa; var ub = ubicar(previa); if (ub) UBIC[id] = ub; pintar(previa); } }
+    if (verbo === 'borrar') {
+      if (previa) { anots[id] = previa; var ub = ubicar(previa); if (ub) UBIC[id] = ub; pintar(previa); }
+      // el borrado no ocurrió: no hay nada que deshacer
+      ultimoBorrado = null; var z = $('#deshacer-zona'); if (z) z.innerHTML = '';
+    }
     else if (previa) { anots[id] = previa; var u2 = ubicar(previa); if (u2) UBIC[id] = u2; pintar(previa); }
     else quitarDeMemoria(id);
     renderPanel(); renderCuentas();
@@ -436,8 +440,13 @@ figure img { cursor: zoom-in; }
     var a = anots[id]; if (!a) return;
     quitarDeMemoria(id);
     renderPanel(); renderCuentas();
-    // Un borrado confirmado sale también de la copia local, para que una pendiente que no subió no vuelva al recargar.
-    if (col) { podarLocal([id]); col.doc(id).delete().then(function () { respaldar(); }).catch(function (e) { rechazoEscritura(e, id, a, 'borrar'); }); }
+    // Un borrado confirmado sale también de la copia local, para que una pendiente que no subió no vuelva al recargar;
+    // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
+    // y la copia local, si la tenía, la sigue teniendo.
+    if (col) {
+      col.doc(id).delete().then(function () { podarLocal([id]); respaldar(); })
+        .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); return; } rechazoEscritura(e, id, a, 'borrar'); });
+    }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); }
     else guardarLocal();
     ofrecerDeshacer(a);

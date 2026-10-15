@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.6] - 2026-10-15
+
+### Corregido
+
+- La copia local de una anotación borrada sólo se retira cuando la base confirma el borrado (o no tenía nada que borrar). Si la base lo rechaza, la anotación vuelve a la memoria, la copia local la sigue teniendo y no se ofrece deshacer un borrado que no ocurrió.
+
 ## [0.2.5] - 2026-10-15
 
 ### Corregido
