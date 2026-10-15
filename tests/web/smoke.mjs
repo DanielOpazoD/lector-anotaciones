@@ -170,7 +170,7 @@ try {
     const j = JSON.parse(localStorage.getItem(clave));
     const s = Object.values(j).find((a) => a.tipo === 'subrayado');
     const movida = Object.assign({}, s, { id: 'movida', inicio: s.inicio + 7, fin: s.fin + 7 });
-    const corrida = Object.assign({}, s, { id: 'corrida', pid: pidSiguiente, color: 'duda' });
+    const corrida = Object.assign({}, s, { id: 'corrida', pid: pidSiguiente, src: 'viejo.md:1', color: 'duda' });
     const perdida = Object.assign({}, s, { id: 'perdida', cita: 'frase que no existe en ningún bloque del libro', color: 'cortar' });
     j.movida = movida; j.corrida = corrida; j.perdida = perdida;
     localStorage.setItem(clave, JSON.stringify(j));
@@ -191,6 +191,14 @@ try {
   check(aviso(sub.id) === '', 'la anotación intacta no lleva aviso');
   const guardadoDespues = await page.evaluate((clave) => JSON.parse(localStorage.getItem(clave)), guardado.clave);
   check(guardadoDespues.movida.inicio === sub.inicio + 7 && guardadoDespues.corrida.pid === pidSiguiente, 'la reubicación no modifica lo guardado');
+  // Lo que se copia de una ficha reubicada apunta al bloque donde la cita está hoy, y lo dice; la perdida lo declara.
+  await page.click('.ficha[data-id="corrida"] .acciones button:has-text("Copiar")');
+  const copiaCorrida = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(copiaCorrida.startsWith(`[duda] ${sub.sidTitulo} ·`) && copiaCorrida.includes(`· ${sub.src} ·`) && copiaCorrida.includes('reubicado') && copiaCorrida.includes('(antes viejo.md:1)'),
+    `Copiar en una ficha reubicada da el bloque actual y avisa (${JSON.stringify(copiaCorrida).slice(0, 110)}…)`);
+  await page.click('.ficha[data-id="perdida"] .acciones button:has-text("Copiar")');
+  const copiaPerdida = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(copiaPerdida.includes('no encontrado en esta versión del libro') && copiaPerdida.includes(`· ${sub.src}`), 'Copiar en una ficha perdida conserva la referencia original y lo declara');
 
   check(errores.length === 0, `sin errores de consola${errores.length ? ': ' + errores.join(' | ') : ''}`);
   await ctx.close();

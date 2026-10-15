@@ -608,8 +608,20 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
   // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
   function textoAnotacion(a) {
     var tipos = { pagina: 'nota de página', capitulo: 'nota de sección', general: 'nota general' };
+    // La referencia que se copia es la del bloque donde la cita está HOY (ubicar puede haberla movido tras
+    // una reconstrucción); si la cita ya no está, se copia la referencia de cuando se anotó y se dice.
+    var src = a.src, pagina = a.pagina, secTitulo = a.sidTitulo, aviso = '', u = UBIC[a.id];
+    if (a.tipo === 'subrayado' && u) {
+      if (u.estado === 'perdido' || !u.pid) aviso = ' · no encontrado en esta versión del libro; referencia de cuando se anotó';
+      else {
+        var n = $('[data-pid="' + u.pid + '"]'), s = SEC_BY_ID[BLOQUE_SEC[u.pid]];
+        if (n) { src = n.getAttribute('data-src') || src; pagina = parseInt(n.getAttribute('data-pg') || '0', 10) || null; }
+        if (s) secTitulo = s.titulo;
+        if (u.estado === 'reubicado') aviso = ' · reubicado en esta versión del libro' + (a.src && a.src !== src ? ' (antes ' + a.src + ')' : '');
+      }
+    }
     var cab = '[' + (a.tipo === 'subrayado' ? a.color : tipos[a.tipo] || a.tipo) + (a.estado === 'resuelta' ? ', resuelta' : '') + '] '
-      + (a.sidTitulo || 'General') + (a.pagina ? ' · p. ' + a.pagina : '') + (a.src ? ' · ' + a.src : '');
+      + (secTitulo || 'General') + (pagina ? ' · p. ' + pagina : '') + (src ? ' · ' + src : '') + aviso;
     var out = [cab];
     if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
     if (a.nota) out.push('Nota: ' + a.nota);
