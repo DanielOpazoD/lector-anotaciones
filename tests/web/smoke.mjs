@@ -605,11 +605,23 @@ try {
   await pt2.waitForFunction(() => /no pudo subir/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });
   const conservada = await pt2.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado') }));
   check(conservada.marca && conservada.local && !conservada.enBase, 'una pendiente que no pudo subir sigue en memoria y en el navegador, y la barra lo dice');
+  // borrarla la saca también de la copia local: al recargar no vuelve
+  await pt2.evaluate(() => { window.__rechazar = null; });
+  await pt2.click('.tab[data-tab="todas"]');
+  await pt2.click('.ficha .acciones button:has-text("Borrar")');
+  await pt2.click('.ficha .confirmar button:has-text("Sí")');
+  await pt2.waitForSelector('#deshacer');
+  const localTrasBorrar = await pt2.evaluate(() => Object.keys(localStorage).filter((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)).map((k) => localStorage.getItem(k)).join(''));
+  check(!/subrayado/.test(localTrasBorrar), 'borrar una pendiente que no subió la retira también de la copia local');
+  await pt2.reload();
+  await pt2.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pt2.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });
+  check((await pt2.$$('mark.hl')).length === 0, 'y al recargar no resucita');
   await ctxTarde2.close();
   // lo que quedó en el navegador en otra sesión (sin conexión, o con subida fallida) se recupera al conectar:
   // sube lo que la base no tiene; en lo que la base ya tenía, manda la base
   const ctxRecarga = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctxRecarga.addInitScript(() => { window.__semilla = { vieja: { id: 'vieja', tipo: 'general', nota: 'Versión de la base', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', editado: '2026-10-03T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxRecarga.addInitScript(() => { window.__retrasoDb = 1500; window.__semilla = { vieja: { id: 'vieja', tipo: 'general', nota: 'Versión de la base', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', editado: '2026-10-03T00:00:00.000Z', autor: 'u_me' } }; });
   await ctxRecarga.addInitScript(conBase);
   await ctxRecarga.addInitScript((clave) => {
     localStorage.setItem(clave, JSON.stringify({
@@ -620,19 +632,28 @@ try {
   }, guardado.clave);
   const pr = await ctxRecarga.newPage();
   await pr.goto(base);
-  await pr.waitForFunction(() => window.__docs && window.__docs.huerfana && window.__docs.huerfana.autor === 'u_me', null, { timeout: 10000 });
-  check(true, 'una anotación que quedó en el navegador en otra sesión sube a la base al conectar, con su autor');
-  await pr.waitForFunction((clave) => localStorage.getItem(clave) === null, guardado.clave, { timeout: 10000 });
+  await pr.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pr.waitForFunction(() => /Conectando/.test(document.querySelector('#estado').textContent));
+  const pidRec = await seleccionar(pr, 10);
+  await pr.waitForSelector('#sel-tb', { state: 'visible' });
+  await pr.click('#sel-tb .col-btn[data-c="revisar"]');
+  await pr.waitForSelector(`[data-pid="${pidRec}"] mark.hl`);
+  const localAntesDeConectar = await pr.evaluate((clave) => Object.keys(JSON.parse(localStorage.getItem(clave) || '{}')), guardado.clave);
+  check(localAntesDeConectar.length === 4 && ['ajena', 'huerfana', 'vieja'].every((k) => localAntesDeConectar.includes(k)), `anotar mientras la base conecta no pisa lo que ya había en la copia local (${localAntesDeConectar.join()})`);
+  await pr.waitForFunction(() => window.__docs && window.__docs.huerfana && window.__docs.huerfana.autor === 'u_me' && Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.autor === 'u_me'), null, { timeout: 10000 });
+  check(true, 'al conectar suben la anotación que quedó en el navegador en otra sesión y la hecha mientras conectaba, con su autor');
+  await pr.waitForFunction((clave) => { const j = JSON.parse(localStorage.getItem(clave) || '{}'); return !j.huerfana && !j.vieja && !Object.values(j).some((a) => a.tipo === 'subrayado'); }, guardado.clave, { timeout: 10000 });
   await pr.click('.tab[data-tab="todas"]');
-  const recuperada = await pr.evaluate(() => ({
+  const recuperada = await pr.evaluate((clave) => ({
     ficha: !!document.querySelector('.ficha[data-id="huerfana"]'),
     vieja: (document.querySelector('.ficha[data-id="vieja"] textarea') || {}).value || '',
     viejaEnBase: window.__docs.vieja.nota,
-    ajena: !!document.querySelector('.ficha[data-id="ajena"]') || !!window.__docs.ajena,
-  }));
-  check(recuperada.ficha, 'y aparece en el panel; la copia del navegador se retira una vez subida');
+    ajenaVisible: !!document.querySelector('.ficha[data-id="ajena"]') || !!window.__docs.ajena,
+    local: Object.keys(JSON.parse(localStorage.getItem(clave) || '{}')),
+  }), guardado.clave);
+  check(recuperada.ficha, 'la recuperada aparece en el panel y sale de la copia local una vez subida');
   check(recuperada.vieja === 'Versión de la base' && recuperada.viejaEnBase === 'Versión de la base', 'una copia local atrasada de algo que la base ya tiene no pisa la versión de la base');
-  check(!recuperada.ajena, 'una copia local de una anotación ajena no se resucita ni se sube');
+  check(!recuperada.ajenaVisible && recuperada.local.join() === 'ajena', `la copia local de una anotación de otra cuenta no se carga ni se sube, pero se conserva para cuando vuelva su autora (${recuperada.local.join()})`);
   await ctxRecarga.close();
 
   // ---------------------------------------------------------------- sólo lectura de verdad

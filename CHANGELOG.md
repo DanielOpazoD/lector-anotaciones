@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.5] - 2026-10-15
+
+### Corregido
+
+- Borrar una anotación que no había logrado subir la retira también de la copia local, así que no vuelve al recargar.
+- La copia local ya no se reescribe entera: anotar o editar mientras la base conecta funde en ella, de la copia sólo sale lo que subió, lo que la base ya tenía o lo borrado, y lo de otra cuenta en el mismo navegador se conserva ahí, sin cargarse ni subirse, hasta que vuelva su autor.
+
 ## [0.2.4] - 2026-10-15
 
 ### Corregido
