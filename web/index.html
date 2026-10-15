@@ -433,7 +433,7 @@ figure img { cursor: zoom-in; }
     var a = anots[id]; if (!a) return;
     quitarDeMemoria(id);
     renderPanel(); renderCuentas();
-    if (col) col.doc(id).delete().catch(function (e) { rechazoEscritura(e, id, a, 'borrar'); });
+    if (col) col.doc(id).delete().then(function () { respaldar(); }).catch(function (e) { rechazoEscritura(e, id, a, 'borrar'); });
     else guardarLocal();
     ofrecerDeshacer(a);
   }
@@ -562,16 +562,17 @@ figure img { cursor: zoom-in; }
     candidatos = candidatos.concat(Object.keys(ORIG).filter(function (p) { return candidatos.indexOf(p) < 0; }));
     // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque
     // entero, o es larga) vale sólo si es la única en todo el libro.
-    var sinContexto = !a.antes && !a.despues, hallazgos = [];
+    var sinContexto = !a.antes && !a.despues, hallazgos = [], mejor = null;
     for (var c = 0; c < candidatos.length; c++) {
       var p = candidatos[c]; if (p === a.pid) continue;
       var m2 = buscarCita(textoPlano(p), a);
       if (!m2) continue;
-      if (m2.puntos > 0) return { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, estado: 'reubicado' };
-      hallazgos.push({ pid: p, inicio: m2.i, fin: m2.i + a.cita.length, estado: 'reubicado' });
-      if (hallazgos.length > 1) break;
+      var h = { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, estado: 'reubicado', puntos: m2.puntos };
+      if (m2.puntos > 0 && (!mejor || m2.puntos > mejor.puntos)) mejor = h;
+      hallazgos.push(h);
     }
-    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40)) return hallazgos[0];
+    if (mejor) return { pid: mejor.pid, inicio: mejor.inicio, fin: mejor.fin, estado: 'reubicado' };
+    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40)) return { pid: hallazgos[0].pid, inicio: hallazgos[0].inicio, fin: hallazgos[0].fin, estado: 'reubicado' };
     return { pid: null, inicio: 0, fin: 0, estado: 'perdido' };
   }
   function reubicarTodo() { UBIC = {}; Object.keys(anots).forEach(function (k) { var u = ubicar(anots[k]); if (u) UBIC[k] = u; }); }
@@ -762,7 +763,7 @@ figure img { cursor: zoom-in; }
     f.appendChild(acc);
     return f;
   }
-  function guardarSilencioso(a) { a.editado = ahora(); if (col) col.doc(a.id).set(a).then(function () { estado('Guardado ' + new Date().toLocaleTimeString()); }).catch(function (e) { estado('No se pudo guardar (' + (e && e.code || 'error') + ')', true); }); else guardarLocal(); }
+  function guardarSilencioso(a) { a.editado = ahora(); if (col) col.doc(a.id).set(a).then(function () { estado('Guardado ' + new Date().toLocaleTimeString()); respaldar(); }).catch(function (e) { estado('No se pudo guardar (' + (e && e.code || 'error') + ')', true); }); else guardarLocal(); }
   function irAAnot(a) {
     var pid = pidEfectivo(a);
     if (pid) { irA(BLOQUE_SEC[pid] || a.sid, pid); }
@@ -1173,8 +1174,14 @@ figure img { cursor: zoom-in; }
       listoUsuario.then(function () {
         if (!col) return;
         // Lo anotado mientras la base conectaba se guardó sólo en el navegador: ahora va a la base, con su autor.
-        var subidas = pendientesBase.splice(0).map(function (id) { var a = anots[id]; if (!a || SOLO_LECTURA) return Promise.resolve(); if (!a.autor && ME) a.autor = ME; return col.doc(id).set(a).catch(function (e) { rechazoEscritura(e, id, null, 'guardar'); }); });
-        if (subidas.length) Promise.all(subidas).then(function () { try { localStorage.removeItem(LOCAL_KEY); } catch (e) {} respaldar(); });
+        // Si alguna subida falla, la anotación sigue en memoria y en el navegador (es su única copia) y se avisa;
+        // la copia local sólo se retira cuando todas subieron.
+        var subidas = pendientesBase.splice(0).map(function (id) { var a = anots[id]; if (!a || SOLO_LECTURA) return Promise.resolve(true); if (!a.autor && ME) a.autor = ME; return col.doc(id).set(a).then(function () { return true; }).catch(function () { return false; }); });
+        if (subidas.length) Promise.all(subidas).then(function (ok) {
+          var fallidas = ok.filter(function (x) { return !x; }).length;
+          if (!fallidas) { try { localStorage.removeItem(LOCAL_KEY); } catch (e) {} respaldar(); }
+          else { guardarLocal(); estado(fallidas + (fallidas === 1 ? ' anotación hecha antes de conectar no pudo subir a la base; se conserva en este navegador. Usa «Copiar todo» para enviarla.' : ' anotaciones hechas antes de conectar no pudieron subir a la base; se conservan en este navegador. Usa «Copiar todo» para enviarlas.'), true); }
+        });
         renderPanel();
       });
       if (!d) {

@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.3] - 2026-10-15
+
+### Corregido
+
+- Si una anotación hecha antes de conectar no logra subir, la nota y su copia local se conservan y el estado lo avisa, en vez de borrarla del navegador.
+- `ubicar` recorre todos los bloques candidatos antes de decidir: una cita con contexto se reubica en el bloque correcto aunque otro igual aparezca antes, y una cita corta sin contexto que se repite no se adivina.
+- El respaldo diario también se escribe tras editar una nota existente (respuesta, cierre, réplica) o borrar una anotación, no sólo tras crear.
+
 ## [0.2.2] - 2026-10-15
 
 Revisión adversarial con agentes independientes (20 hallazgos confirmados) y sus correcciones.

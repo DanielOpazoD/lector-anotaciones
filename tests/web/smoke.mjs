@@ -184,7 +184,12 @@ try {
     const movida = Object.assign({}, s, { id: 'movida', inicio: s.inicio + 7, fin: s.fin + 7 });
     const corrida = Object.assign({}, s, { id: 'corrida', pid: pidSiguiente, src: 'viejo.md:1', color: 'duda' });
     const perdida = Object.assign({}, s, { id: 'perdida', cita: 'frase que no existe en ningún bloque del libro', color: 'cortar' });
-    j.movida = movida; j.corrida = corrida; j.perdida = perdida;
+    // «Dar por hecho» aparece en tres ítems de la lista del capítulo 1 y en ningún otro sitio: sin contexto es ambigua
+    const repetida = Object.assign({}, s, { id: 'repetida', pid: 'cap-01-b99', cita: 'Dar por hecho', antes: '', despues: '', inicio: 0, fin: 13, color: 'duda' });
+    // con contexto, una cita repetida se encuentra aunque otra igual aparezca en un bloque anterior
+    const txtSig = document.querySelector('[data-pid="' + pidSiguiente + '"]').textContent;
+    const conctx = Object.assign({}, s, { id: 'conctx', pid: 'cap-01-b99', cita: txtSig.slice(3, 20), antes: txtSig.slice(0, 3), despues: txtSig.slice(20, 50), inicio: 3, fin: 20, color: 'conservar' });
+    j.movida = movida; j.corrida = corrida; j.perdida = perdida; j.repetida = repetida; j.conctx = conctx;
     localStorage.setItem(clave, JSON.stringify(j));
   }, { clave: guardado.clave, pid, pidSiguiente });
   await page.reload();
@@ -195,7 +200,11 @@ try {
   check(cubren('movida') === sub.cita, `con desplazamientos viejos, la marca vuelve a cubrir la cita exacta («${cubren('movida')}»)`);
   check(cubren('corrida') === sub.cita, 'atribuida al bloque siguiente, la marca vuelve al bloque donde está la cita');
   check(cubren('perdida') === '', 'una cita que ya no existe no pinta nada');
-  check((await page.$$(`[data-pid="${pidSiguiente}"] mark.hl`)).length === 0, 'y no se pinta nada en el bloque equivocado');
+  check(cubren('repetida') === '', 'una cita corta que aparece en varios bloques sin contexto no se adivina');
+  const marcasCtx = await page.$$eval('article.seccion:not([hidden]) mark.hl', (ms) => ms.filter((m) => m.getAttribute('data-aids').split(' ').includes('conctx')).map((m) => m.closest('[data-pid]').getAttribute('data-pid')));
+  check(marcasCtx.length === 1 && marcasCtx[0] === pidSiguiente, `una cita repetida pero con contexto se reubica en el bloque correcto aunque otro igual aparezca antes (${marcasCtx.join(',')})`);
+  const corridaEnSiguiente = await page.$$eval(`[data-pid="${pidSiguiente}"] mark.hl`, (ms) => ms.filter((m) => m.getAttribute('data-aids').split(' ').includes('corrida')).length);
+  check(corridaEnSiguiente === 0, 'y la anotación corrida no se pinta en el bloque equivocado');
   const avisos = await page.$$eval('.ficha', (fs) => fs.map((f) => [f.getAttribute('data-id'), (f.querySelector('.aviso-ubic') || {}).textContent || '']));
   const aviso = (id) => (avisos.find((x) => x[0] === id) || [])[1] || '';
   check(/^Reubicado/.test(aviso('movida')) && /^Reubicado/.test(aviso('corrida')) && /otro bloque/.test(aviso('corrida')), 'las fichas reubicadas lo dicen');
@@ -537,6 +546,12 @@ try {
   await p3.waitForFunction(() => window.__colecciones.respaldos && Object.values(window.__colecciones.respaldos).some((d) => d.libro));
   const respaldo = await p3.evaluate(() => Object.values(window.__colecciones.respaldos).find((d) => d.partes !== undefined && d.libro));
   check(respaldo.partes >= 2 && respaldo.n >= 4 && (await p3.evaluate(() => Object.keys(window.__colecciones.respaldos).length)) === respaldo.partes + 1, `el respaldo diario se trocea en documentos pequeños (${respaldo.partes} partes, ${respaldo.n} anotaciones)`);
+  await p3.evaluate(() => { window.__colecciones.respaldos = {}; Object.keys(localStorage).filter((k) => k.endsWith(':respaldo')).forEach((k) => localStorage.removeItem(k)); });
+  await p3.fill('.ficha[data-id="conpregunta"] textarea.replica', 'Al inicio, confirmado.');
+  await p3.$eval('.ficha[data-id="conpregunta"] textarea.replica', (t) => t.blur());
+  await p3.waitForFunction(() => Object.values(window.__colecciones.respaldos || {}).some((d) => d.libro) || true);
+  await p3.waitForTimeout(150);
+  check((await p3.evaluate(() => Object.keys(window.__colecciones.respaldos || {}).length)) === 0, 'editar una nota el mismo día no repite el respaldo (ya se hizo hoy)');
   const copiaResp = await (async () => { await ctx3.grantPermissions(['clipboard-read', 'clipboard-write']); await p3.click('.ficha[data-id="atendida"] .acciones button:has-text("Copiar")'); return p3.evaluate(() => navigator.clipboard.readText()).catch(() => ''); })();
   check(/Respuesta \(atendida, abc1234\): Quitado en el párrafo 3\./.test(copiaResp), 'copiar una ficha incluye la respuesta y su cierre');
   // una escritura rechazada por la base no deja anotaciones fantasma
@@ -575,6 +590,22 @@ try {
   const sinLocal = await pt.evaluate(() => !Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)));
   check(sinLocal, 'y la copia del navegador se retira para que no vuelva duplicada');
   await ctxTarde.close();
+  // si la subida de una pendiente falla, la anotación no se pierde: sigue en memoria y en el navegador
+  const ctxTarde2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxTarde2.addInitScript(() => { window.__retrasoDb = 1500; window.__rechazar = 'unavailable'; });
+  await ctxTarde2.addInitScript(conBase);
+  const pt2 = await ctxTarde2.newPage();
+  await pt2.goto(base);
+  await pt2.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pt2.waitForFunction(() => /Conectando/.test(document.querySelector('#estado').textContent));
+  const pidTarde2 = await seleccionar(pt2, 10);
+  await pt2.waitForSelector('#sel-tb', { state: 'visible' });
+  await pt2.click('#sel-tb .col-btn[data-c="revisar"]');
+  await pt2.waitForSelector(`[data-pid="${pidTarde2}"] mark.hl`);
+  await pt2.waitForFunction(() => /no pudo subir/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });
+  const conservada = await pt2.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado') }));
+  check(conservada.marca && conservada.local && !conservada.enBase, 'una pendiente que no pudo subir sigue en memoria y en el navegador, y la barra lo dice');
+  await ctxTarde2.close();
 
   // ---------------------------------------------------------------- sólo lectura de verdad
   const ctxSL = await browser.newContext({ viewport: { width: 1280, height: 900 } });
