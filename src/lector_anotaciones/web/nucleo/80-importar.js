@@ -254,9 +254,19 @@
       var meta = { titulo: r[4] ? textoLibre(primeroNS(r[4], 'title')) : '', autor: r[4] ? textoLibre(primeroNS(r[4], 'creator')) : '', subtitulo: '' };
       var cuerpo = primeroNS(doc, 'body');
       if (!cuerpo) throw new Error('documento de Word sin cuerpo');
-      // párrafos y tablas del cuerpo, en orden (los controles de contenido se abren)
-      var piezas = [];
-      (function recorrer(n) { for (var c = n.firstChild; c; c = c.nextSibling) { if (c.nodeType !== 1) continue; var t = local(c); if (t === 'p' || t === 'tbl') piezas.push(c); else if (t === 'sdt' || t === 'sdtcontent' || t === 'customxml') recorrer(c); } })(cuerpo);
+      // párrafos y tablas del cuerpo, en orden (los controles de contenido se abren). Una tabla de una sola columna es
+      // un marco de maquetación (una figura con su leyenda, un recuadro): se recorre su contenido como texto corrido.
+      var piezas = [], directos = function (n, nombre) { return hijos(n).filter(function (x) { return x.nodeType === 1 && local(x) === nombre; }); };
+      var esMarco = function (tbl) { var filas = directos(tbl, 'tr'); return filas.length > 0 && filas.every(function (tr) { return directos(tr, 'tc').length === 1; }); };
+      (function recorrer(n) {
+        for (var c = n.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType !== 1) continue;
+          var t = local(c);
+          if (t === 'p') piezas.push(c);
+          else if (t === 'tbl') { if (esMarco(c)) directos(c, 'tr').forEach(function (tr) { directos(tr, 'tc').forEach(recorrer); }); else piezas.push(c); }
+          else if (t === 'sdt' || t === 'sdtcontent' || t === 'customxml') recorrer(c);
+        }
+      })(cuerpo);
       // título de cada párrafo: estilo Heading/Título n o nivel de esquema
       var nivelDe = function (p) {
         var ppr = wHijo(p, 'pPr'), est = estilo(wAttr(wHijo(ppr, 'pStyle'), 'val')), m = /^(heading|t[ií]tulo|encabezado)\s*(\d)$/.exec(est.nombre), ol = wHijo(ppr, 'outlineLvl');

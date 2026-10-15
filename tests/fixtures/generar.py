@@ -2,7 +2,7 @@
 
 Son ZIP armados a mano, deterministas (fecha fija) y pequeños, con los casos que el importador debe resolver:
 títulos de dos niveles y subtítulos, negrita y cursiva, listas con y sin número, cita, tabla, figura con su
-leyenda, un capítulo sin encabezado (toma el título del índice del EPUB), texto borrado con control de cambios
+leyenda (en Word, dentro de una tabla de una columna usada como marco, como hacen muchos maquetadores), un capítulo sin encabezado (toma el título del índice del EPUB), texto borrado con control de cambios
 (no debe aparecer) y un enlace (sólo su texto).
 
 Uso: python tests/fixtures/generar.py   (escribe ejemplo.epub, ejemplo-ncx.epub y ejemplo.docx junto a este archivo)
@@ -152,8 +152,8 @@ DOCUMENTO = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 {_p("Segundo.", "Prrafodelista", num=(2, 0))}
 {_p("Una frase bien escrita dice lo que se sabe.", "Cita")}
 <w:tbl><w:tr><w:tc>{_p(runs=_r("Capa", b=True))}</w:tc><w:tc>{_p("Pregunta")}</w:tc></w:tr><w:tr><w:tc>{_p("Hecho")}</w:tc><w:tc>{_p("¿Qué vi?")}</w:tc></w:tr></w:tbl>
-<w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="Imagen 1"/><a:graphic><a:graphicData><a:blip r:embed="rId5"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
-{_p("Figura 1. Un punto mínimo.", "Descripcin")}
+<w:tbl><w:tr><w:tc><w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="Imagen 1"/><a:graphic><a:graphicData><a:blip r:embed="rId5"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+{_p("Figura 1. Un punto mínimo.", "Descripcin")}</w:tc></w:tr></w:tbl>
 {_p("")}
 {_p("Capítulo 2. Inferencias", "Ttulo2")}
 {_p("Una inferencia va más allá de lo observado.")}
