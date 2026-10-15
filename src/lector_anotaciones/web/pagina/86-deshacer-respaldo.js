@@ -14,9 +14,17 @@
         guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada');
       }
       z.innerHTML = '';
+      enfocar(a.id);  // el foco pasa a la anotación recuperada
+      if (!z.contains(document.activeElement) && document.activeElement === document.body) $('#lectura').focus({ preventScroll: true });
     });
     z.appendChild(u);
-    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.contains(u)) z.innerHTML = ''; }, 8000);
+    setTimeout(function () {
+      if (ultimoBorrado === a) ultimoBorrado = null;
+      if (!z.contains(u)) return;
+      var tenia = z.contains(document.activeElement);
+      z.innerHTML = '';
+      if (tenia) { var t = $('.tab.activa'); (enfocable(t) ? t : $('#lectura')).focus({ preventScroll: true }); }
+    }, 8000);
   }
   function respaldar() {
     // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura

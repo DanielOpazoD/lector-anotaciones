@@ -29,7 +29,11 @@
   var uid = function () { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); };
   // En sólo lectura, todo mensaje de la barra lo recuerda («Conectado · N anotaciones · sólo lectura»), para que el eco
   // de la base no pise el aviso.
-  var estado = function (t, aviso) { var e = $('#estado'); if (SOLO_LECTURA && !/sólo lectura/i.test(t)) t += ' · sólo lectura'; e.textContent = t; e.className = aviso ? 'aviso' : ''; };
+  // Los avisos (errores, cambios de modo) se anuncian además a los lectores de pantalla desde una región viva fuera de la
+  // barra, que sigue en el árbol de accesibilidad aunque la barra quede inerte; los mensajes de rutina («Guardado…»,
+  // «Conectado…») sólo se muestran.
+  var estado = function (t, aviso) { var e = $('#estado'); if (SOLO_LECTURA && !/sólo lectura/i.test(t)) t += ' · sólo lectura'; e.textContent = t; e.className = aviso ? 'aviso' : ''; if (aviso) anunciar(t); };
+  var anunciar = function (t) { var r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(function () { r.textContent = t; }, 60); };
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var igual = N.igual;
   var lsSet = function (k, v) { try { localStorage.setItem(k, v); return localStorage.getItem(k) === v; } catch (e) { return false; } };

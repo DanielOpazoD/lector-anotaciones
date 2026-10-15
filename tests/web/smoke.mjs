@@ -1177,7 +1177,7 @@ try {
   await pa.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
   const guardadoLocal = (page, texto) => page.evaluate((t) => Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && (localStorage.getItem(k) || '').includes(t)), texto);
   const aria = await pa.evaluate(() => ({
-    estado: document.querySelector('#estado').getAttribute('role'),
+    estado: (document.querySelector('#anuncio') && !document.querySelector('#anuncio').closest('#app')) ? document.querySelector('#anuncio').getAttribute('role') : null,
     tabs: (document.querySelector('.tabs') || {}).getAttribute ? document.querySelector('.tabs').getAttribute('role') : null,
     seleccionadas: document.querySelectorAll('.tab[aria-selected="true"]').length,
     actual: (document.querySelector('nav a.sec[aria-current="page"]') || {}).className || '',
@@ -1238,6 +1238,9 @@ try {
   await pa.mouse.click(5, 5);
   check(dlg.abierto && dlg.modal && dlg.foco && !(await pa.$eval('#atajos', (d) => !!d.open)), `? abre los atajos como diálogo modal con el foco adentro, y un clic en el fondo lo cierra (${JSON.stringify(dlg)})`);
   await pa.click('#b-atajos');
+  const bordeAtajos = await pa.$eval('#atajos', (d) => { const r = d.getBoundingClientRect(); return { x: r.left + 4, y: r.top + 4 }; });
+  await pa.mouse.click(bordeAtajos.x, bordeAtajos.y);
+  check(await pa.$eval('#atajos', (d) => !!d.open), 'un clic en el relleno del diálogo (dentro de su recuadro) no lo cierra');
   await pa.keyboard.press('Escape');
   check(!(await pa.$eval('#atajos', (d) => !!d.open)) && (await pa.evaluate(() => document.activeElement.id)) === 'b-atajos', 'Esc cierra los atajos y el foco vuelve a su botón');
   // figura ampliada con texto alternativo; un clic la cierra
@@ -1259,9 +1262,21 @@ try {
   const tam1 = await tamTexto();
   const oscuro = await pa.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const letra = await pa.$eval('article.seccion:not([hidden]) p.bloque', (p) => getComputedStyle(p).fontFamily);
+  // contraste del texto sobre la tinta (pestaña activa, sección activa, botón primario) en tema oscuro
+  const contrasteOscuro = await pa.evaluate(() => {
+    const lum = (c) => { const v = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+    const ratio = (n) => { const cs = getComputedStyle(n); const a = lum(cs.color), b = lum(cs.backgroundColor); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+    return Math.min(...['.tab.activa', 'nav a.sec.activa'].map((q) => ratio(document.querySelector(q))));
+  });
+  check(contrasteOscuro >= 4.5, `en tema oscuro el texto sobre la tinta tiene contraste suficiente (${contrasteOscuro.toFixed(2)}:1)`);
+  for (let i = 0; i < 2; i++) await pa.click('#aj-mas');  // de 120 % al tope (145 %)
+  check((await pa.evaluate(() => document.activeElement.id)) === 'aj-mas' && (await pa.$eval('#aj-mas', (b) => b.getAttribute('aria-disabled'))) === 'true', 'A+ al tope queda deshabilitado sin perder el foco');
+  for (let i = 0; i < 2; i++) await pa.click('#aj-menos');
   await pa.keyboard.press('Escape');
   const menuCerrado = await pa.evaluate(() => !document.querySelector('#ajustes').open && document.activeElement.tagName === 'SUMMARY');
   check(ajustesOk && tam1 > tam0 && oscuro === 'rgb(21, 23, 27)' && /Plex/.test(letra) && menuCerrado, `«Aa» agranda el texto, cambia tema y letra, y Esc cierra el menú con el foco en su botón (${tam0} → ${tam1} px, ${oscuro})`);
+  const subtitulo = await pa.$eval('article.seccion:not([hidden]) h1.sec-titulo', (h) => parseFloat(getComputedStyle(h).fontSize));
+  check(subtitulo > 28, `el título de la sección también crece con «Aa» (${subtitulo} px)`);
   await pa.reload();
   await pa.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   check((await tamTexto()) === tam1 && (await pa.evaluate(() => document.documentElement.getAttribute('data-tema-lector'))) === 'dark', 'los ajustes de lectura se recuerdan al recargar');
@@ -1277,6 +1292,8 @@ try {
   await pa.click('.ficha button[data-accion="si"]');
   const trasBorrarA = await pa.evaluate(() => ({ foco: document.activeElement !== document.body && !!document.activeElement.closest('#panel'), deshacer: !!document.querySelector('#deshacer') }));
   check(trasBorrarA.foco && trasBorrarA.deshacer, `al borrar, el foco queda en el panel y aparece «Deshacer» (${JSON.stringify(trasBorrarA)})`);
+  await pa.click('#deshacer');
+  check(await pa.evaluate(() => document.activeElement !== document.body && !!document.activeElement.closest('.ficha, mark')), 'tras deshacer, el foco queda en la anotación recuperada');
   check(erroresA.length === 0, `sin errores de consola en el recorrido de accesibilidad${erroresA.length ? ': ' + erroresA.join(' | ') : ''}`);
   await ctxA.close();
 
@@ -1373,6 +1390,42 @@ try {
   check(!!undo && !undo.inerte && undo.dentro && undo.encima, `con el panel abierto, «Deshacer» sigue visible y se puede tocar (${JSON.stringify(undo)})`);
   if (undo && undo.encima) await pc.click('#deshacer');
   check((await pc.$$('#panel .ficha')).length === 1, 'y deshacer devuelve la ficha');
+  // en concentración, tocar un subrayado sale de ella y muestra la ficha (no un velo sin nada)
+  await tocarFuera();
+  if (!(await esperar(pc, () => document.querySelector('#velo').hidden, null, 1500))) { await tocarFuera(); await esperar(pc, () => document.querySelector('#velo').hidden, null, 1500); }
+  await pc.click('#b-mas');
+  await pc.click('#b-foco');
+  await pc.tap('article.seccion:not([hidden]) mark.hl');
+  const concentrado = await pc.evaluate(() => ({ foco: document.querySelector('#app').classList.contains('foco'), panelVisible: document.querySelector('#panel').getClientRects().length > 0 && document.querySelector('#panel').classList.contains('abierta'), cuerpo: document.activeElement === document.body }));
+  check(!concentrado.foco && concentrado.panelVisible && !concentrado.cuerpo, `en concentración, tocar un subrayado sale de ella y abre su ficha (${JSON.stringify(concentrado)})`);
+  // cambiar el ancho con el panel abierto: al volver a estrecho, el cajón sólo reaparece si el foco sigue en él (una nota
+  // a medio escribir); si se siguió leyendo, el texto no queda inerte detrás de un velo
+  await pc.setViewportSize({ width: 1280, height: 800 });
+  await pc.focus('#panel .ficha textarea');
+  await pc.setViewportSize({ width: 400, height: 800 });
+  await esperar(pc, () => document.querySelector('#panel').classList.contains('abierta'), null, 2000);  // el cambio de media llega en el cuadro siguiente
+  const conNota = await estadoCajon();
+  check(conNota.panel && conNota.velo && (await pc.evaluate(() => document.activeElement.tagName)) === 'TEXTAREA', `estrechar la pantalla con una nota en edición deja el panel abierto con el cursor en ella (${JSON.stringify(conNota)})`);
+  await pc.setViewportSize({ width: 1280, height: 800 });
+  await pc.mouse.click(400, 400);
+  await pc.setViewportSize({ width: 400, height: 800 });
+  await pc.waitForTimeout(150);
+  const trasAncho = await estadoCajon();
+  check(!trasAncho.panel && !trasAncho.velo && !trasAncho.lectura && !trasAncho.cabecera, `pasar a ancho, seguir leyendo y volver no deja un cajón abierto ni el texto inerte (${JSON.stringify(trasAncho)})`);
+  // Esc con «⋯» abierto y el foco en la búsqueda lo cierra
+  await pc.click('#b-mas');
+  await pc.focus('#buscar');
+  await pc.keyboard.press('Escape');
+  check(!(await pc.$eval('#herramientas', (h) => h.classList.contains('abierta'))), 'Esc en la búsqueda cierra «⋯»');
+  // a 360 px la barra de subrayado cabe en la pantalla
+  await pc.setViewportSize({ width: 360, height: 760 });
+  await seleccionar(pc, 25);
+  await esperar(pc, () => getComputedStyle(document.querySelector('#sel-tb')).display === 'flex', null, 3000);
+  const barra360 = await pc.$eval('#sel-tb', (t) => { const r = t.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; });
+  check(barra360[0] >= 0 && barra360[1] <= 360, `a 360 px la barra de subrayado cabe en la pantalla (${barra360.join('–')})`);
+  await pc.keyboard.press('Escape');
+  check(await pc.evaluate(() => getComputedStyle(document.querySelector('#sel-tb')).display === 'none' && getSelection().isCollapsed), 'Esc con una selección la suelta y oculta la barra');
+  await pc.setViewportSize({ width: 400, height: 800 });
   const anchosC = await pc.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   check(anchosC[0] <= anchosC[1], `sin desborde horizontal con los cajones nuevos (${anchosC.join(' / ')})`);
   check(erroresC.length === 0, `sin errores de consola en el recorrido del teléfono${erroresC.length ? ': ' + erroresC.join(' | ') : ''}`);

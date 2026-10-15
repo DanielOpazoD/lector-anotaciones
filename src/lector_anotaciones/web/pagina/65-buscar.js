@@ -1,6 +1,7 @@
   // ------------------------------------------------------------ búsqueda
   function buscar(q) {
     tab = 'buscar'; marcarTab();
+    if (mqMovil.matches) cerrarHerramientas();
     var box = $('#lista'); box.innerHTML = '';
     q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
     var norm = N.normalizar;
@@ -10,7 +11,7 @@
     enAnots.forEach(function (a) {
       var r = el('div', { 'class': 'res anot', role: 'button', tabindex: '0' }, [el('div', { 'class': 'donde', text: 'En tus anotaciones · ' + etiqueta(a) }), el('div', { text: (a.nota || a.cita || '').slice(0, 160) })]);
       r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
-      r.addEventListener('click', function () { irAAnot(anots[a.id] || a); if (mqMovil.matches) lateral('panel', true); });
+      r.addEventListener('click', function () { irAAnot(anots[a.id] || a, true); });
       box.appendChild(r);
     });
     SECS.forEach(function (s) {
@@ -23,7 +24,12 @@
         r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
         var frag = el('div'); frag.appendChild(document.createTextNode((ini ? '…' : '') + t.slice(ini, i))); frag.appendChild(el('b', { text: t.slice(i, i + nq.length) })); frag.appendChild(document.createTextNode(t.slice(i + nq.length, fin) + (fin < t.length ? '…' : '')));
         r.appendChild(frag);
-        r.addEventListener('click', function () { irA(s.id, b.id); if (mqMovil.matches) lateral('panel', false); });
+        r.addEventListener('click', function () {
+          irA(s.id, b.id);
+          if (mqMovil.matches) { volverA = null; lateral('panel', false); }
+          // el foco va al pasaje encontrado (no al campo de búsqueda, que en el teléfono abriría el teclado)
+          var n = $('[data-pid="' + b.id + '"]'); if (n) { n.setAttribute('tabindex', '-1'); n.focus({ preventScroll: true }); }
+        });
         box.appendChild(r);
       });
     });

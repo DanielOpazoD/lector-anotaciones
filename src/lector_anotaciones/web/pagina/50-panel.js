@@ -32,7 +32,7 @@
     if (!L.length) {
       var filtrado = filtro !== 'todas' || !!filtroAutor || !!filtroEtiqueta;
       var vacio = el('div', { 'class': 'vacio', text: filtrado ? 'Ninguna anotación con estos filtros. ' : tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' });
-      if (filtrado) { var qf = el('button', { 'class': 'enlace', type: 'button', text: 'Quitar filtros' }); qf.addEventListener('click', function () { quitarFiltros(); renderPanel(); }); vacio.appendChild(qf); }
+      if (filtrado) { var qf = el('button', { 'class': 'enlace', type: 'button', text: 'Quitar filtros' }); qf.addEventListener('click', function () { quitarFiltros(); renderPanel(); var p = $('.ficha') || $('#filtros-det > summary'); if (p) p.focus({ preventScroll: true }); }); vacio.appendChild(qf); }
       box.appendChild(vacio); return;
     }
     L.forEach(function (a) { box.appendChild(ficha(a)); });
@@ -165,14 +165,15 @@
     if (col) escribirEnBase(id, null);
     else guardarLocal(modo === 'cargando' ? [id] : undefined);
   }
-  function irAAnot(a) {
+  // `mostrar`: en pantalla estrecha, dejar el panel abierto con la ficha (desde un resultado de búsqueda).
+  function irAAnot(a, mostrar) {
     var pid = pidEfectivo(a);
     if (pid) { irA(BLOQUE_SEC[pid] || a.sid, pid); }
     else if (a.pid) { if (a.sid) irA(a.sid); }
     else if (a.tipo === 'pagina') { var n = $('[data-pg="' + a.pagina + '"][data-pid]'); if (n) irA(BLOQUE_SEC[n.getAttribute('data-pid')], n.getAttribute('data-pid')); }
     else if (a.sid) irA(a.sid);
-    if (mqMovil.matches) lateral('panel', false);
-    enfocar(a.id);
+    if (mqMovil.matches && !mostrar) lateral('panel', false);
+    enfocar(a.id, false, !!mostrar);
   }
   // Enfoca la ficha de una anotación (y su pasaje). `editar` lleva el cursor a la nota; `mostrar` abre el panel en
   // pantalla estrecha aunque no se vaya a escribir (al tocar un subrayado).
@@ -186,6 +187,8 @@
     if (lista().indexOf(a) < 0) quitarFiltros();
     marcarTab();
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
+    // en concentración el panel no se ve: para escribir o mostrar la ficha se sale de ella
+    if ((editar || mostrar) && $('#app').classList.contains('foco')) alternarFoco();
     if (mqMovil.matches && (editar || mostrar)) {
       // en pantalla estrecha el panel sube desde abajo y el pasaje queda a la vista encima
       var mk = $('mark.hl[data-aids~="' + id + '"]');
@@ -198,12 +201,12 @@
       // Si la activación vino de una marca del texto o de un resultado de búsqueda, el elemento pulsado ya no existe
       // (se redibujó): el foco del teclado sigue en la ficha, no cae al cuerpo del documento. Con el panel cerrado
       // (pantalla estrecha) la ficha es inerte y el foco va al pasaje.
-      if (!f.closest('[inert]')) {
+      if (enfocable(f)) {
         if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); }
         if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
       } else {
         var m = $('mark.hl[data-aids~="' + id + '"]');
-        if (m) m.focus({ preventScroll: true });
+        if (enfocable(m)) m.focus({ preventScroll: true });
       }
     }
   }

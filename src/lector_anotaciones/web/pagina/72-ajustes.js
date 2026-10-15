@@ -10,7 +10,8 @@
     if (ajustes.tema === 'light' || ajustes.tema === 'dark') raiz.setAttribute('data-tema-lector', ajustes.tema); else raiz.removeAttribute('data-tema-lector');
     if (ajustes.letra === 'sans') raiz.setAttribute('data-letra', 'sans'); else raiz.removeAttribute('data-letra');
     $('#aj-tam').textContent = Math.round(ajustes.escala * 100) + ' %';
-    $('#aj-menos').disabled = i <= 0; $('#aj-mas').disabled = i >= ESCALAS.length - 1;
+    // aria-disabled y no disabled: el botón que llega al tope conserva el foco
+    $('#aj-menos').setAttribute('aria-disabled', i <= 0 ? 'true' : 'false'); $('#aj-mas').setAttribute('aria-disabled', i >= ESCALAS.length - 1 ? 'true' : 'false');
     $$('input[name="aj-tema"]').forEach(function (r) { r.checked = r.value === (ajustes.tema || ''); });
     $$('input[name="aj-letra"]').forEach(function (r) { r.checked = r.value === (ajustes.letra || ''); });
   }

@@ -66,6 +66,10 @@
   // teclado no se escapa a lo que no se ve, y al cerrarlo el foco vuelve a donde estaba.
   var mqMovil = window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false };
   var volverA = null;
+  // Un destino de foco que de verdad se puede enfocar: en el documento, visible (no en una sección oculta ni en un panel
+  // escondido por la concentración) y fuera de lo inerte.
+  function enfocable(n) { return !!n && document.contains(n) && n.getClientRects().length > 0 && !n.closest('[inert]'); }
+  function cerrarHerramientas() { $('#herramientas').classList.remove('abierta'); $('#b-mas').setAttribute('aria-expanded', 'false'); }
   function cajonAbierto() {
     if (!mqMovil.matches) return null;
     return ['indice', 'panel'].filter(function (c) { return $('#' + c).classList.contains('abierta'); })[0] || null;
@@ -81,14 +85,18 @@
     $('#lectura').classList.toggle('con-hoja', abierto === 'panel');
     $('header.barra').inert = !!abierto;
     $('#lectura').inert = !!abierto;
+    $('.saltar').inert = !!abierto;
   }
   // `origen`: a dónde vuelve el foco al cerrar, si no es el control que lo abrió (el pasaje de una nota recién creada).
   function lateral(cual, abierto, origen) {
     var n = $('#' + cual), antes = n.classList.contains('abierta');
     var ahora = abierto === 'alternar' ? !antes : !!abierto;
     if (ahora === antes) return;
+    // en concentración índice y panel no se ven: abrir uno sale antes de la concentración
+    if (ahora && $('#app').classList.contains('foco')) alternarFoco();
     var activo = document.activeElement;
     if (ahora && mqMovil.matches) {
+      cerrarHerramientas();
       var otro = $('#' + (cual === 'indice' ? 'panel' : 'indice'));
       if (otro.classList.contains('abierta')) otro.classList.remove('abierta');
       else volverA = origen || (activo && activo !== document.body ? activo : null);
@@ -102,14 +110,24 @@
         (dentro || $('.cerrar', n)).focus({ preventScroll: true });
       }
     } else if (n.contains(activo) || !activo || activo === document.body) {
-      var destino = volverA && document.contains(volverA) && !volverA.closest('.cajon, [inert]') ? volverA : null;
-      if (!destino && cual === 'panel' && fichaFoco) destino = $('mark.hl[data-aids~="' + fichaFoco + '"]');
+      var destino = enfocable(volverA) && !volverA.closest('.cajon') ? volverA : null;
+      if (!destino && cual === 'panel' && fichaFoco) { var mf = $('mark.hl[data-aids~="' + fichaFoco + '"]'); if (enfocable(mf)) destino = mf; }
       (destino || $('#b-' + cual)).focus({ preventScroll: true });
       volverA = null;
     }
   }
   function cerrarCajones() { var c = cajonAbierto(); if (c) lateral(c, false); }
-  if (mqMovil.addEventListener) mqMovil.addEventListener('change', sincronizarLaterales); else if (mqMovil.addListener) mqMovil.addListener(sincronizarLaterales);
+  // Al pasar a pantalla ancha los cajones dejan de serlo (y no vuelven abiertos al estrecharla); al pasar a estrecha, si
+  // el foco está en el índice o el panel, ese cajón queda abierto para no dejarlo en algo inerte (una nota a medias).
+  function alCambiarAncho() {
+    if (!mqMovil.matches) { ['indice', 'panel'].forEach(function (c) { $('#' + c).classList.remove('abierta'); }); volverA = null; }
+    else {
+      var act = document.activeElement, dentro = act && act.closest ? act.closest('#indice, #panel') : null;
+      if (dentro) ['indice', 'panel'].forEach(function (c) { $('#' + c).classList.toggle('abierta', c === dentro.id); });
+    }
+    sincronizarLaterales();
+  }
+  if (mqMovil.addEventListener) mqMovil.addEventListener('change', alCambiarAncho); else if (mqMovil.addListener) mqMovil.addListener(alCambiarAncho);
   sincronizarLaterales();
   $('#b-indice').addEventListener('click', function () { lateral('indice', 'alternar'); });
   $('#b-panel').addEventListener('click', function () { lateral('panel', 'alternar'); });
@@ -129,7 +147,8 @@
   // subrayado, o a la ficha si no tiene pasaje; en pantalla estrecha se cierra además el panel.
   function volverAlTexto(id) {
     var m = $('mark.hl[data-aids~="' + id + '"]'), f = $('.ficha[data-id="' + id + '"]');
-    if (cajonAbierto() === 'panel') { volverA = m || null; lateral('panel', false); }
+    if (m && !m.getClientRects().length) m = null;  // el pasaje está en otra sección, oculta
+    if (cajonAbierto() === 'panel') { volverA = m; lateral('panel', false); }
     else if (m) m.focus({ preventScroll: true });
     else if (f) f.focus({ preventScroll: true });
     salirDeFicha();
@@ -140,7 +159,19 @@
   function abrirDialogo(d) { if (d.open) return; try { d.showModal(); } catch (e) { d.setAttribute('open', ''); } }
   function cerrarDialogo(d) { if (!d.open) return; try { d.close(); } catch (e) { d.removeAttribute('open'); } }
   function alternarAtajos() { var d = $('#atajos'); if (d.open) cerrarDialogo(d); else abrirDialogo(d); }
-  $('#atajos').addEventListener('click', function (ev) { if (ev.target === this || ev.target.closest('.cerrar')) cerrarDialogo(this); });
+  // «En el fondo» es fuera del recuadro del diálogo al apretar y al soltar: un clic en su relleno, o una selección que
+  // empieza en un campo y termina en el borde, no lo cierran.
+  function cierreEnElFondo(d) {
+    var fuera = function (ev) { var r = d.getBoundingClientRect(); return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom; };
+    var empezoFuera = false;
+    d.addEventListener('pointerdown', function (ev) { empezoFuera = ev.target === d && fuera(ev); });
+    d.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest('.dialogo-cab .cerrar')) { cerrarDialogo(d); return; }
+      if (ev.target === d && empezoFuera && fuera(ev)) cerrarDialogo(d);
+      empezoFuera = false;
+    });
+  }
+  cierreEnElFondo($('#atajos'));
   $('#lightbox').addEventListener('click', function () { cerrarDialogo(this); });
   $('#b-atajos').addEventListener('click', alternarAtajos);
   $('#lectura').addEventListener('click', function (ev) {
@@ -153,25 +184,34 @@
   $('#f-autor').addEventListener('change', function () { filtroAutor = this.value; renderPanel(); });
   $('#f-etiqueta').addEventListener('change', function () { filtroEtiqueta = this.value; renderPanel(); });
   $('#b-foco').addEventListener('click', function () { alternarFoco(); });
-  function alternarFoco() { var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  // Antes de salir hacia algo que se oculta, el foco que estaba en el índice o el panel pasa a la lectura.
+  function alternarFoco() {
+    var act = document.activeElement;
+    if (!$('#app').classList.contains('foco') && act && act.closest && act.closest('#indice, #panel')) $('#lectura').focus({ preventScroll: true });
+    var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false'); }
   var COLOR_TECLA = { '1': 'revisar', '2': 'cortar', '3': 'duda', '4': 'conservar' };
+  // Esc cierra de a una capa por vez, la más reciente primero: menú de la barra, «⋯», la selección y su barra, la
+  // lectura en voz alta, el cajón, la concentración y, al final, la ficha. Vale también con el foco en un campo de
+  // texto (no en una nota, que atiende su propio Esc).
+  function escapar() {
+    var menu = $$('details.menu-det[open]');
+    if (menu.length) { menu.forEach(function (d) { d.open = false; $('summary', d).focus({ preventScroll: true }); }); return; }
+    if (mqMovil.matches && $('#herramientas').classList.contains('abierta')) { cerrarHerramientas(); $('#b-mas').focus({ preventScroll: true }); return; }
+    var s = window.getSelection();
+    if (tb.style.display === 'flex' || (s && !s.isCollapsed && s.rangeCount && ancestroPid(s.getRangeAt(0).startContainer))) { ocultarTb(); if (s) s.removeAllRanges(); return; }
+    if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); return; }
+    if (cajonAbierto()) { cerrarCajones(); salirDeFicha(); return; }
+    if ($('#app').classList.contains('foco')) { alternarFoco(); return; }
+    salirDeFicha();
+  }
   document.addEventListener('keydown', function (ev) {
     var tg = ev.target || {}, tagName = tg.tagName || '';
     if ($('dialog[open]')) return;  // el diálogo abierto atiende su propio Esc
+    if (ev.key === 'Escape') { escapar(); return; }
     if (/TEXTAREA|SELECT/.test(tagName) || (tagName === 'INPUT' && !/checkbox|radio|button/.test(tg.type || ''))) return;
     if (ev.metaKey || ev.ctrlKey) return;
     var sel = window.getSelection(), haySel = sel && sel.rangeCount && !sel.isCollapsed && ancestroPid(sel.getRangeAt(0).startContainer);
     if (ev.key === 'ArrowRight' && ev.altKey) mover(1); else if (ev.key === 'ArrowLeft' && ev.altKey) mover(-1);
-    else if (ev.key === 'Escape') {
-      // de a una capa por vez: menú abierto, cajón, concentración, ficha
-      var menu = $$('details.menu-det[open]');
-      if (menu.length) { menu.forEach(function (d) { d.open = false; $('summary', d).focus({ preventScroll: true }); }); return; }
-      ocultarTb();
-      if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); }
-      if (cajonAbierto()) { cerrarCajones(); salirDeFicha(); return; }
-      if ($('#app').classList.contains('foco')) { alternarFoco(); return; }
-      salirDeFicha();
-    }
     else if (COLOR_TECLA[ev.key] && haySel) { ev.preventDefault(); crearSubrayado(COLOR_TECLA[ev.key], false); }
     else if ((ev.key === 'n' || ev.key === 'N') && haySel) { ev.preventDefault(); crearSubrayado('revisar', true); }
     else if ((ev.key === 'c' || ev.key === 'C') && haySel) { ev.preventDefault(); copiarSeleccion($('#sel-copiar')); }
@@ -190,6 +230,10 @@
     $$('details.menu-det[open]').forEach(function (d) { if (!d.contains(t)) d.open = false; });
     if (fichaFoco && t && t.closest && !t.closest('.ficha, mark.hl, #sel-tb, dialog, #velo, button, a, input, select, textarea, label, summary, .res')) salirDeFicha();
   });
+  // Al salir de la página (recargar, cerrar, pasar a otra pestaña), la nota en edición se guarda sin esperar la pausa.
+  var soltarNota = function () { var a = document.activeElement; if (a && a.tagName === 'TEXTAREA' && a.closest('.ficha')) a.blur(); };
+  window.addEventListener('pagehide', soltarNota);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') soltarNota(); });
   // El enlace «Saltar al texto» lleva el foco a la lectura sin tocar el ancla (que guarda la sección abierta).
   $('.saltar').addEventListener('click', function (ev) { ev.preventDefault(); $('#lectura').focus(); });
   window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (SEC_BY_ID[h] && h !== secActual) irA(h); });

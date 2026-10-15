@@ -18,6 +18,7 @@
   --serif: "Literata", "Georgia", "Times New Roman", serif;
   --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --radius: 6px;
+  --sobre-tinta: #ffffff; --sobre-acento: #ffffff;  /* texto sobre fondo de tinta o de acento */
   --escala: 1;  /* ajuste «tamaño del texto» del lector */
 }
 @media (prefers-color-scheme: dark) {
@@ -26,6 +27,7 @@
     --tinta: #9fc0d4; --acento: #e08a8a; --marco: #1a1d22;
     --hl-revisar: #5a4a10; --hl-cortar: #6a2a2a; --hl-duda: #1f3e5a; --hl-conservar: #244a24;
     --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
+    --sobre-tinta: #15171b; --sobre-acento: #15171b;
     color-scheme: dark;
   }
 }
@@ -34,6 +36,7 @@
   --tinta: #9fc0d4; --acento: #e08a8a; --marco: #1a1d22;
   --hl-revisar: #5a4a10; --hl-cortar: #6a2a2a; --hl-duda: #1f3e5a; --hl-conservar: #244a24;
   --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
+  --sobre-tinta: #15171b; --sobre-acento: #15171b;
   color-scheme: dark;
 }
 /* El tema que elige el lector en «Aa» manda sobre el del sistema y el de la página anfitriona (data-theme). */
@@ -42,6 +45,7 @@
   --tinta: #3d5a6c; --acento: #8c2f2f; --marco: #ffffff;
   --hl-revisar: #ffe08a; --hl-cortar: #ffb3b3; --hl-duda: #bfe0ff; --hl-conservar: #c9ecc4;
   --hl-revisar-ink: #7a5a00; --hl-cortar-ink: #8c2f2f; --hl-duda-ink: #1f4e79; --hl-conservar-ink: #2e6b2a;
+  --sobre-tinta: #ffffff; --sobre-acento: #ffffff;
   color-scheme: light;
 }
 :root[data-tema-lector="dark"] {
@@ -49,6 +53,7 @@
   --tinta: #9fc0d4; --acento: #e08a8a; --marco: #1a1d22;
   --hl-revisar: #5a4a10; --hl-cortar: #6a2a2a; --hl-duda: #1f3e5a; --hl-conservar: #244a24;
   --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
+  --sobre-tinta: #15171b; --sobre-acento: #15171b;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -58,10 +63,13 @@ body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sa
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
-.saltar { position: absolute; left: 8px; top: -60px; z-index: 50; background: var(--tinta); color: #fff; padding: 8px 12px; border-radius: var(--radius); text-decoration: none; }
+.saltar { position: absolute; left: 8px; top: -60px; z-index: 50; background: var(--tinta); color: var(--sobre-tinta); padding: 8px 12px; border-radius: var(--radius); text-decoration: none; }
 .saltar:focus { top: 8px; }
 section.lectura:focus { outline: none; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  .bloque.flash { outline: 2px solid var(--hl-duda-ink); outline-offset: 4px; }
+}
 
 #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
 header.barra {
@@ -75,7 +83,9 @@ header .espacio { flex: 1; }
 header input[type=search] { min-width: 0; width: min(260px, 50vw); padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--marco); }
 .btn { border: 1px solid var(--line); background: var(--marco); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; line-height: 1.2; }
 .btn:hover { border-color: var(--tinta); }
-.btn.primario { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+.btn.primario { background: var(--tinta); color: var(--sobre-tinta); border-color: var(--tinta); }
+[aria-disabled="true"] { opacity: .5; cursor: default; }
+.solo-lector { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .btn.peq { padding: 3px 7px; font-size: 12px; min-height: 26px; }
 .chip { display: inline-block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--bg-2); color: var(--fg-2); }
 #estado { font-size: 12px; color: var(--fg-2); }
@@ -86,33 +96,33 @@ nav.indice { border-right: 1px solid var(--line); overflow: auto; padding: 12px 
 nav .grupo { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); padding-left: 8px; }
 nav a.sec { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: var(--radius); color: inherit; text-decoration: none; }
 nav a.sec:hover { background: var(--bg-2); }
-nav a.sec.activa { background: var(--tinta); color: #fff; }
+nav a.sec.activa { background: var(--tinta); color: var(--sobre-tinta); }
 nav a.sec .n { font-variant-numeric: tabular-nums; color: inherit; opacity: .7; font-size: 12px; }
-nav a.sec .cuenta { font-size: 11px; background: var(--acento); color: #fff; border-radius: 999px; padding: 0 6px; align-self: center; }
-nav a.sec.activa .cuenta { background: #fff; color: var(--tinta); }
+nav a.sec .cuenta { font-size: 11px; background: var(--acento); color: var(--sobre-acento); border-radius: 999px; padding: 0 6px; align-self: center; }
+nav a.sec.activa .cuenta { background: var(--sobre-tinta); color: var(--tinta); }
 
 section.lectura { overflow: auto; padding-block: 28px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 article.seccion { max-width: 66ch; margin: 0 auto; position: relative; font-family: var(--serif); font-size: calc(18px * var(--escala)); line-height: 1.62; padding-left: 56px; }
-article h1.sec-titulo { font-size: 28px; line-height: 1.2; font-weight: 700; margin: 0 0 6px; text-wrap: balance; color: var(--tinta); }
+article h1.sec-titulo { font-size: calc(28px * var(--escala)); line-height: 1.2; font-weight: 700; margin: 0 0 6px; text-wrap: balance; color: var(--tinta); }
 article .sec-meta { font-family: var(--sans); font-size: 12px; color: var(--fg-2); margin-bottom: 24px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 article .bloque { position: relative; margin: 0 0 1em; }
 article p.bloque { text-align: left; hyphens: auto; }
-article h2.bloque { font-size: 21px; font-weight: 600; margin: 1.6em 0 .5em; color: var(--tinta); text-wrap: balance; }
-article h3.bloque { font-family: var(--sans); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; font-weight: 600; margin: 1.6em 0 .6em; color: var(--acento); }
+article h2.bloque { font-size: calc(21px * var(--escala)); font-weight: 600; margin: 1.6em 0 .5em; color: var(--tinta); text-wrap: balance; }
+article h3.bloque { font-family: var(--sans); font-size: calc(14px * var(--escala)); letter-spacing: .04em; text-transform: uppercase; font-weight: 600; margin: 1.6em 0 .6em; color: var(--acento); }
 article blockquote.bloque { margin: 1.2em 0; padding: 4px 0 4px 18px; border-left: 3px solid var(--acento); font-style: italic; }
 article ul.bloque, article ol.bloque { padding-left: 1.4em; }
 article li { margin: .25em 0; }
 article figure.bloque { margin: 1.4em 0; text-align: center; }
 article figure img { max-width: 100%; height: auto; border: 1px solid var(--line); background: #fff; }
-article figcaption { font-family: var(--sans); font-size: 13px; color: var(--fg-2); margin-top: 8px; text-align: left; }
-article .tabla { overflow-x: auto; margin: 1.2em 0; font-family: var(--sans); font-size: 14px; }
+article figcaption { font-family: var(--sans); font-size: calc(13px * var(--escala)); color: var(--fg-2); margin-top: 8px; text-align: left; }
+article .tabla { overflow-x: auto; margin: 1.2em 0; font-family: var(--sans); font-size: calc(14px * var(--escala)); }
 article table { border-collapse: collapse; width: 100%; }
 article th, article td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
 article th { background: var(--bg-2); }
 article .portada { text-align: center; padding: 40px 0; }
-article .portada .t1 { font-size: 30px; font-weight: 700; color: var(--tinta); }
-article .portada .t2 { font-size: 20px; margin-top: 8px; }
-article .portada .t3 { font-size: 16px; font-style: italic; color: var(--fg-2); margin-top: 6px; }
+article .portada .t1 { font-size: calc(30px * var(--escala)); font-weight: 700; color: var(--tinta); }
+article .portada .t2 { font-size: calc(20px * var(--escala)); margin-top: 8px; }
+article .portada .t3 { font-size: calc(16px * var(--escala)); font-style: italic; color: var(--fg-2); margin-top: 6px; }
 article .portada .autor { margin-top: 36px; letter-spacing: .12em; text-transform: uppercase; font-family: var(--sans); font-size: 14px; }
 .pg { position: absolute; left: -56px; top: .35em; width: 46px; text-align: right; font-family: var(--sans); font-size: 11px; color: var(--fg-2); text-decoration: none; border: 0; background: none; padding: 0 4px; border-radius: 4px; font-variant-numeric: tabular-nums; cursor: pointer; }
 .pg:hover { color: var(--acento); background: var(--bg-2); }
@@ -131,7 +141,7 @@ aside .panel-fila { display: flex; gap: 6px; width: 100%; align-items: center; }
 aside .tabs { display: flex; gap: 2px; width: 100%; flex: 1; }
 aside .panel-fila .cerrar { display: none; }
 aside .tab { flex: 1; padding: 6px; border: 1px solid var(--line); background: var(--marco); font-size: 12px; border-radius: var(--radius); }
-aside .tab.activa { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+aside .tab.activa { background: var(--tinta); color: var(--sobre-tinta); border-color: var(--tinta); }
 aside .filtros { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; margin: 6px 0; }
 aside .nuevas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
 aside .nota-pg input { width: 64px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--marco); }
@@ -214,7 +224,7 @@ fieldset.ajuste { justify-content: flex-start; gap: 4px 14px; }
 .ajuste output { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 :root[data-letra="sans"] article.seccion { font-family: var(--sans); }
 .sec-herr { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: -14px 0 22px; font-family: var(--sans); font-size: 12px; color: var(--fg-2); }
-.sec-herr label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; color: var(--fg); }
+.sec-herr label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; color: var(--fg); min-height: 24px; }
 nav .progreso { height: 3px; background: var(--line); margin: 2px 12px 6px; border-radius: 2px; overflow: hidden; }
 nav .progreso i { display: block; height: 100%; width: 0; background: var(--tinta); transition: width .2s; }
 nav a.sec.leida .n::before { content: "✓ "; color: var(--hl-conservar-ink); }
@@ -273,7 +283,7 @@ figure img { cursor: zoom-in; }
 .bib-opciones { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .bib-opciones[hidden] { display: none; }  /* display: flex anularía el atributo hidden */
 .bib-opciones legend { font-size: 12px; color: var(--fg-2); padding: 0; margin-bottom: 2px; }
-.bib-opciones label { display: flex; gap: 6px; align-items: baseline; }
+.bib-opciones label { display: flex; gap: 6px; align-items: center; min-height: 26px; }
 .bib-opciones label.no { opacity: .5; }
 .bib-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
 .bib-estado { font-size: 13px; margin: 8px 0 0; }
@@ -329,11 +339,14 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
 @media (pointer: coarse) {
   .btn, .btn.peq, summary.btn, aside .tab, aside .filtro, .filtros select { min-height: 40px; }
   .btn.peq, summary.btn { padding: 6px 10px; font-size: 13px; }
-  .col-btn { width: 36px; height: 36px; }
+  .col-btn { width: 40px; height: 40px; }
+  .enlace, .ficha .etiquetas button, .sec-herr label, nav a.sec, aside .nota-pg input, .vacio .enlace { min-height: 40px; }
+  .enlace, .ficha .etiquetas button { display: inline-flex; align-items: center; }
   .cerrar { min-width: 40px; }
   .pg { min-height: 32px; min-width: 40px; padding: 6px 6px; }
   details.menu-det .menu label, aside details.plegable > summary { min-height: 40px; }
-  #sel-tb.abajo { left: 50% !important; right: auto; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px; gap: 8px; }
+  #sel-tb.abajo { left: 50% !important; right: auto; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px; gap: 8px; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; }
+  #sel-tb.abajo .etq { display: none; }
   #sel-tb.abajo .col-btn { width: 40px; height: 40px; }
   #deshacer-zona { bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 64px)); }
 }
@@ -342,6 +355,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   mark.hl { forced-color-adjust: none; background: Mark; color: MarkText; text-decoration-line: underline; text-decoration-thickness: 2px; }
   mark.hl.c-cortar { text-decoration-line: line-through; } mark.hl.c-duda { text-decoration-style: wavy; } mark.hl.c-conservar { text-decoration-style: double; }
   mark.hl.foco, .ficha.foco { outline: 3px solid Highlight; }
+  aside .tab.activa, nav a.sec.activa, .btn.primario { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
   .col-btn { forced-color-adjust: none; }
   .ficha { border-left-width: 6px; }
 }
@@ -368,7 +382,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     </div></details>
     <button class="btn peq" id="b-atajos" type="button" title="Atajos de teclado (tecla ?)" aria-label="Atajos de teclado" aria-haspopup="dialog">?</button>
     </div>
-    <span id="estado" role="status">Cargando…</span>
+    <span id="estado">Cargando…</span>
   </header>
   <main class="mesa">
     <nav class="indice cajon" id="indice" aria-label="Índice">
@@ -418,7 +432,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   </main>
   <div id="velo" hidden></div>
 </div>
-<div id="deshacer-zona" role="status"></div>
+<div id="deshacer-zona"></div>
+<div id="anuncio" class="solo-lector" role="status" aria-live="polite"></div>
 <dialog id="lightbox" aria-label="Figura ampliada"><img alt=""><button class="btn peq cerrar" type="button" aria-label="Cerrar la figura">×</button></dialog>
 <dialog id="atajos" aria-labelledby="atajos-t">
   <div class="dialogo-cab"><h2 id="atajos-t">Atajos de teclado</h2><button class="btn peq cerrar" type="button" aria-label="Cerrar">×</button></div>
@@ -1437,7 +1452,11 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   var uid = function () { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); };
   // En sólo lectura, todo mensaje de la barra lo recuerda («Conectado · N anotaciones · sólo lectura»), para que el eco
   // de la base no pise el aviso.
-  var estado = function (t, aviso) { var e = $('#estado'); if (SOLO_LECTURA && !/sólo lectura/i.test(t)) t += ' · sólo lectura'; e.textContent = t; e.className = aviso ? 'aviso' : ''; };
+  // Los avisos (errores, cambios de modo) se anuncian además a los lectores de pantalla desde una región viva fuera de la
+  // barra, que sigue en el árbol de accesibilidad aunque la barra quede inerte; los mensajes de rutina («Guardado…»,
+  // «Conectado…») sólo se muestran.
+  var estado = function (t, aviso) { var e = $('#estado'); if (SOLO_LECTURA && !/sólo lectura/i.test(t)) t += ' · sólo lectura'; e.textContent = t; e.className = aviso ? 'aviso' : ''; if (aviso) anunciar(t); };
+  var anunciar = function (t) { var r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(function () { r.textContent = t; }, 60); };
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var igual = N.igual;
   var lsSet = function (k, v) { try { localStorage.setItem(k, v); return localStorage.getItem(k) === v; } catch (e) { return false; } };
@@ -1897,7 +1916,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     if (!L.length) {
       var filtrado = filtro !== 'todas' || !!filtroAutor || !!filtroEtiqueta;
       var vacio = el('div', { 'class': 'vacio', text: filtrado ? 'Ninguna anotación con estos filtros. ' : tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' });
-      if (filtrado) { var qf = el('button', { 'class': 'enlace', type: 'button', text: 'Quitar filtros' }); qf.addEventListener('click', function () { quitarFiltros(); renderPanel(); }); vacio.appendChild(qf); }
+      if (filtrado) { var qf = el('button', { 'class': 'enlace', type: 'button', text: 'Quitar filtros' }); qf.addEventListener('click', function () { quitarFiltros(); renderPanel(); var p = $('.ficha') || $('#filtros-det > summary'); if (p) p.focus({ preventScroll: true }); }); vacio.appendChild(qf); }
       box.appendChild(vacio); return;
     }
     L.forEach(function (a) { box.appendChild(ficha(a)); });
@@ -2030,14 +2049,15 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     if (col) escribirEnBase(id, null);
     else guardarLocal(modo === 'cargando' ? [id] : undefined);
   }
-  function irAAnot(a) {
+  // `mostrar`: en pantalla estrecha, dejar el panel abierto con la ficha (desde un resultado de búsqueda).
+  function irAAnot(a, mostrar) {
     var pid = pidEfectivo(a);
     if (pid) { irA(BLOQUE_SEC[pid] || a.sid, pid); }
     else if (a.pid) { if (a.sid) irA(a.sid); }
     else if (a.tipo === 'pagina') { var n = $('[data-pg="' + a.pagina + '"][data-pid]'); if (n) irA(BLOQUE_SEC[n.getAttribute('data-pid')], n.getAttribute('data-pid')); }
     else if (a.sid) irA(a.sid);
-    if (mqMovil.matches) lateral('panel', false);
-    enfocar(a.id);
+    if (mqMovil.matches && !mostrar) lateral('panel', false);
+    enfocar(a.id, false, !!mostrar);
   }
   // Enfoca la ficha de una anotación (y su pasaje). `editar` lleva el cursor a la nota; `mostrar` abre el panel en
   // pantalla estrecha aunque no se vaya a escribir (al tocar un subrayado).
@@ -2051,6 +2071,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     if (lista().indexOf(a) < 0) quitarFiltros();
     marcarTab();
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
+    // en concentración el panel no se ve: para escribir o mostrar la ficha se sale de ella
+    if ((editar || mostrar) && $('#app').classList.contains('foco')) alternarFoco();
     if (mqMovil.matches && (editar || mostrar)) {
       // en pantalla estrecha el panel sube desde abajo y el pasaje queda a la vista encima
       var mk = $('mark.hl[data-aids~="' + id + '"]');
@@ -2063,12 +2085,12 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       // Si la activación vino de una marca del texto o de un resultado de búsqueda, el elemento pulsado ya no existe
       // (se redibujó): el foco del teclado sigue en la ficha, no cae al cuerpo del documento. Con el panel cerrado
       // (pantalla estrecha) la ficha es inerte y el foco va al pasaje.
-      if (!f.closest('[inert]')) {
+      if (enfocable(f)) {
         if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); }
         if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
       } else {
         var m = $('mark.hl[data-aids~="' + id + '"]');
-        if (m) m.focus({ preventScroll: true });
+        if (enfocable(m)) m.focus({ preventScroll: true });
       }
     }
   }
@@ -2159,6 +2181,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   // ------------------------------------------------------------ búsqueda
   function buscar(q) {
     tab = 'buscar'; marcarTab();
+    if (mqMovil.matches) cerrarHerramientas();
     var box = $('#lista'); box.innerHTML = '';
     q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
     var norm = N.normalizar;
@@ -2168,7 +2191,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     enAnots.forEach(function (a) {
       var r = el('div', { 'class': 'res anot', role: 'button', tabindex: '0' }, [el('div', { 'class': 'donde', text: 'En tus anotaciones · ' + etiqueta(a) }), el('div', { text: (a.nota || a.cita || '').slice(0, 160) })]);
       r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
-      r.addEventListener('click', function () { irAAnot(anots[a.id] || a); if (mqMovil.matches) lateral('panel', true); });
+      r.addEventListener('click', function () { irAAnot(anots[a.id] || a, true); });
       box.appendChild(r);
     });
     SECS.forEach(function (s) {
@@ -2181,7 +2204,12 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
         r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
         var frag = el('div'); frag.appendChild(document.createTextNode((ini ? '…' : '') + t.slice(ini, i))); frag.appendChild(el('b', { text: t.slice(i, i + nq.length) })); frag.appendChild(document.createTextNode(t.slice(i + nq.length, fin) + (fin < t.length ? '…' : '')));
         r.appendChild(frag);
-        r.addEventListener('click', function () { irA(s.id, b.id); if (mqMovil.matches) lateral('panel', false); });
+        r.addEventListener('click', function () {
+          irA(s.id, b.id);
+          if (mqMovil.matches) { volverA = null; lateral('panel', false); }
+          // el foco va al pasaje encontrado (no al campo de búsqueda, que en el teléfono abriría el teclado)
+          var n = $('[data-pid="' + b.id + '"]'); if (n) { n.setAttribute('tabindex', '-1'); n.focus({ preventScroll: true }); }
+        });
         box.appendChild(r);
       });
     });
@@ -2257,6 +2285,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   // teclado no se escapa a lo que no se ve, y al cerrarlo el foco vuelve a donde estaba.
   var mqMovil = window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false };
   var volverA = null;
+  // Un destino de foco que de verdad se puede enfocar: en el documento, visible (no en una sección oculta ni en un panel
+  // escondido por la concentración) y fuera de lo inerte.
+  function enfocable(n) { return !!n && document.contains(n) && n.getClientRects().length > 0 && !n.closest('[inert]'); }
+  function cerrarHerramientas() { $('#herramientas').classList.remove('abierta'); $('#b-mas').setAttribute('aria-expanded', 'false'); }
   function cajonAbierto() {
     if (!mqMovil.matches) return null;
     return ['indice', 'panel'].filter(function (c) { return $('#' + c).classList.contains('abierta'); })[0] || null;
@@ -2272,14 +2304,18 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     $('#lectura').classList.toggle('con-hoja', abierto === 'panel');
     $('header.barra').inert = !!abierto;
     $('#lectura').inert = !!abierto;
+    $('.saltar').inert = !!abierto;
   }
   // `origen`: a dónde vuelve el foco al cerrar, si no es el control que lo abrió (el pasaje de una nota recién creada).
   function lateral(cual, abierto, origen) {
     var n = $('#' + cual), antes = n.classList.contains('abierta');
     var ahora = abierto === 'alternar' ? !antes : !!abierto;
     if (ahora === antes) return;
+    // en concentración índice y panel no se ven: abrir uno sale antes de la concentración
+    if (ahora && $('#app').classList.contains('foco')) alternarFoco();
     var activo = document.activeElement;
     if (ahora && mqMovil.matches) {
+      cerrarHerramientas();
       var otro = $('#' + (cual === 'indice' ? 'panel' : 'indice'));
       if (otro.classList.contains('abierta')) otro.classList.remove('abierta');
       else volverA = origen || (activo && activo !== document.body ? activo : null);
@@ -2293,14 +2329,24 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
         (dentro || $('.cerrar', n)).focus({ preventScroll: true });
       }
     } else if (n.contains(activo) || !activo || activo === document.body) {
-      var destino = volverA && document.contains(volverA) && !volverA.closest('.cajon, [inert]') ? volverA : null;
-      if (!destino && cual === 'panel' && fichaFoco) destino = $('mark.hl[data-aids~="' + fichaFoco + '"]');
+      var destino = enfocable(volverA) && !volverA.closest('.cajon') ? volverA : null;
+      if (!destino && cual === 'panel' && fichaFoco) { var mf = $('mark.hl[data-aids~="' + fichaFoco + '"]'); if (enfocable(mf)) destino = mf; }
       (destino || $('#b-' + cual)).focus({ preventScroll: true });
       volverA = null;
     }
   }
   function cerrarCajones() { var c = cajonAbierto(); if (c) lateral(c, false); }
-  if (mqMovil.addEventListener) mqMovil.addEventListener('change', sincronizarLaterales); else if (mqMovil.addListener) mqMovil.addListener(sincronizarLaterales);
+  // Al pasar a pantalla ancha los cajones dejan de serlo (y no vuelven abiertos al estrecharla); al pasar a estrecha, si
+  // el foco está en el índice o el panel, ese cajón queda abierto para no dejarlo en algo inerte (una nota a medias).
+  function alCambiarAncho() {
+    if (!mqMovil.matches) { ['indice', 'panel'].forEach(function (c) { $('#' + c).classList.remove('abierta'); }); volverA = null; }
+    else {
+      var act = document.activeElement, dentro = act && act.closest ? act.closest('#indice, #panel') : null;
+      if (dentro) ['indice', 'panel'].forEach(function (c) { $('#' + c).classList.toggle('abierta', c === dentro.id); });
+    }
+    sincronizarLaterales();
+  }
+  if (mqMovil.addEventListener) mqMovil.addEventListener('change', alCambiarAncho); else if (mqMovil.addListener) mqMovil.addListener(alCambiarAncho);
   sincronizarLaterales();
   $('#b-indice').addEventListener('click', function () { lateral('indice', 'alternar'); });
   $('#b-panel').addEventListener('click', function () { lateral('panel', 'alternar'); });
@@ -2320,7 +2366,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   // subrayado, o a la ficha si no tiene pasaje; en pantalla estrecha se cierra además el panel.
   function volverAlTexto(id) {
     var m = $('mark.hl[data-aids~="' + id + '"]'), f = $('.ficha[data-id="' + id + '"]');
-    if (cajonAbierto() === 'panel') { volverA = m || null; lateral('panel', false); }
+    if (m && !m.getClientRects().length) m = null;  // el pasaje está en otra sección, oculta
+    if (cajonAbierto() === 'panel') { volverA = m; lateral('panel', false); }
     else if (m) m.focus({ preventScroll: true });
     else if (f) f.focus({ preventScroll: true });
     salirDeFicha();
@@ -2331,7 +2378,19 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   function abrirDialogo(d) { if (d.open) return; try { d.showModal(); } catch (e) { d.setAttribute('open', ''); } }
   function cerrarDialogo(d) { if (!d.open) return; try { d.close(); } catch (e) { d.removeAttribute('open'); } }
   function alternarAtajos() { var d = $('#atajos'); if (d.open) cerrarDialogo(d); else abrirDialogo(d); }
-  $('#atajos').addEventListener('click', function (ev) { if (ev.target === this || ev.target.closest('.cerrar')) cerrarDialogo(this); });
+  // «En el fondo» es fuera del recuadro del diálogo al apretar y al soltar: un clic en su relleno, o una selección que
+  // empieza en un campo y termina en el borde, no lo cierran.
+  function cierreEnElFondo(d) {
+    var fuera = function (ev) { var r = d.getBoundingClientRect(); return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom; };
+    var empezoFuera = false;
+    d.addEventListener('pointerdown', function (ev) { empezoFuera = ev.target === d && fuera(ev); });
+    d.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest('.dialogo-cab .cerrar')) { cerrarDialogo(d); return; }
+      if (ev.target === d && empezoFuera && fuera(ev)) cerrarDialogo(d);
+      empezoFuera = false;
+    });
+  }
+  cierreEnElFondo($('#atajos'));
   $('#lightbox').addEventListener('click', function () { cerrarDialogo(this); });
   $('#b-atajos').addEventListener('click', alternarAtajos);
   $('#lectura').addEventListener('click', function (ev) {
@@ -2344,25 +2403,34 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   $('#f-autor').addEventListener('change', function () { filtroAutor = this.value; renderPanel(); });
   $('#f-etiqueta').addEventListener('change', function () { filtroEtiqueta = this.value; renderPanel(); });
   $('#b-foco').addEventListener('click', function () { alternarFoco(); });
-  function alternarFoco() { var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  // Antes de salir hacia algo que se oculta, el foco que estaba en el índice o el panel pasa a la lectura.
+  function alternarFoco() {
+    var act = document.activeElement;
+    if (!$('#app').classList.contains('foco') && act && act.closest && act.closest('#indice, #panel')) $('#lectura').focus({ preventScroll: true });
+    var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false'); }
   var COLOR_TECLA = { '1': 'revisar', '2': 'cortar', '3': 'duda', '4': 'conservar' };
+  // Esc cierra de a una capa por vez, la más reciente primero: menú de la barra, «⋯», la selección y su barra, la
+  // lectura en voz alta, el cajón, la concentración y, al final, la ficha. Vale también con el foco en un campo de
+  // texto (no en una nota, que atiende su propio Esc).
+  function escapar() {
+    var menu = $$('details.menu-det[open]');
+    if (menu.length) { menu.forEach(function (d) { d.open = false; $('summary', d).focus({ preventScroll: true }); }); return; }
+    if (mqMovil.matches && $('#herramientas').classList.contains('abierta')) { cerrarHerramientas(); $('#b-mas').focus({ preventScroll: true }); return; }
+    var s = window.getSelection();
+    if (tb.style.display === 'flex' || (s && !s.isCollapsed && s.rangeCount && ancestroPid(s.getRangeAt(0).startContainer))) { ocultarTb(); if (s) s.removeAllRanges(); return; }
+    if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); return; }
+    if (cajonAbierto()) { cerrarCajones(); salirDeFicha(); return; }
+    if ($('#app').classList.contains('foco')) { alternarFoco(); return; }
+    salirDeFicha();
+  }
   document.addEventListener('keydown', function (ev) {
     var tg = ev.target || {}, tagName = tg.tagName || '';
     if ($('dialog[open]')) return;  // el diálogo abierto atiende su propio Esc
+    if (ev.key === 'Escape') { escapar(); return; }
     if (/TEXTAREA|SELECT/.test(tagName) || (tagName === 'INPUT' && !/checkbox|radio|button/.test(tg.type || ''))) return;
     if (ev.metaKey || ev.ctrlKey) return;
     var sel = window.getSelection(), haySel = sel && sel.rangeCount && !sel.isCollapsed && ancestroPid(sel.getRangeAt(0).startContainer);
     if (ev.key === 'ArrowRight' && ev.altKey) mover(1); else if (ev.key === 'ArrowLeft' && ev.altKey) mover(-1);
-    else if (ev.key === 'Escape') {
-      // de a una capa por vez: menú abierto, cajón, concentración, ficha
-      var menu = $$('details.menu-det[open]');
-      if (menu.length) { menu.forEach(function (d) { d.open = false; $('summary', d).focus({ preventScroll: true }); }); return; }
-      ocultarTb();
-      if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); }
-      if (cajonAbierto()) { cerrarCajones(); salirDeFicha(); return; }
-      if ($('#app').classList.contains('foco')) { alternarFoco(); return; }
-      salirDeFicha();
-    }
     else if (COLOR_TECLA[ev.key] && haySel) { ev.preventDefault(); crearSubrayado(COLOR_TECLA[ev.key], false); }
     else if ((ev.key === 'n' || ev.key === 'N') && haySel) { ev.preventDefault(); crearSubrayado('revisar', true); }
     else if ((ev.key === 'c' || ev.key === 'C') && haySel) { ev.preventDefault(); copiarSeleccion($('#sel-copiar')); }
@@ -2381,6 +2449,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     $$('details.menu-det[open]').forEach(function (d) { if (!d.contains(t)) d.open = false; });
     if (fichaFoco && t && t.closest && !t.closest('.ficha, mark.hl, #sel-tb, dialog, #velo, button, a, input, select, textarea, label, summary, .res')) salirDeFicha();
   });
+  // Al salir de la página (recargar, cerrar, pasar a otra pestaña), la nota en edición se guarda sin esperar la pausa.
+  var soltarNota = function () { var a = document.activeElement; if (a && a.tagName === 'TEXTAREA' && a.closest('.ficha')) a.blur(); };
+  window.addEventListener('pagehide', soltarNota);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') soltarNota(); });
   // El enlace «Saltar al texto» lleva el foco a la lectura sin tocar el ancla (que guarda la sección abierta).
   $('.saltar').addEventListener('click', function (ev) { ev.preventDefault(); $('#lectura').focus(); });
   window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (SEC_BY_ID[h] && h !== secActual) irA(h); });
@@ -2396,7 +2468,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     if (ajustes.tema === 'light' || ajustes.tema === 'dark') raiz.setAttribute('data-tema-lector', ajustes.tema); else raiz.removeAttribute('data-tema-lector');
     if (ajustes.letra === 'sans') raiz.setAttribute('data-letra', 'sans'); else raiz.removeAttribute('data-letra');
     $('#aj-tam').textContent = Math.round(ajustes.escala * 100) + ' %';
-    $('#aj-menos').disabled = i <= 0; $('#aj-mas').disabled = i >= ESCALAS.length - 1;
+    // aria-disabled y no disabled: el botón que llega al tope conserva el foco
+    $('#aj-menos').setAttribute('aria-disabled', i <= 0 ? 'true' : 'false'); $('#aj-mas').setAttribute('aria-disabled', i >= ESCALAS.length - 1 ? 'true' : 'false');
     $$('input[name="aj-tema"]').forEach(function (r) { r.checked = r.value === (ajustes.tema || ''); });
     $$('input[name="aj-letra"]').forEach(function (r) { r.checked = r.value === (ajustes.letra || ''); });
   }
@@ -2568,9 +2641,17 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
         guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada');
       }
       z.innerHTML = '';
+      enfocar(a.id);  // el foco pasa a la anotación recuperada
+      if (!z.contains(document.activeElement) && document.activeElement === document.body) $('#lectura').focus({ preventScroll: true });
     });
     z.appendChild(u);
-    setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.contains(u)) z.innerHTML = ''; }, 8000);
+    setTimeout(function () {
+      if (ultimoBorrado === a) ultimoBorrado = null;
+      if (!z.contains(u)) return;
+      var tenia = z.contains(document.activeElement);
+      z.innerHTML = '';
+      if (tenia) { var t = $('.tab.activa'); (enfocable(t) ? t : $('#lectura')).focus({ preventScroll: true }); }
+    }, 8000);
   }
   function respaldar() {
     // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura
