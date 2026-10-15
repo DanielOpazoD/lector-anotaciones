@@ -20,6 +20,7 @@
     <div class="espacio"></div>
     <button class="btn peq" id="b-mas" type="button" aria-controls="herramientas" aria-expanded="false" aria-label="Buscar y más herramientas" title="Buscar, concentración, capas, ajustes y atajos">⋯</button>
     <div class="herramientas" id="herramientas">
+    <button class="btn peq" id="b-biblioteca" type="button" aria-haspopup="dialog" title="Abrir otro libro o importar uno (Markdown, texto, HTML, EPUB, Word)">Biblioteca</button>
     <input type="search" id="buscar" placeholder="Buscar en el libro y en las notas…" aria-label="Buscar en el libro y en las notas">
     <button class="btn peq" id="b-foco" type="button" title="Modo concentración: sólo el texto (tecla F)" aria-pressed="false">Concentración</button>
     <details id="capas" class="menu-det" hidden><summary class="btn peq" title="Señales editoriales calculadas al construir el libro">Capas</summary><div class="menu" id="capas-menu"></div></details>
@@ -90,6 +91,35 @@
   <div><kbd>J</kbd> / <kbd>K</kbd> sección siguiente / anterior · <kbd>L</kbd> marcar leída · <kbd>F</kbd> concentración</div>
   <div class="anotar">En una nota: <kbd>Esc</kbd> o <kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda y vuelve al texto</div>
   <div><kbd>Esc</kbd> cerrar · <kbd>?</kbd> esta ayuda · clic fuera de una ficha o un panel lo cierra</div>
+</dialog>
+<dialog id="biblioteca" aria-labelledby="biblioteca-t">
+  <div class="dialogo-cab"><h2 id="biblioteca-t">Biblioteca</h2><button class="btn peq cerrar" type="button" aria-label="Cerrar la biblioteca">×</button></div>
+  <p class="bib-intro" id="bib-intro"></p>
+  <ul class="bib-lista" id="bib-lista" aria-label="Libros"><li class="vacio">Cargando…</li></ul>
+  <section class="bib-importar" aria-labelledby="bib-imp-t">
+    <h3 id="bib-imp-t">Importar un libro</h3>
+    <div class="bib-zona" id="bib-zona">
+      <p>Markdown o texto (uno o varios capítulos, con sus imágenes), HTML, EPUB, Word (.docx) o un <code>libro.json</code> del lector.</p>
+      <button class="btn" type="button" id="bib-elegir">Elegir archivos…</button> <span class="bib-soltar">o arrástralos aquí</span>
+      <input type="file" id="bib-archivo" multiple hidden accept=".md,.markdown,.txt,.text,.html,.htm,.xhtml,.epub,.docx,.json,.png,.jpg,.jpeg,.gif,.webp,.svg">
+    </div>
+    <form id="bib-previa" hidden>
+      <p class="bib-resumen" id="bib-resumen"></p>
+      <ul class="bib-avisos" id="bib-avisos"></ul>
+      <label class="bib-campo">Título <input id="bib-titulo" required autocomplete="off"></label>
+      <label class="bib-campo">Autor <input id="bib-autor" autocomplete="off"></label>
+      <fieldset class="bib-opciones" id="bib-donde"><legend>Guardar en</legend>
+        <label><input type="radio" name="bib-donde" value="base"> la biblioteca compartida de esta página</label>
+        <label><input type="radio" name="bib-donde" value="local"> sólo este navegador</label>
+      </fieldset>
+      <fieldset class="bib-opciones" id="bib-choque" hidden><legend id="bib-choque-t">Ya hay un libro con ese título</legend>
+        <label><input type="radio" name="bib-choque" value="reemplazar" checked> reemplazarlo por esta versión (sus anotaciones se conservan y se reubican)</label>
+        <label><input type="radio" name="bib-choque" value="nuevo"> guardarlo como otro libro</label>
+      </fieldset>
+      <div class="bib-acciones"><button class="btn primario" type="submit" id="bib-importar">Importar y abrir</button><button class="btn" type="button" id="bib-cancelar">Cancelar</button></div>
+    </form>
+    <p class="bib-estado" id="bib-estado" role="status"></p>
+  </section>
 </dialog>
 <div id="sel-tb" role="toolbar" aria-label="Subrayar">
   <span class="etq">Subrayar</span>

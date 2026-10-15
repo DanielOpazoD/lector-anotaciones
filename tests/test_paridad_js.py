@@ -1,0 +1,80 @@
+"""El núcleo de la página (JavaScript) arma el mismo libro.json que el paquete a partir del mismo Markdown.
+
+La página importa libros sin la línea de órdenes; sus ids, su HTML y sus huellas tienen que coincidir con los del
+paquete para que un libro construido de una forma y anotado de la otra conserve sus subrayados.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from lector_anotaciones.construir import construir
+from lector_anotaciones.markdown import expandir_fuentes
+
+RAIZ = Path(__file__).resolve().parent.parent
+FUENTES = RAIZ / "ejemplo" / "fuentes"
+NODE = shutil.which("node")
+
+pytestmark = pytest.mark.skipif(NODE is None, reason="hace falta node para ejecutar el núcleo de la página")
+
+
+def _armar_js(rutas: list[Path], titulo: str) -> dict:
+    salida = subprocess.run(
+        [NODE, str(RAIZ / "tests" / "js" / "armar.mjs"), "--titulo", titulo, *map(str, rutas)],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return json.loads(salida.stdout)
+
+
+def _forma(libro: dict) -> dict:
+    claves = ("formato", "id", "titulo", "inicio", "paginas_fisicas", "desfase_paginas", "fuentes")
+    return {
+        **{k: libro[k] for k in claves},
+        "secciones": [
+            {
+                "id": s["id"],
+                "titulo": s["titulo"],
+                "nivel": s["nivel"],
+                "src": s["src"],
+                "pagina": s["pagina"],
+                "bloques": [{k: b.get(k) for k in ("id", "t", "html", "src", "h", "pagina")} for b in s["bloques"]],
+            }
+            for s in libro["secciones"]
+        ],
+    }
+
+
+def test_el_ejemplo_sale_igual_en_python_y_en_la_pagina():
+    rutas = expandir_fuentes([FUENTES])
+    py = construir([FUENTES], titulo="Libro de ejemplo", capas=None)
+    js = _armar_js(rutas, "Libro de ejemplo")
+    assert _forma(js) == _forma(py)
+
+
+def test_casos_raros_del_dialecto(tmp_path):
+    md = tmp_path / "raro.md"
+    md.write_text(
+        "﻿Texto antes de todo título\r\n\r\n"
+        "# Capítulo 3. Uno\n\n"
+        "Párrafo con *cursiva*, **negrita**, 2*3*4, a*b, ∗x*, <etiqueta> & «comillas»\n"
+        "y una segunda línea.\n\n"
+        "## Interludio II. Dos\n\n"
+        "1. uno\n1. dos\n\n"
+        "| A | *B* |\n|:--|--:|\n| 1 | 2 |\n\n"
+        "> cita\n> en dos\n\n"
+        "[LEGAL]\nDerechos\n\nOtra línea\n[/LEGAL]\n\n"
+        "## Apéndice B. Tres\n\n### Sub *a*\n\n#### Subsub\n\n- x\n- y **z**\n\n"
+        "## Capítulo 3. Repetido\n\nFin.\n",
+        encoding="utf-8",
+    )
+    py = construir([md], titulo="Raro", capas=None)
+    js = _armar_js([md], "Raro")
+    assert _forma(js) == _forma(py)

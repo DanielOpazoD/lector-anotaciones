@@ -1,9 +1,8 @@
 // Núcleo · diferencias palabra por palabra entre dos versiones de un bloque. Sin DOM.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Subsecuencia común más larga sobre palabras y espacios; devuelve tramos [op, texto] con op '=', '-' o '+'.
   // Por encima de 250 000 celdas no compara: devuelve el bloque viejo entero quitado y el nuevo añadido.

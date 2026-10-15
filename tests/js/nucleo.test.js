@@ -1,21 +1,10 @@
 // Pruebas del núcleo de la página (lógica pura, sin navegador): node --test 'tests/js/**/*.test.js'
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import { cargarNucleo } from './nucleo.mjs';
 
-const NUCLEO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'lector_anotaciones', 'web', 'nucleo');
-// Los módulos del núcleo son guiones UMD (no ESM): se evalúan con un `module` propio, como haría CommonJS.
-function cargar(nombre) {
-  const m = { exports: {} };
-  new Function('module', readFileSync(path.join(NUCLEO, nombre), 'utf8'))(m);
-  return m.exports;
-}
-const T = cargar('10-texto.js');
-const D = cargar('20-diff.js');
-const U = cargar('30-ubicar.js');
-const B = cargar('40-borradores.js');
+const N = cargarNucleo();
+const T = N, D = N, U = N, B = N;
 
 test('slug coincide con util.slug del paquete Python', () => {
   // Valores calculados con lector_anotaciones.util.slug

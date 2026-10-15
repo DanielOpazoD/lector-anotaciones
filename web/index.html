@@ -52,6 +52,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* ningún display de una regla debe anular el atributo hidden */
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -245,6 +246,41 @@ figure img { cursor: zoom-in; }
 #atajos { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px 14px; background: var(--marco); font-size: 13px; line-height: 1.9; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
 #atajos .dialogo-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
 #atajos h2 { font-size: 15px; margin: 0; font-family: var(--serif); }
+#biblioteca { border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 16px; background: var(--marco); width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+#biblioteca .dialogo-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#biblioteca h2 { font-size: 18px; margin: 0; font-family: var(--serif); }
+#biblioteca h3 { font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-2); margin: 18px 0 8px; }
+.bib-intro { color: var(--fg-2); font-size: 13px; margin: 6px 0 10px; }
+.bib-intro:empty { display: none; }
+.bib-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bib-libro { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.bib-libro.abierto { border-color: var(--tinta); box-shadow: inset 3px 0 0 var(--tinta); }
+.bib-libro .datos { flex: 1 1 260px; min-width: 0; }
+.bib-libro .t { font-family: var(--serif); font-weight: 600; }
+.bib-libro .d { font-size: 12px; color: var(--fg-2); }
+.bib-libro .acc { display: flex; flex-wrap: wrap; gap: 4px; }
+.bib-zona { border: 2px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; }
+.bib-zona p { margin: 0 0 8px; font-size: 13px; color: var(--fg-2); }
+.bib-zona.arrastrando { border-color: var(--tinta); background: var(--bg-2); }
+.bib-soltar { font-size: 12px; color: var(--fg-2); }
+#bib-previa { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+#bib-previa[hidden] { display: none; }
+.bib-resumen { margin: 0; font-size: 13px; }
+.bib-avisos { margin: 0; padding-left: 18px; font-size: 12px; color: var(--acento); }
+.bib-avisos:empty { display: none; }
+.bib-campo { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--fg-2); }
+.bib-campo input { font-size: 14px; color: var(--fg); padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.bib-opciones { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.bib-opciones[hidden] { display: none; }  /* display: flex anularía el atributo hidden */
+.bib-opciones legend { font-size: 12px; color: var(--fg-2); padding: 0; margin-bottom: 2px; }
+.bib-opciones label { display: flex; gap: 6px; align-items: baseline; }
+.bib-opciones label.no { opacity: .5; }
+.bib-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.bib-estado { font-size: 13px; margin: 8px 0 0; }
+.bib-estado.aviso { color: var(--acento); }
+.bib-estado:empty { display: none; }
+figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-family: var(--sans); font-size: 12px; padding: 18px; }
+.vacio .btn { margin-top: 10px; }
 #atajos kbd { font-family: var(--sans); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; background: var(--bg-2); margin-right: 4px; }
 .filtros select { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px; background: var(--marco); max-width: 100%; }
 .res.anot { border-left: 3px solid var(--tinta); }
@@ -321,6 +357,7 @@ figure img { cursor: zoom-in; }
     <div class="espacio"></div>
     <button class="btn peq" id="b-mas" type="button" aria-controls="herramientas" aria-expanded="false" aria-label="Buscar y más herramientas" title="Buscar, concentración, capas, ajustes y atajos">⋯</button>
     <div class="herramientas" id="herramientas">
+    <button class="btn peq" id="b-biblioteca" type="button" aria-haspopup="dialog" title="Abrir otro libro o importar uno (Markdown, texto, HTML, EPUB, Word)">Biblioteca</button>
     <input type="search" id="buscar" placeholder="Buscar en el libro y en las notas…" aria-label="Buscar en el libro y en las notas">
     <button class="btn peq" id="b-foco" type="button" title="Modo concentración: sólo el texto (tecla F)" aria-pressed="false">Concentración</button>
     <details id="capas" class="menu-det" hidden><summary class="btn peq" title="Señales editoriales calculadas al construir el libro">Capas</summary><div class="menu" id="capas-menu"></div></details>
@@ -392,6 +429,35 @@ figure img { cursor: zoom-in; }
   <div class="anotar">En una nota: <kbd>Esc</kbd> o <kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda y vuelve al texto</div>
   <div><kbd>Esc</kbd> cerrar · <kbd>?</kbd> esta ayuda · clic fuera de una ficha o un panel lo cierra</div>
 </dialog>
+<dialog id="biblioteca" aria-labelledby="biblioteca-t">
+  <div class="dialogo-cab"><h2 id="biblioteca-t">Biblioteca</h2><button class="btn peq cerrar" type="button" aria-label="Cerrar la biblioteca">×</button></div>
+  <p class="bib-intro" id="bib-intro"></p>
+  <ul class="bib-lista" id="bib-lista" aria-label="Libros"><li class="vacio">Cargando…</li></ul>
+  <section class="bib-importar" aria-labelledby="bib-imp-t">
+    <h3 id="bib-imp-t">Importar un libro</h3>
+    <div class="bib-zona" id="bib-zona">
+      <p>Markdown o texto (uno o varios capítulos, con sus imágenes), HTML, EPUB, Word (.docx) o un <code>libro.json</code> del lector.</p>
+      <button class="btn" type="button" id="bib-elegir">Elegir archivos…</button> <span class="bib-soltar">o arrástralos aquí</span>
+      <input type="file" id="bib-archivo" multiple hidden accept=".md,.markdown,.txt,.text,.html,.htm,.xhtml,.epub,.docx,.json,.png,.jpg,.jpeg,.gif,.webp,.svg">
+    </div>
+    <form id="bib-previa" hidden>
+      <p class="bib-resumen" id="bib-resumen"></p>
+      <ul class="bib-avisos" id="bib-avisos"></ul>
+      <label class="bib-campo">Título <input id="bib-titulo" required autocomplete="off"></label>
+      <label class="bib-campo">Autor <input id="bib-autor" autocomplete="off"></label>
+      <fieldset class="bib-opciones" id="bib-donde"><legend>Guardar en</legend>
+        <label><input type="radio" name="bib-donde" value="base"> la biblioteca compartida de esta página</label>
+        <label><input type="radio" name="bib-donde" value="local"> sólo este navegador</label>
+      </fieldset>
+      <fieldset class="bib-opciones" id="bib-choque" hidden><legend id="bib-choque-t">Ya hay un libro con ese título</legend>
+        <label><input type="radio" name="bib-choque" value="reemplazar" checked> reemplazarlo por esta versión (sus anotaciones se conservan y se reubican)</label>
+        <label><input type="radio" name="bib-choque" value="nuevo"> guardarlo como otro libro</label>
+      </fieldset>
+      <div class="bib-acciones"><button class="btn primario" type="submit" id="bib-importar">Importar y abrir</button><button class="btn" type="button" id="bib-cancelar">Cancelar</button></div>
+    </form>
+    <p class="bib-estado" id="bib-estado" role="status"></p>
+  </section>
+</dialog>
 <div id="sel-tb" role="toolbar" aria-label="Subrayar">
   <span class="etq">Subrayar</span>
   <button class="col-btn c-revisar" type="button" data-c="revisar" title="revisar o reescribir (1)" aria-label="Subrayar: revisar"></button>
@@ -405,10 +471,9 @@ figure img { cursor: zoom-in; }
 <script>
 // Núcleo · texto: normalización, identificadores y comparación de objetos. Sin DOM.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Minúsculas y sin diacríticos: la forma con que se busca en el libro y en las notas.
   function normalizar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
@@ -441,10 +506,9 @@ figure img { cursor: zoom-in; }
 });
 // Núcleo · diferencias palabra por palabra entre dos versiones de un bloque. Sin DOM.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Subsecuencia común más larga sobre palabras y espacios; devuelve tramos [op, texto] con op '=', '-' o '+'.
   // Por encima de 250 000 celdas no compara: devuelve el bloque viejo entero quitado y el nuevo añadido.
@@ -469,10 +533,9 @@ figure img { cursor: zoom-in; }
 // guardado; si no, se busca (primero en el bloque, luego en la sección, luego en el libro, exigiendo contexto
 // fuera del bloque) y, si no aparece, se declara perdido. Nada de esto modifica la anotación guardada.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Índice de la cita en `txt`, desambiguado con el contexto: { i, puntos } (puntos de 0 a 2) o null.
   function buscarCita(txt, a) {
@@ -513,10 +576,9 @@ figure img { cursor: zoom-in; }
 });
 // Núcleo · borradores que la base todavía no tiene: qué campos cambió el lector y cómo se funden. Sin DOM.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Lo que el lector edita en la página; el resto (respuesta, cierre, commit…) lo escribe quien edita las fuentes.
   var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado'];
@@ -536,6 +598,802 @@ figure img { cursor: zoom-in; }
   }
   return { CAMPOS_LECTOR: CAMPOS_LECTOR, marcarCampos: marcarCampos, fundirBorrador: fundirBorrador };
 });
+// Núcleo · Markdown → secciones y bloques. Es el mismo dialecto y la misma salida que `markdown.py` del paquete
+// (la paridad se comprueba en tests/test_paridad_js.py): `#`/`##` abren secciones de nivel 1 y 2, `###`/`####` son
+// subtítulos, párrafos, listas `- ` y `1. `, tablas `|`, citas `> `, **negrita**, *cursiva*, y los marcadores
+// `[FIGURA: archivo | Leyenda]`, `[PORTADA]…[/PORTADA]` y `[LEGAL]…[/LEGAL]`.
+//
+// `estadoLibro()` es también el armazón con que los importadores de HTML, EPUB y Word van abriendo secciones y
+// añadiendo bloques, para que todos los libros salgan con los mismos ids.
+(function (raiz, crear) {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+  'use strict';
+  var ROMANOS = { I: 1, II: 2, III: 3, IV: 4, V: 5 };
+  var ABRE_BLOQUE = /^(#{1,4} |- |\d+\. |\||> |\[FIGURA|\[\/?PORTADA\]|\[\/?LEGAL\])/;
+  var FIGURA = /^\[FIGURA:\s*(\S+)\s*\|\s*(.+)\]$/;
+  var SEPARADOR_TABLA = /^\|\s*:?-{2,}/;
+  var ITEM_NUMERADO = /^(\d+)\. /;
+  var NEGRITA = /\*\*([^*]+)\*\*/g;
+  // \w de Python sobre texto: letras y números de cualquier escritura, y el guion bajo
+  var CURSIVA = /(?<![\p{L}\p{N}_∗])\*([^*\n]+)\*(?![\p{L}\p{N}_])/gu;
+
+  function dos(n) { return n < 10 ? '0' + n : String(n); }
+  // Id estable y legible para una sección; se registra en `usados` para evitar duplicados.
+  function seccionId(titulo, usados) {
+    var m, base;
+    if ((m = /^Capítulo (\d+)\./.exec(titulo))) base = 'cap-' + dos(parseInt(m[1], 10));
+    else if ((m = /^Interludio (I{1,3})\./.exec(titulo))) base = 'interludio-' + ROMANOS[m[1]];
+    else if ((m = /^PARTE (I{1,3}V?|IV)\./.exec(titulo)) && ROMANOS[m[1]]) base = 'parte-' + ROMANOS[m[1]];
+    else if ((m = /^Apéndice ([A-Z])\./.exec(titulo))) base = 'ap-' + m[1].toLowerCase();
+    else base = N.slug(titulo.split('.')[0]);
+    var sid = base, n = 2;
+    while (usados[sid]) { sid = base + '-' + n; n++; }
+    usados[sid] = true;
+    return sid;
+  }
+  // Escapa HTML y convierte **negrita** y *cursiva*.
+  function inline(s) {
+    return N.escaparHtml(s).replace(NEGRITA, '<strong>$1</strong>').replace(CURSIVA, '<em>$1</em>');
+  }
+  // El armazón del libro: las secciones abiertas y la actual. Un bloque antes de toda sección abre «Preliminares».
+  function estadoLibro(figs) {
+    var st = { figs: figs === undefined ? 'figs/' : figs, usados: {}, secciones: [], sec: null };
+    st.nueva = function (titulo, nivel, src) {
+      st.sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };
+      st.secciones.push(st.sec);
+      return st.sec;
+    };
+    st.bloque = function (t, contenido, src) {
+      if (!st.sec) st.nueva('Preliminares', 1, src);
+      var b = { id: st.sec.id + '-b' + (st.sec.bloques.length + 1), t: t, html: contenido, src: src };
+      st.sec.bloques.push(b);
+      return b;
+    };
+    return st;
+  }
+  function strip(s) { return s.trim(); }
+  function leerMarcado(lines, i, cierre) {
+    var buf = [];
+    i += 1;
+    while (i < lines.length && lines[i].indexOf(cierre) !== 0) { if (lines[i].trim()) buf.push(lines[i].trim()); i++; }
+    if (i >= lines.length) throw new Error('falta el cierre ' + cierre);
+    return [buf, i + 1];
+  }
+  function empieza(s, p) { return s.slice(0, p.length) === p; }
+  function parseLineas(lines, nombre, st) {
+    var i = 0, m, r, buf, items, filas;
+    while (i < lines.length) {
+      var linea = lines[i], src = nombre + ':' + (i + 1);
+      if (!linea.trim()) { i++; continue; }
+      if (empieza(linea, '[PORTADA]')) {
+        r = leerMarcado(lines, i, '[/PORTADA]'); i = r[1];
+        st.nueva('Portada', 1, src);
+        st.bloque('portada', r[0].map(inline), src);
+        continue;
+      }
+      if (empieza(linea, '[LEGAL]')) {
+        r = leerMarcado(lines, i, '[/LEGAL]'); i = r[1];
+        st.nueva('Página legal', 1, src);
+        r[0].forEach(function (p) { st.bloque('p', inline(p), src); });
+        continue;
+      }
+      if (empieza(linea, '# ')) { st.nueva(strip(linea.slice(2)), 1, src); i++; continue; }
+      if (empieza(linea, '## ')) { st.nueva(strip(linea.slice(3)), 2, src); i++; continue; }
+      if (empieza(linea, '### ')) { st.bloque('h3', inline(strip(linea.slice(4))), src); i++; continue; }
+      if (empieza(linea, '#### ')) { st.bloque('h4', inline(strip(linea.slice(5))), src); i++; continue; }
+      if ((m = FIGURA.exec(linea))) {
+        st.bloque('figure', { src: st.figs + m[1], caption: inline(m[2].trim()) }, src);
+        i++; continue;
+      }
+      if (empieza(linea, '- ')) {
+        items = [];
+        while (i < lines.length && empieza(lines[i], '- ')) { items.push(inline(strip(lines[i].slice(2)))); i++; }
+        st.bloque('ul', items, src);
+        continue;
+      }
+      if (ITEM_NUMERADO.test(linea)) {
+        items = [];
+        while (i < lines.length && (m = ITEM_NUMERADO.exec(lines[i]))) { items.push(inline(strip(lines[i].slice(m[0].length)))); i++; }
+        st.bloque('ol', items, src);
+        continue;
+      }
+      if (empieza(linea, '|')) {
+        filas = [];
+        while (i < lines.length && empieza(lines[i], '|')) {
+          if (!SEPARADOR_TABLA.test(lines[i])) filas.push(lines[i].trim().replace(/^\|+|\|+$/g, '').split('|').map(function (c) { return inline(c.trim()); }));
+          i++;
+        }
+        st.bloque('table', filas, src);
+        continue;
+      }
+      if (empieza(linea, '> ')) {
+        buf = [];
+        while (i < lines.length && empieza(lines[i], '> ')) { buf.push(strip(lines[i].slice(2))); i++; }
+        st.bloque('quote', inline(buf.join(' ')), src);
+        continue;
+      }
+      // párrafo: líneas consecutivas no vacías que no abren otro bloque
+      buf = [linea.trim()];
+      i++;
+      while (i < lines.length && lines[i].trim() && !ABRE_BLOQUE.test(lines[i])) { buf.push(lines[i].trim()); i++; }
+      st.bloque('p', inline(buf.join(' ')), src);
+    }
+  }
+  // Uno o varios Markdown, en orden: [{ nombre, texto }]. Una sección abierta en un archivo sigue recibiendo bloques
+  // si el siguiente empieza sin título, como cuando un libro largo se parte en varios archivos.
+  function parsearMarkdown(archivos, figs) {
+    var st = estadoLibro(figs);
+    archivos.forEach(function (a) {
+      var texto = String(a.texto).replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+      parseLineas(texto.split('\n'), a.nombre, st);
+    });
+    return st.secciones;
+  }
+  return { seccionId: seccionId, inline: inline, estadoLibro: estadoLibro, parsearMarkdown: parsearMarkdown };
+});
+// Núcleo · armar y validar un libro.json (formato 2), como `construir.py` cuando no hay PDF ni capas: huella de cada
+// bloque (SHA-1 del texto que muestra la página, 12 cifras), páginas vacías y los datos del libro. También vuelve a
+// escribir un libro como Markdown del dialecto del lector, para seguir trabajándolo con la línea de órdenes.
+(function (raiz, crear) {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+  'use strict';
+  var FORMATO = 2;
+
+  function utf8(s) {
+    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(s);
+    var b = unescape(encodeURIComponent(s)), out = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
+    return out;
+  }
+  // SHA-1 sin dependencias (síncrono, igual en el navegador y en Node): la huella no protege nada, sólo identifica.
+  function sha1(texto) {
+    var bytes = utf8(texto), n = bytes.length, total = ((n + 9 + 63) >> 6) << 6, m = new Uint8Array(total);
+    m.set(bytes); m[n] = 0x80;
+    var bits = n * 8;
+    m[total - 4] = (bits >>> 24) & 255; m[total - 3] = (bits >>> 16) & 255; m[total - 2] = (bits >>> 8) & 255; m[total - 1] = bits & 255;
+    m[total - 8] = Math.floor(n / 0x20000000) & 255;  // bits altos de la longitud (libros de más de 512 MB, por si acaso)
+    var h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476, h4 = 0xc3d2e1f0, w = new Int32Array(80);
+    for (var o = 0; o < total; o += 64) {
+      for (var i = 0; i < 16; i++) w[i] = (m[o + 4 * i] << 24) | (m[o + 4 * i + 1] << 16) | (m[o + 4 * i + 2] << 8) | m[o + 4 * i + 3];
+      for (i = 16; i < 80; i++) { var x = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]; w[i] = (x << 1) | (x >>> 31); }
+      var a = h0, b = h1, c = h2, d = h3, e = h4;
+      for (i = 0; i < 80; i++) {
+        var f, k;
+        if (i < 20) { f = (b & c) | (~b & d); k = 0x5a827999; }
+        else if (i < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }
+        else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
+        else { f = b ^ c ^ d; k = 0xca62c1d6; }
+        var t = (((a << 5) | (a >>> 27)) + f + e + k + w[i]) | 0;
+        e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = t;
+      }
+      h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0;
+    }
+    return [h0, h1, h2, h3, h4].map(function (v) { return ('00000000' + (v >>> 0).toString(16)).slice(-8); }).join('');
+  }
+  // Los trozos de texto con que la página compone el bloque: uno por ítem o celda, o uno solo (`partes_render`).
+  function partesRender(b) {
+    var h = b.html;
+    if (typeof h === 'string') return [N.textoDeHtml(h)];
+    if (Array.isArray(h)) {
+      var partes = [];
+      h.forEach(function (x) { if (Array.isArray(x)) x.forEach(function (c) { partes.push(N.textoDeHtml(c)); }); else partes.push(N.textoDeHtml(x)); });
+      return partes;
+    }
+    if (h && typeof h === 'object') return [N.textoDeHtml(h.caption || '')];
+    return [];
+  }
+  // El texto del bloque tal como lo muestra la página: el sistema de coordenadas de los subrayados.
+  function textoRender(b) { return partesRender(b).join(''); }
+  function huella(texto) { return sha1(texto).slice(0, 12); }
+  function hoyLocal() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
+  // Secciones ya parseadas (con ids) → libro.json. meta: { titulo, subtitulo, autor, fuentes, generador, generado }.
+  function armarLibro(secciones, meta) {
+    meta = meta || {};
+    secciones.forEach(function (sec) {
+      sec.bloques.forEach(function (b) { b.h = huella(textoRender(b)); b.pagina = null; });
+      sec.pagina = null;
+    });
+    var titulo = meta.titulo || (secciones.length ? secciones[0].titulo : 'Libro');
+    var nivel2 = secciones.filter(function (s) { return s.nivel === 2; })[0];
+    return {
+      formato: FORMATO,
+      generador: meta.generador || 'lector-anotaciones (página)',
+      id: N.slug(titulo),
+      titulo: titulo,
+      subtitulo: meta.subtitulo || '',
+      autor: meta.autor || '',
+      generado: meta.generado || hoyLocal(),
+      fuentes: meta.fuentes || [],
+      paginas_fisicas: null,
+      desfase_paginas: 0,
+      inicio: nivel2 ? nivel2.id : (secciones.length ? secciones[0].id : null),
+      claves_anteriores: [],
+      anterior_generado: null,
+      cambios: 0,
+      capas: {},
+      secciones: secciones
+    };
+  }
+  var ID_BLOQUE = /^(.+)-b(\d+)$/;
+  // Las invariantes de las que dependen los subrayados (`validar` de construir.py), más la forma básica que la página
+  // necesita para mostrar un libro que llega de fuera: devuelve la lista de problemas.
+  function validarLibro(libro) {
+    var problemas = [], vistos = {}, ultima = 0;
+    if (!libro || typeof libro !== 'object' || !Array.isArray(libro.secciones)) return ['no es un libro.json (falta la lista de secciones)'];
+    libro.secciones.forEach(function (sec) {
+      if (!sec || typeof sec.id !== 'string' || !Array.isArray(sec.bloques)) { problemas.push('sección sin id o sin bloques'); return; }
+      if (vistos[sec.id]) problemas.push('id de sección repetido: ' + sec.id);
+      vistos[sec.id] = true;
+      sec.bloques.forEach(function (b, i) {
+        ['id', 't', 'html', 'src'].forEach(function (k) { if (!(k in b)) problemas.push('bloque sin «' + k + '» en ' + sec.id); });
+        if (!('h' in b)) problemas.push('bloque sin «h» en ' + sec.id);
+        var m = ID_BLOQUE.exec(b.id || '');
+        if (!m || m[1] !== sec.id || parseInt(m[2], 10) !== i + 1) problemas.push('id de bloque fuera de patrón: ' + b.id + ' (esperado ' + sec.id + '-b' + (i + 1) + ')');
+        if (vistos[b.id]) problemas.push('id de bloque repetido: ' + b.id);
+        vistos[b.id] = true;
+        if (!/^.+:\d+$/.test(b.src || '')) problemas.push('src sin línea en ' + b.id + ': ' + b.src);
+        var p = b.pagina;
+        if (p !== null && p !== undefined) { if (p < ultima) problemas.push('página retrocede en ' + b.id + ': ' + p + ' tras ' + ultima); ultima = Math.max(ultima, p); }
+      });
+    });
+    if (!libro.secciones.length) problemas.push('el libro no tiene secciones');
+    return problemas;
+  }
+
+  // Un libro que no es el de la página (importado de un archivo, o leído de la base, donde cualquier colaborador puede
+  // escribir) se muestra con innerHTML: de su HTML sólo pasan el texto, <strong> y <em>, sin atributos; los signos < y >
+  // sueltos quedan escapados. Las imágenes, sólo con ruta relativa o como data:image. Es lo mismo que produce el
+  // Markdown, así que un libro legítimo no cambia (ni sus huellas).
+  var ETIQUETA = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;
+  function escaparSignos(x) { return x.replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function sanearHtml(h) {
+    var s = String(h === null || h === undefined ? '' : h), out = '', i = 0, m;
+    ETIQUETA.lastIndex = 0;
+    while ((m = ETIQUETA.exec(s))) {
+      out += escaparSignos(s.slice(i, m.index));
+      var t = m[1].toLowerCase();
+      if (t === 'strong' || t === 'em') out += '<' + (m[0][1] === '/' ? '/' : '') + t + '>';
+      i = m.index + m[0].length;
+    }
+    return out + escaparSignos(s.slice(i));
+  }
+  var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|[^:]*)$/;
+  function sanearLibro(libro) {
+    (libro.secciones || []).forEach(function (s) {
+      s.titulo = String(s.titulo || '');
+      (s.bloques || []).forEach(function (b) {
+        // la forma que cada tipo de bloque espera, aunque el archivo traiga otra
+        var h = b.html, t = b.t, lista = Array.isArray(h) ? h : [];
+        if (t === 'figure') b.html = h && typeof h === 'object' && !Array.isArray(h) ? { src: IMAGEN_SEGURA.test(String(h.src || '')) ? String(h.src || '') : '', caption: sanearHtml(h.caption) } : { src: '', caption: '' };
+        else if (t === 'table') b.html = lista.map(function (f) { return Array.isArray(f) ? f.map(sanearHtml) : [sanearHtml(f)]; });
+        else if (t === 'ul' || t === 'ol' || t === 'portada') b.html = lista.map(function (x) { return sanearHtml(Array.isArray(x) ? x.join(' ') : x); });
+        else b.html = typeof h === 'string' ? sanearHtml(h) : '';
+      });
+    });
+    return libro;
+  }
+  // HTML del lector (sólo <strong>, <em> y texto escapado) → Markdown en línea.
+  function mdEnLinea(h) {
+    return N.textoDeHtml(String(h || '').replace(/<\/?strong>/g, '**').replace(/<\/?em>/g, '*').replace(/<br\s*\/?>/g, ' '));
+  }
+  // El libro como Markdown del dialecto del lector: lo que `lector-anotaciones construir` vuelve a leer.
+  function libroAMarkdown(libro) {
+    var out = [];
+    libro.secciones.forEach(function (s) {
+      if (s.titulo === 'Portada' && s.bloques.length === 1 && s.bloques[0].t === 'portada') {
+        out.push('[PORTADA]'); s.bloques[0].html.forEach(function (l) { out.push(mdEnLinea(l)); }); out.push('[/PORTADA]', ''); return;
+      }
+      out.push((s.nivel === 1 ? '# ' : '## ') + s.titulo, '');
+      s.bloques.forEach(function (b) {
+        var h = b.html;
+        if (b.t === 'h3') out.push('### ' + mdEnLinea(h));
+        else if (b.t === 'h4') out.push('#### ' + mdEnLinea(h));
+        else if (b.t === 'ul') h.forEach(function (x) { out.push('- ' + mdEnLinea(x)); });
+        else if (b.t === 'ol') h.forEach(function (x, i) { out.push((i + 1) + '. ' + mdEnLinea(x)); });
+        else if (b.t === 'quote') out.push('> ' + mdEnLinea(h));
+        else if (b.t === 'table') h.forEach(function (fila, i) { out.push('| ' + fila.map(mdEnLinea).join(' | ') + ' |'); if (i === 0) out.push('|' + fila.map(function () { return ' --- '; }).join('|') + '|'); });
+        else if (b.t === 'figure') out.push('[FIGURA: ' + (/^data:/.test(h.src || '') || !h.src ? 'figura' : String(h.src).replace(/^.*\//, '')) + ' | ' + (mdEnLinea(h.caption) || 'Figura') + ']');
+        else if (b.t === 'portada') h.forEach(function (l) { out.push(mdEnLinea(l)); });
+        else out.push(mdEnLinea(h));
+        out.push('');
+      });
+    });
+    return out.join('\n');
+  }
+  return { sanearHtml: sanearHtml, sanearLibro: sanearLibro, sha1: sha1, partesRender: partesRender, textoRender: textoRender, huella: huella, armarLibro: armarLibro, validarLibro: validarLibro, libroAMarkdown: libroAMarkdown };
+});
+// Núcleo · lectura de archivos ZIP (EPUB y Word son ZIP). Sin dependencias: se lee el directorio central y cada
+// entrada se descomprime con la función `inflar(bytes) → Promise<Uint8Array>` que se le pase (en el navegador,
+// DecompressionStream('deflate-raw'); en Node, zlib). Admite entradas guardadas (método 0) y comprimidas (método 8).
+(function (raiz, crear) {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function () {
+  'use strict';
+  var FIN_DIRECTORIO = 0x06054b50, ENTRADA_CENTRAL = 0x02014b50, CABECERA_LOCAL = 0x04034b50;
+  function u16(b, i) { return b[i] | (b[i + 1] << 8); }
+  function u32(b, i) { return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0; }
+  function decodificar(bytes) {
+    if (typeof TextDecoder !== 'undefined') return new TextDecoder('utf-8').decode(bytes);
+    var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    try { return decodeURIComponent(escape(s)); } catch (e) { return s; }
+  }
+  function inflarNavegador(datos) {
+    if (typeof DecompressionStream === 'undefined') return Promise.reject(new Error('este navegador no descomprime ZIP (falta DecompressionStream)'));
+    var flujo = new Blob([datos]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(flujo).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+  // bytes: Uint8Array con el ZIP entero. Devuelve { nombres, tiene(n), bytes(n), texto(n) }; lanza si no es un ZIP.
+  function abrirZip(bytes, inflar) {
+    inflar = inflar || inflarNavegador;
+    var fin = -1;
+    for (var i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) { if (u32(bytes, i) === FIN_DIRECTORIO) { fin = i; break; } }
+    if (fin < 0) throw new Error('no es un archivo ZIP (EPUB y Word lo son)');
+    var total = u16(bytes, fin + 10), p = u32(bytes, fin + 16), entradas = {}, nombres = [];
+    for (var n = 0; n < total; n++) {
+      if (u32(bytes, p) !== ENTRADA_CENTRAL) throw new Error('directorio del ZIP dañado');
+      var metodo = u16(bytes, p + 10), comprimido = u32(bytes, p + 20), largoNombre = u16(bytes, p + 28);
+      var largoExtra = u16(bytes, p + 30), largoComentario = u16(bytes, p + 32), local = u32(bytes, p + 42);
+      var nombre = decodificar(bytes.subarray(p + 46, p + 46 + largoNombre));
+      entradas[nombre] = { metodo: metodo, comprimido: comprimido, local: local };
+      nombres.push(nombre);
+      p += 46 + largoNombre + largoExtra + largoComentario;
+    }
+    function leer(nombre) {
+      var e = entradas[nombre];
+      if (!e) return Promise.reject(new Error('falta ' + nombre + ' dentro del archivo'));
+      if (u32(bytes, e.local) !== CABECERA_LOCAL) return Promise.reject(new Error('entrada dañada: ' + nombre));
+      var ini = e.local + 30 + u16(bytes, e.local + 26) + u16(bytes, e.local + 28), datos = bytes.subarray(ini, ini + e.comprimido);
+      if (e.metodo === 0) return Promise.resolve(datos);
+      if (e.metodo === 8) return Promise.resolve(inflar(datos));
+      return Promise.reject(new Error('compresión no admitida (método ' + e.metodo + ') en ' + nombre));
+    }
+    return {
+      nombres: nombres,
+      tiene: function (nombre) { return !!entradas[nombre]; },
+      bytes: leer,
+      texto: function (nombre) { return leer(nombre).then(decodificar); }
+    };
+  }
+  return { abrirZip: abrirZip, decodificarUtf8: decodificar };
+});
+// Núcleo · importar un libro desde archivos: Markdown o texto, HTML, EPUB, Word (.docx) o un libro.json del lector.
+//
+// Todo termina en las mismas secciones y bloques que produce el Markdown (estadoLibro) y se arma con armarLibro, así
+// que un libro importado se anota igual que uno construido con la línea de órdenes. Del HTML de afuera sólo se
+// conserva el texto, la negrita y la cursiva: nada del archivo se inserta como HTML en la página. Las figuras de EPUB
+// y Word entran como imágenes data: si caben (por imagen y en total); si no, queda su leyenda.
+//
+// Necesita un analizador de XML/HTML: `opciones.parsear(texto, tipo) → Document` (DOMParser en el navegador).
+(function (raiz, crear) {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+  'use strict';
+  var IMAGEN_MAX = 300 * 1024, IMAGENES_MAX = 4 * 1024 * 1024;
+  var TIPOS_IMAGEN = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
+
+  function extension(nombre) { var m = /\.([a-z0-9]+)$/i.exec(nombre || ''); return m ? m[1].toLowerCase() : ''; }
+  function hijos(n) { return Array.prototype.slice.call(n.childNodes || []); }
+  function local(n) { return (n.localName || n.nodeName || '').toLowerCase(); }
+  function espacios(s) { return s.replace(/\s+/g, ' ').trim(); }
+  function envolver(tag, s) { return s.trim() ? '<' + tag + '>' + s + '</' + tag + '>' : s; }
+  function base64(bytes) {
+    var s = '', i;
+    for (i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return typeof btoa !== 'undefined' ? btoa(s) : Buffer.from(s, 'binary').toString('base64');
+  }
+  function textoLibre(n) { return espacios(n ? (n.textContent || '') : ''); }
+  // Rutas dentro de un ZIP: relativa a la carpeta de `desde`, sin «..» ni fragmento.
+  function resolver(desde, href) {
+    href = String(href || '').split('#')[0];
+    try { href = decodeURIComponent(href); } catch (e) { /* se usa tal cual */ }
+    if (!href) return '';
+    var partes = desde.split('/').slice(0, -1);
+    href.split('/').forEach(function (p) { if (p === '..') partes.pop(); else if (p && p !== '.') partes.push(p); });
+    return partes.join('/');
+  }
+  // Imágenes: se piden durante el recorrido y se resuelven al final, respetando los topes; la huella de una figura sólo
+  // depende de su leyenda, así que poner la imagen después no cambia nada.
+  function colaImagenes(leer, avisos) {
+    var pendientes = [];
+    return {
+      pedir: function (b, ruta) { b.html.src = ''; if (ruta) pendientes.push({ b: b, ruta: ruta }); },
+      resolver: function () {
+        var total = 0, omitidas = 0;
+        return pendientes.reduce(function (p, x) {
+          return p.then(function () {
+            var tipo = TIPOS_IMAGEN[extension(x.ruta)];
+            if (!tipo) { omitidas++; return; }
+            return leer(x.ruta).then(function (bytes) {
+              if (!bytes || bytes.length > IMAGEN_MAX || total + bytes.length > IMAGENES_MAX) { omitidas++; return; }
+              total += bytes.length;
+              x.b.html.src = 'data:' + tipo + ';base64,' + base64(bytes);
+            }, function () { omitidas++; });
+          });
+        }, Promise.resolve()).then(function () {
+          if (omitidas) avisos.push(omitidas + (omitidas === 1 ? ' figura quedó' : ' figuras quedaron') + ' sólo con su leyenda (imagen ausente, de formato no admitido o demasiado grande).');
+        });
+      }
+    };
+  }
+  // Niveles de título en uso → qué es sección (nivel 1 o 2) y qué subtítulo (h3, h4). Con un solo nivel, cada título
+  // es una sección de nivel 2 (capítulos sin partes).
+  function mapaNiveles(usados) {
+    var l = Object.keys(usados).map(Number).sort(function (a, b) { return a - b; }), m = {};
+    if (l.length === 1) { m[l[0]] = { sec: 2 }; return m; }
+    l.forEach(function (n, i) { m[n] = i === 0 ? { sec: 1 } : i === 1 ? { sec: 2 } : { t: i === 2 ? 'h3' : 'h4' }; });
+    return m;
+  }
+
+  // ------------------------------------------------------------------ HTML (archivos sueltos y capítulos de EPUB)
+  var EN_LINEA = /^(a|abbr|b|bdi|bdo|cite|code|data|dfn|em|font|i|kbd|mark|q|s|samp|small|span|strike|strong|sub|sup|time|tt|u|var|wbr|br|img|ins|del|label|ruby|rt|rp)$/;
+  var OMITIR = /^(script|style|noscript|template|head|title|meta|link|svg|math|iframe|object|button|input|select|textarea|hr|nav)$/;
+  function enLinea(n) {
+    if (n.nodeType === 3 || n.nodeType === 4) return N.escaparHtml(n.nodeValue);
+    if (n.nodeType !== 1) return '';
+    var t = local(n);
+    if (t === 'br' || t === 'wbr') return ' ';
+    if (t === 'img' || t === 'del' || t === 'rt' || t === 'rp' || OMITIR.test(t)) return '';
+    var dentro = hijos(n).map(enLinea).join('');
+    if (t === 'strong' || t === 'b') return envolver('strong', dentro);
+    if (t === 'em' || t === 'i' || t === 'cite' || t === 'dfn' || t === 'var') return envolver('em', dentro);
+    return dentro;
+  }
+  function htmlEnLinea(n) { return espacios(hijos(n).map(enLinea).join('')); }
+  function nivelTitulo(n) { var m = /^h([1-6])$/.exec(local(n)); return m && textoLibre(n) ? parseInt(m[1], 10) : 0; }
+  function nivelesHtml(doc, usados) {
+    ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(function (h, i) { var ns = doc.getElementsByTagName(h); for (var k = 0; k < ns.length; k++) if (textoLibre(ns[k])) { usados[i + 1] = 1; break; } });
+  }
+  // Recorre el cuerpo de un documento HTML y agrega sus bloques al libro. `ctx`: { st, niveles, nombre, imagenes,
+  // rutaImagen(src) → ruta en el ZIP o null }.
+  function bloquesHtml(cuerpo, ctx) {
+    var st = ctx.st, orden = 0;
+    var src = function () { orden++; return ctx.nombre + ':' + orden; };
+    var parrafo = function (h) { h = espacios(h); if (N.textoDeHtml(h).trim()) st.bloque('p', h, src()); };
+    var figura = function (img, leyenda) {
+      var b = st.bloque('figure', { src: '', caption: leyenda || N.escaparHtml(espacios(img.getAttribute('alt') || img.getAttribute('title') || '')) || 'Figura' }, src());
+      ctx.imagenes.pedir(b, ctx.rutaImagen(img.getAttribute('src') || img.getAttribute('xlink:href') || ''));
+    };
+    function contenedor(nodo) {
+      var pendiente = '';
+      var soltar = function () { if (pendiente) { parrafo(pendiente); pendiente = ''; } };
+      hijos(nodo).forEach(function (n) {
+        if (n.nodeType === 3 || n.nodeType === 4) { pendiente += N.escaparHtml(n.nodeValue); return; }
+        if (n.nodeType !== 1) return;
+        var t = local(n);
+        if (OMITIR.test(t)) return;
+        if (t === 'img') { soltar(); figura(n, ''); return; }
+        if (EN_LINEA.test(t)) { pendiente += enLinea(n); return; }
+        soltar();
+        var nv = nivelTitulo(n);
+        if (nv) {
+          var dest = ctx.niveles[nv] || { t: 'h4' };
+          if (dest.sec) st.nueva(textoLibre(n), dest.sec, src());
+          else st.bloque(dest.t, htmlEnLinea(n), src());
+          return;
+        }
+        if (t === 'p' || t === 'dt' || t === 'dd' || t === 'caption' || t === 'address') {
+          var imgs = n.getElementsByTagName('img');
+          if (imgs.length && !textoLibre(n)) { for (var k = 0; k < imgs.length; k++) figura(imgs[k], ''); return; }
+          parrafo(htmlEnLinea(n)); return;
+        }
+        if (t === 'pre') { parrafo(N.escaparHtml(n.textContent || '')); return; }
+        if (t === 'ul' || t === 'ol') {
+          var items = hijos(n).filter(function (x) { return x.nodeType === 1 && local(x) === 'li'; }).map(htmlEnLinea).filter(function (h) { return N.textoDeHtml(h).trim(); });
+          if (items.length) st.bloque(t, items, src());
+          return;
+        }
+        if (t === 'blockquote') {
+          var q = espacios(hijos(n).map(function (x) { return x.nodeType === 1 && !EN_LINEA.test(local(x)) ? ' ' + htmlEnLinea(x) + ' ' : enLinea(x); }).join(''));
+          if (N.textoDeHtml(q).trim()) st.bloque('quote', q, src());
+          return;
+        }
+        if (t === 'table') {
+          var filas = [], trs = n.getElementsByTagName('tr');
+          for (var r = 0; r < trs.length; r++) {
+            var celdas = hijos(trs[r]).filter(function (x) { return x.nodeType === 1 && (local(x) === 'td' || local(x) === 'th'); }).map(htmlEnLinea);
+            if (celdas.length) filas.push(celdas);
+          }
+          if (filas.length) st.bloque('table', filas, src());
+          return;
+        }
+        if (t === 'figure') {
+          var img = n.getElementsByTagName('img')[0], cap = n.getElementsByTagName('figcaption')[0];
+          if (img) { figura(img, cap ? htmlEnLinea(cap) : ''); return; }
+          contenedor(n); return;
+        }
+        if (t === 'li') { parrafo(htmlEnLinea(n)); return; }
+        contenedor(n);  // div, section, article, body…
+      });
+      soltar();
+    }
+    contenedor(cuerpo);
+  }
+  function documentoHtml(texto, parsear, xhtml) {
+    var doc = null;
+    if (xhtml) { doc = parsear(texto, 'application/xhtml+xml'); if (doc.getElementsByTagName('parsererror').length) doc = null; }
+    return doc || parsear(texto, 'text/html');
+  }
+  function cuerpoDe(doc) { return doc.getElementsByTagName('body')[0] || doc.documentElement; }
+
+  function importarHtml(archivos, opciones) {
+    var avisos = [], st = N.estadoLibro(''), usados = {}, docs = archivos.map(function (a) { var d = documentoHtml(N.decodificarUtf8(a.bytes), opciones.parsear, extension(a.nombre) === 'xhtml'); nivelesHtml(d, usados); return { nombre: a.nombre, doc: d }; });
+    var niveles = mapaNiveles(usados), imagenes = colaImagenes(function () { return Promise.reject(new Error('sin imágenes')); }, avisos);
+    docs.forEach(function (x) { bloquesHtml(cuerpoDe(x.doc), { st: st, niveles: niveles, nombre: x.nombre, imagenes: imagenes, rutaImagen: function () { return null; } }); });
+    var primero = docs[0] && docs[0].doc, t = primero && primero.getElementsByTagName('title')[0];
+    var autor = primero && primero.querySelector ? primero.querySelector('meta[name="author"]') : null;
+    return imagenes.resolver().then(function () {
+      return { secciones: st.secciones, meta: { titulo: t ? textoLibre(t) : '', autor: autor ? autor.getAttribute('content') || '' : '' }, avisos: avisos };
+    });
+  }
+
+  // ------------------------------------------------------------------ EPUB
+  function primeroNS(doc, nombre) {
+    var ns = doc.getElementsByTagNameNS ? doc.getElementsByTagNameNS('*', nombre) : [];
+    return ns.length ? ns[0] : doc.getElementsByTagName(nombre)[0] || null;
+  }
+  function todosNS(doc, nombre) {
+    var ns = doc.getElementsByTagNameNS ? doc.getElementsByTagNameNS('*', nombre) : [];
+    return Array.prototype.slice.call(ns.length ? ns : doc.getElementsByTagName(nombre));
+  }
+  function importarEpub(archivo, opciones) {
+    var avisos = [], zip = N.abrirZip(archivo.bytes, opciones.inflar), xml = function (t) { return opciones.parsear(t, 'application/xml'); };
+    return zip.texto('META-INF/container.xml').then(function (c) {
+      var rf = primeroNS(xml(c), 'rootfile'), opf = rf && rf.getAttribute('full-path');
+      if (!opf) throw new Error('EPUB sin rootfile en META-INF/container.xml');
+      return zip.texto(opf).then(function (t) { return { ruta: opf, doc: xml(t) }; });
+    }).then(function (opf) {
+      var manifiesto = {}, porRuta = {};
+      todosNS(opf.doc, 'item').forEach(function (it) {
+        var x = { id: it.getAttribute('id'), ruta: resolver(opf.ruta, it.getAttribute('href')), tipo: it.getAttribute('media-type') || '', props: it.getAttribute('properties') || '' };
+        manifiesto[x.id] = x; porRuta[x.ruta] = x;
+      });
+      var spine = primeroNS(opf.doc, 'spine'), orden = todosNS(opf.doc, 'itemref').filter(function (r) { return r.getAttribute('linear') !== 'no'; })
+        .map(function (r) { return manifiesto[r.getAttribute('idref')]; }).filter(function (x) { return x && /html|xml/.test(x.tipo); });
+      if (!orden.length) throw new Error('EPUB sin capítulos en el orden de lectura (spine)');
+      var meta = { titulo: textoLibre(primeroNS(opf.doc, 'title')), autor: textoLibre(primeroNS(opf.doc, 'creator')) };
+      // títulos del índice del EPUB, para los capítulos que no traen encabezado propio
+      var etiquetas = {}, nav = Object.keys(manifiesto).map(function (k) { return manifiesto[k]; }).filter(function (x) { return /\bnav\b/.test(x.props); })[0];
+      var ncx = (spine && manifiesto[spine.getAttribute('toc')]) || Object.keys(manifiesto).map(function (k) { return manifiesto[k]; }).filter(function (x) { return x.tipo === 'application/x-dtbncx+xml'; })[0];
+      var indice = nav ? zip.texto(nav.ruta).then(function (t) {
+        var d = documentoHtml(t, opciones.parsear, true);
+        todosNS(d, 'a').forEach(function (a) { var r = resolver(nav.ruta, a.getAttribute('href')); if (r && !etiquetas[r]) etiquetas[r] = textoLibre(a); });
+      }, function () {}) : ncx ? zip.texto(ncx.ruta).then(function (t) {
+        todosNS(xml(t), 'navPoint').forEach(function (p) {
+          var c = primeroNS(p, 'content'), l = primeroNS(p, 'text'), r = c ? resolver(ncx.ruta, c.getAttribute('src')) : '';
+          if (r && !etiquetas[r] && l) etiquetas[r] = textoLibre(l);
+        });
+      }, function () {}) : Promise.resolve();
+      return indice.then(function () {
+        return Promise.all(orden.map(function (x) { return zip.texto(x.ruta).then(function (t) { return { x: x, doc: documentoHtml(t, opciones.parsear, true) }; }); }));
+      }).then(function (docs) {
+        var st = N.estadoLibro(''), usados = {};
+        docs.forEach(function (d) { nivelesHtml(d.doc, usados); });
+        var niveles = mapaNiveles(usados), imagenes = colaImagenes(function (r) { return zip.tiene(r) ? zip.bytes(r) : Promise.reject(new Error('falta')); }, avisos);
+        docs.forEach(function (d) {
+          var cuerpo = cuerpoDe(d.doc), conTitulo = false;
+          Object.keys(niveles).forEach(function (n) { if (niveles[n].sec && cuerpo.getElementsByTagName('h' + n).length) conTitulo = true; });
+          if (!conTitulo && etiquetas[d.x.ruta] && textoLibre(cuerpo)) st.nueva(etiquetas[d.x.ruta], 2, d.x.ruta.split('/').pop() + ':0');
+          bloquesHtml(cuerpo, { st: st, niveles: niveles, nombre: d.x.ruta.split('/').pop(), imagenes: imagenes, rutaImagen: function (s) { return s && !/^(data|https?):/i.test(s) ? resolver(d.x.ruta, s) : null; } });
+        });
+        return imagenes.resolver().then(function () { return { secciones: st.secciones, meta: meta, avisos: avisos }; });
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------ Word (.docx)
+  var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  function wAttr(n, nombre) { return n ? (n.getAttributeNS(W, nombre) || n.getAttribute('w:' + nombre) || '') : ''; }
+  function wHijo(n, nombre) { if (!n) return null; nombre = nombre.toLowerCase(); for (var c = n.firstChild; c; c = c.nextSibling) if (c.nodeType === 1 && local(c) === nombre) return c; return null; }
+  function wActivo(n) { if (!n) return false; var v = wAttr(n, 'val').toLowerCase(); return v !== '0' && v !== 'false' && v !== 'off' && v !== 'none'; }
+  function importarDocx(archivo, opciones) {
+    var avisos = [], zip = N.abrirZip(archivo.bytes, opciones.inflar), xml = function (t) { return opciones.parsear(t, 'application/xml'); };
+    var opcional = function (r) { return zip.tiene(r) ? zip.texto(r).then(xml) : Promise.resolve(null); };
+    if (!zip.tiene('word/document.xml')) return Promise.reject(new Error('no es un documento de Word (.docx): falta word/document.xml'));
+    return Promise.all([zip.texto('word/document.xml').then(xml), opcional('word/styles.xml'), opcional('word/numbering.xml'), opcional('word/_rels/document.xml.rels'), opcional('docProps/core.xml')]).then(function (r) {
+      var doc = r[0], estilos = {}, formatos = {}, rels = {};
+      // estilos: nombre, nivel de esquema y numeración, heredados por basedOn
+      if (r[1]) todosNS(r[1], 'style').forEach(function (s) {
+        var ppr = wHijo(s, 'pPr'), ol = wHijo(ppr, 'outlineLvl'), base = wHijo(s, 'basedOn');
+        estilos[wAttr(s, 'styleId')] = { nombre: wAttr(wHijo(s, 'name'), 'val').toLowerCase(), esquema: ol ? parseInt(wAttr(ol, 'val'), 10) : null, num: !!wHijo(ppr, 'numPr'), base: base ? wAttr(base, 'val') : null };
+      });
+      var estilo = function (id) {
+        var e = estilos[id], vistos = {}, out = { nombre: e ? e.nombre : String(id || '').toLowerCase(), esquema: null, num: false };
+        while (e && !vistos[id]) { vistos[id] = 1; if (out.esquema === null && e.esquema !== null) out.esquema = e.esquema; out.num = out.num || e.num; id = e.base; e = estilos[id]; }
+        return out;
+      };
+      // numeración: numId → ¿lista ordenada?
+      if (r[2]) {
+        var abstractos = {};
+        todosNS(r[2], 'abstractNum').forEach(function (a) { var lv = {}; todosNS(a, 'lvl').forEach(function (l) { lv[wAttr(l, 'ilvl')] = wAttr(wHijo(l, 'numFmt'), 'val'); }); abstractos[wAttr(a, 'abstractNumId')] = lv; });
+        todosNS(r[2], 'num').forEach(function (n) { formatos[wAttr(n, 'numId')] = abstractos[wAttr(wHijo(n, 'abstractNumId'), 'val')] || {}; });
+      }
+      if (r[3]) todosNS(r[3], 'Relationship').forEach(function (x) { rels[x.getAttribute('Id')] = resolver('word/document.xml', x.getAttribute('Target')); });
+      var meta = { titulo: r[4] ? textoLibre(primeroNS(r[4], 'title')) : '', autor: r[4] ? textoLibre(primeroNS(r[4], 'creator')) : '', subtitulo: '' };
+      var cuerpo = primeroNS(doc, 'body');
+      if (!cuerpo) throw new Error('documento de Word sin cuerpo');
+      // párrafos y tablas del cuerpo, en orden (los controles de contenido se abren)
+      var piezas = [];
+      (function recorrer(n) { for (var c = n.firstChild; c; c = c.nextSibling) { if (c.nodeType !== 1) continue; var t = local(c); if (t === 'p' || t === 'tbl') piezas.push(c); else if (t === 'sdt' || t === 'sdtcontent' || t === 'customxml') recorrer(c); } })(cuerpo);
+      // título de cada párrafo: estilo Heading/Título n o nivel de esquema
+      var nivelDe = function (p) {
+        var ppr = wHijo(p, 'pPr'), est = estilo(wAttr(wHijo(ppr, 'pStyle'), 'val')), m = /^(heading|t[ií]tulo|encabezado)\s*(\d)$/.exec(est.nombre), ol = wHijo(ppr, 'outlineLvl');
+        if (m) return parseInt(m[2], 10);
+        var v = ol ? parseInt(wAttr(ol, 'val'), 10) : est.esquema;
+        return v !== null && v >= 0 && v < 9 ? v + 1 : 0;  // el nivel 9 es texto normal
+      };
+      var segmentos = function (p) {
+        var segs = [];
+        (function recorrer(n, b, i) {
+          for (var c = n.firstChild; c; c = c.nextSibling) {
+            if (c.nodeType !== 1) continue;
+            var t = local(c);
+            if (t === 'del' || t === 'movefrom' || t === 'ppr' || t === 'instrtext' || t === 'footnotereference' || t === 'endnotereference') continue;
+            if (t === 'r') {
+              var rpr = wHijo(c, 'rPr'), rs = wAttr(wHijo(rpr, 'rStyle'), 'val').toLowerCase();
+              var bb = b || wActivo(wHijo(rpr, 'b')) || /strong|fuerte|negrita/.test(rs), ii = i || wActivo(wHijo(rpr, 'i')) || /emphasis|[ée]nfasis|cursiva/.test(rs);
+              for (var x = c.firstChild; x; x = x.nextSibling) {
+                if (x.nodeType !== 1) continue;
+                var tx = local(x);
+                if (tx === 't') segs.push({ s: x.textContent, b: bb, i: ii });
+                else if (tx === 'tab' || tx === 'br' || tx === 'cr') segs.push({ s: ' ', b: bb, i: ii });
+                else if (tx === 'nobreakhyphen') segs.push({ s: '-', b: bb, i: ii });
+              }
+            } else recorrer(c, b, i);  // hyperlink, ins, moveTo, smartTag, fldSimple, sdt…
+          }
+        })(p, false, false);
+        return segs;
+      };
+      var enLineaW = function (p) {
+        var out = '', act = null;
+        segmentos(p).forEach(function (g) {
+          if (act && act.b === g.b && act.i === g.i) act.s += g.s;
+          else { if (act) out += pintar(act); act = { s: g.s, b: g.b, i: g.i }; }
+        });
+        if (act) out += pintar(act);
+        return espacios(out);
+        function pintar(g) { var h = N.escaparHtml(g.s); if (g.i) h = envolver('em', h); if (g.b) h = envolver('strong', h); return h; }
+      };
+      var usados = {};
+      piezas.forEach(function (p) { if (local(p) === 'p') { var n = nivelDe(p); if (n && textoLibre(p)) usados[n] = 1; } });
+      var niveles = mapaNiveles(usados), st = N.estadoLibro(''), nombre = archivo.nombre, orden = 0, lista = null, cita = null;
+      var imagenes = colaImagenes(function (ruta) { return zip.tiene(ruta) ? zip.bytes(ruta) : Promise.reject(new Error('falta')); }, avisos);
+      var src = function () { return nombre + ':' + orden; };
+      var cerrar = function () {
+        if (lista && lista.items.length) st.bloque(lista.t, lista.items, lista.src);
+        if (cita && cita.partes.length) st.bloque('quote', cita.partes.join(' '), cita.src);
+        lista = null; cita = null;
+      };
+      var ultimaFigura = null;
+      piezas.forEach(function (p) {
+        orden++;
+        if (local(p) === 'tbl') {
+          cerrar(); ultimaFigura = null;
+          var filas = todosNS(p, 'tr').map(function (tr) { return hijos(tr).filter(function (c) { return c.nodeType === 1 && local(c) === 'tc'; }).map(function (tc) { return espacios(todosNS(tc, 'p').map(enLineaW).join(' ')); }); }).filter(function (f) { return f.length; });
+          if (filas.length) st.bloque('table', filas, src());
+          return;
+        }
+        var ppr = wHijo(p, 'pPr'), est = estilo(wAttr(wHijo(ppr, 'pStyle'), 'val')), h = enLineaW(p), texto = N.textoDeHtml(h).trim();
+        var blips = todosNS(p, 'blip');
+        if (blips.length && !texto) {
+          cerrar();
+          blips.forEach(function (bl) {
+            var dp = todosNS(p, 'docPr')[0], ley = dp ? espacios(dp.getAttribute('descr') || dp.getAttribute('title') || '') : '';
+            var b = st.bloque('figure', { src: '', caption: N.escaparHtml(ley) || 'Figura' }, src());
+            b.sinLeyenda = !ley;
+            var id = bl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed') || bl.getAttribute('r:embed');
+            imagenes.pedir(b, rels[id] || null);
+            ultimaFigura = b;
+          });
+          return;
+        }
+        if (!texto) return;
+        if (/^(title|t[ií]tulo)$/.test(est.nombre)) { cerrar(); if (!meta.titulo) meta.titulo = texto; ultimaFigura = null; return; }
+        if (/^(subtitle|subt[ií]tulo)$/.test(est.nombre)) { cerrar(); if (!meta.subtitulo) meta.subtitulo = texto; return; }
+        // la leyenda que sigue a una imagen es su pie, no un párrafo aparte
+        if (ultimaFigura && (/caption|descripci[oó]n|ep[ií]grafe|leyenda/.test(est.nombre) || /^(Figura|Fig\.|Figure|Imagen|Tabla)\s/.test(texto))) {
+          if (ultimaFigura.sinLeyenda) { ultimaFigura.html.caption = h; delete ultimaFigura.sinLeyenda; ultimaFigura = null; return; }
+        }
+        if (ultimaFigura) delete ultimaFigura.sinLeyenda;
+        ultimaFigura = null;
+        var nv = nivelDe(p);
+        if (nv) {
+          cerrar();
+          var dest = niveles[nv] || { t: 'h4' };
+          if (dest.sec) st.nueva(texto, dest.sec, src()); else st.bloque(dest.t, h, src());
+          return;
+        }
+        var numPr = wHijo(ppr, 'numPr');
+        if (numPr || est.num) {
+          var numId = wAttr(wHijo(numPr, 'numId'), 'val'), ilvl = wAttr(wHijo(numPr, 'ilvl'), 'val') || '0', fmt = (formatos[numId] || {})[ilvl] || 'bullet';
+          var t = fmt === 'bullet' || fmt === 'none' ? 'ul' : 'ol';
+          if (cita) cerrar();
+          if (lista && lista.t !== t) cerrar();
+          if (!lista) lista = { t: t, items: [], src: src() };
+          lista.items.push(h);
+          return;
+        }
+        if (/quote|cita/.test(est.nombre)) {
+          if (lista) cerrar();
+          if (!cita) cita = { partes: [], src: src() };
+          cita.partes.push(h);
+          return;
+        }
+        cerrar();
+        st.bloque('p', h, src());
+      });
+      cerrar();
+      st.secciones.forEach(function (s) { s.bloques.forEach(function (b) { delete b.sinLeyenda; }); });
+      return imagenes.resolver().then(function () { return { secciones: st.secciones, meta: meta, avisos: avisos }; });
+    });
+  }
+
+  // ------------------------------------------------------------------ texto plano y Markdown
+  // En un .txt, las líneas sueltas del tipo «CAPÍTULO III» o «Chapter 3. Título» se toman como títulos de sección.
+  var TITULO_TXT = /^(cap[ií]tulo|chapter|parte|part|libro|book|pr[oó]logo|prologue|ep[ií]logo|epilogue|introducci[oó]n|introduction)\b[^\n]{0,80}$/i;
+  function txtAMarkdown(texto) {
+    var lineas = String(texto).replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
+    return lineas.map(function (l, i) {
+      var sola = (i === 0 || !lineas[i - 1].trim()) && (i === lineas.length - 1 || !lineas[i + 1].trim());
+      return sola && TITULO_TXT.test(l.trim()) ? '## ' + l.trim() : l;
+    }).join('\n');
+  }
+
+  // ------------------------------------------------------------------ entrada única
+  // archivos: [{ nombre, bytes: Uint8Array }]. opciones: { parsear, inflar, titulo, autor, figs }.
+  // → Promise<{ libro, avisos, origen }>; rechaza con un Error de mensaje legible.
+  function importarLibro(archivos, opciones) {
+    opciones = opciones || {};
+    if (!archivos || !archivos.length) return Promise.reject(new Error('no hay archivos'));
+    archivos = archivos.slice().sort(function (a, b) { return a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0; });
+    // las imágenes que acompañan a un Markdown resuelven sus [FIGURA: archivo | …]
+    var figuras = {};
+    archivos = archivos.filter(function (a) { if (TIPOS_IMAGEN[extension(a.nombre)]) { figuras[a.nombre.split('/').pop()] = a.bytes; return false; } return true; });
+    if (!archivos.length) return Promise.reject(new Error('elige el texto del libro (las imágenes sólo acompañan a un Markdown)'));
+    var tipos = {}, grupo = function (e) { return /^(md|markdown|txt|text)$/.test(e) ? 'md' : /^(html|htm|xhtml)$/.test(e) ? 'html' : e; };
+    archivos.forEach(function (a) { tipos[grupo(extension(a.nombre))] = 1; });
+    var tipo = Object.keys(tipos);
+    if (tipo.length > 1) return Promise.reject(new Error('importa un solo tipo de archivo a la vez (' + tipo.join(', ') + ')'));
+    tipo = tipo[0];
+    if ((tipo === 'epub' || tipo === 'docx' || tipo === 'json') && archivos.length > 1) return Promise.reject(new Error('importa un solo archivo .' + tipo + ' a la vez'));
+    var trabajo;
+    try {
+      if (tipo === 'json') {
+        var libro = JSON.parse(N.decodificarUtf8(archivos[0].bytes).replace(/^﻿/, ''));
+        var problemas = N.validarLibro(libro);
+        if (problemas.length) throw new Error('el libro.json no es válido: ' + problemas.slice(0, 3).join('; ') + (problemas.length > 3 ? '…' : ''));
+        return Promise.resolve({ libro: N.sanearLibro(libro), avisos: [], origen: 'libro.json' });
+      }
+      if (tipo === 'md') {
+        var avisosMd = [], secciones = N.parsearMarkdown(archivos.map(function (a) {
+          var t = N.decodificarUtf8(a.bytes); return { nombre: a.nombre, texto: /\.te?xt$/i.test(a.nombre) ? txtAMarkdown(t) : t };
+        }), '');
+        var cola = colaImagenes(function (r) { return figuras[r] ? Promise.resolve(figuras[r]) : Promise.reject(new Error('falta')); }, avisosMd);
+        secciones.forEach(function (s) { s.bloques.forEach(function (b) { if (b.t === 'figure') cola.pedir(b, b.html.src); }); });
+        trabajo = cola.resolver().then(function () { return { secciones: secciones, meta: {}, avisos: avisosMd }; });
+      } else if (tipo === 'html') trabajo = importarHtml(archivos, opciones);
+      else if (tipo === 'epub') trabajo = importarEpub(archivos[0], opciones);
+      else if (tipo === 'docx') trabajo = importarDocx(archivos[0], opciones);
+      else return Promise.reject(new Error('formato no admitido: .' + (extension(archivos[0].nombre) || '?') + ' (usa Markdown, texto, HTML, EPUB, Word .docx o libro.json)'));
+    } catch (e) { return Promise.reject(e instanceof Error ? e : new Error(String(e))); }
+    return trabajo.then(function (r) {
+      var cuenta = r.secciones.reduce(function (n, s) { return n + s.bloques.length; }, 0);
+      if (!cuenta) throw new Error('no se encontró texto en ' + (archivos.length === 1 ? archivos[0].nombre : 'los archivos'));
+      var libro = N.armarLibro(r.secciones, {
+        titulo: opciones.titulo || r.meta.titulo || '', subtitulo: r.meta.subtitulo || '', autor: opciones.autor || r.meta.autor || '',
+        fuentes: archivos.map(function (a) { return a.nombre; })
+      });
+      return { libro: libro, avisos: r.avisos, origen: tipo };
+    });
+  }
+  return { importarLibro: importarLibro, txtAMarkdown: txtAMarkdown, mapaNiveles: mapaNiveles };
+});
 (function () {
   'use strict';
   var LIBRO = null, SECS = [], SEC_BY_ID = {}, BLOQUE_SEC = {}, ORIG = {};
@@ -548,6 +1406,7 @@ figure img { cursor: zoom-in; }
   var CAPAS_ON = {}, VISTO = {}, LEIDAS = {}, filtroAutor = '', filtroEtiqueta = '';
   var ultimoBorrado = null, lectura = null;
   var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
+  var ESCRIBIENDO = 0;      // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
   var SIN_GUARDAR = {};     // id -> código del último rechazo de una anotación que la base todavía no tiene
   var RESPALDO_MAX = 180 * 1024;  // bytes de cada documento de respaldo ya envuelto, con margen (la base admite 256 KiB)
   var N = window.LANucleo;  // lógica pura (nucleo/*.js), probada con node --test
@@ -572,6 +1431,7 @@ figure img { cursor: zoom-in; }
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var igual = N.igual;
   var lsSet = function (k, v) { try { localStorage.setItem(k, v); return localStorage.getItem(k) === v; } catch (e) { return false; } };
+  var enCurso = function (p) { ESCRIBIENDO++; var fin = function () { ESCRIBIENDO--; }; p.then(fin, fin); return p; };
   var bytesJSON = function (v) { var s = JSON.stringify(v); return window.TextEncoder ? new TextEncoder().encode(s).length : unescape(encodeURIComponent(s)).length; };
 
   // ------------------------------------------------------------ libro
@@ -626,7 +1486,8 @@ figure img { cursor: zoom-in; }
     else if (b.t === 'h4') n = el('h3', { 'class': 'bloque', html: b.html });
     else if (b.t === 'quote') n = el('blockquote', { 'class': 'bloque', html: b.html });
     else if (b.t === 'ul' || b.t === 'ol') { n = el(b.t, { 'class': 'bloque' }); b.html.forEach(function (it) { n.appendChild(el('li', { html: it })); }); }
-    else if (b.t === 'figure') { n = el('figure', { 'class': 'bloque' }, [el('img', { src: b.html.src, alt: '', loading: 'lazy' }), el('figcaption', { html: b.html.caption })]); }
+    // una figura importada sin imagen (ausente o demasiado grande) conserva su leyenda
+    else if (b.t === 'figure') { n = el('figure', { 'class': 'bloque' }, [b.html.src ? el('img', { src: b.html.src, alt: '', loading: 'lazy' }) : el('div', { 'class': 'fig-ausente', text: 'Figura sin imagen' }), el('figcaption', { html: b.html.caption })]); }
     else if (b.t === 'table') {
       var t = el('table'); b.html.forEach(function (fila, i) { var tr = el('tr'); fila.forEach(function (c) { tr.appendChild(el(i ? 'td' : 'th', { html: c })); }); t.appendChild(tr); });
       n = el('div', { 'class': 'bloque tabla' }, [t]);
@@ -695,7 +1556,7 @@ figure img { cursor: zoom-in; }
     // borró o la página pasó a sólo lectura, no hay nada que escribir.
     var a = anots[id]; if (!a) return;
     var rechazo = function (e) { rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
-    col.doc(id).set(a).then(function () {
+    enCurso(col.doc(id).set(a)).then(function () {
       limpiarCampos(id, a);
       // la copia local se suelta sólo si nada se editó después de esta escritura
       if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }
@@ -759,7 +1620,7 @@ figure img { cursor: zoom-in; }
     // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
     // (con su marca de «sin guardar», si la tenía) y la copia local, si la tenía, la sigue teniendo.
     if (col) {
-      col.doc(id).delete().then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
+      enCurso(col.doc(id).delete()).then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
         .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
     }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }
@@ -1721,8 +2582,8 @@ figure img { cursor: zoom-in; }
       actual.push(a); tam += t;
     });
     if (actual.length) partes.push(actual);
-    var colR = db.collection('respaldos'), respaldadas = todas.length - omitidas;
-    var escrituras = partes.map(function (parte, i) { return colR.doc(hoy + '-' + (i + 1)).set({ fecha: hoy, parte: i + 1, partes: partes.length, n: parte.length, anotaciones: JSON.stringify(parte) }); });
+    var colR = db.collection(rutaBase('respaldos')), respaldadas = todas.length - omitidas;
+    var escrituras = partes.map(function (parte, i) { return enCurso(colR.doc(hoy + '-' + (i + 1)).set({ fecha: hoy, parte: i + 1, partes: partes.length, n: parte.length, anotaciones: JSON.stringify(parte) })); });
     Promise.all(escrituras).then(function () { return colR.doc(hoy).set({ fecha: hoy, libro: LIBRO.generado, n: respaldadas, partes: partes.length, omitidas: omitidas }); })
       .catch(function (e) {
         var codigo = (e && e.code) || 'error';
@@ -1732,13 +2593,308 @@ figure img { cursor: zoom-in; }
       });
   }
 
+  // ------------------------------------------------------------ biblioteca: el libro de la página y los importados
+  // Además del libro que viene con la página (libro.json junto a index.html), se pueden importar otros: quedan en la
+  // biblioteca compartida de la página (colección «libros» de la base, troceados para no pasar del tamaño por
+  // documento) o sólo en este navegador (IndexedDB). Las anotaciones de un libro importado van aparte, en
+  // libros/<id>/anotaciones (o en el navegador, si el libro es sólo de este navegador). Cada carga de la página atiende
+  // un libro: abrir otro recuerda la elección y recarga, para que nada de un libro (escrituras en curso, borradores, la
+  // cola de pendientes) se cruce con el otro.
+  var ABIERTO_KEY = 'lector-anotaciones:libro-abierto';  // '' = el de la página; 'base:<id>' o 'local:<id>'
+  var FUENTE = { tipo: 'pagina', id: null };
+  var PARTE_MAX = 180 * 1024;
+  var usoDb = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
+  var usoUser = window.claude && window.claude.use ? window.claude.use('user') : Promise.resolve(null);
+  var libroPagina = null;  // promesa con el libro.json de la página (o null si no trae)
+
+  function sinLibro() { var e = new Error('esta página no trae libro.json'); e.sinLibro = true; return e; }
+  function leerLibroPagina() {
+    if (!libroPagina) libroPagina = fetch('libro.json').then(function (r) { if (r.status === 404) throw sinLibro(); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+    return libroPagina;
+  }
+  function claveAbierta(tipo, id) { return tipo === 'pagina' ? '' : tipo + ':' + id; }
+  // El libro que esta carga va a mostrar: el elegido la última vez, o el de la página.
+  function obtenerLibro() {
+    var m = /^(base|local):(.+)$/.exec(lsGet(ABIERTO_KEY) || '');
+    var dePagina = function (aviso) { return leerLibroPagina().then(function (L) { return { libro: L, fuente: { tipo: 'pagina', id: null }, aviso: aviso }; }); };
+    if (!m) return dePagina();
+    var leer = m[1] === 'base' ? usoDb.then(function (d) { if (!d) throw new Error('sin base compartida en esta vista'); return compartida.leer(d, m[2]); }) : enNavegador.leer(m[2]);
+    return leer.then(function (L) {
+      if (!L) throw new Error('ya no está en la biblioteca');
+      L.id = m[2]; L.claves_anteriores = [];  // las claves viejas de localStorage son del libro de la página
+      N.sanearLibro(L);
+      return { libro: L, fuente: { tipo: m[1], id: m[2] } };
+    }).catch(function (e) {
+      lsSet(ABIERTO_KEY, '');
+      return dePagina('No se pudo abrir el libro elegido (' + ((e && e.message) || e) + '); se abrió el de la página.');
+    });
+  }
+  // Colecciones del libro abierto en la base.
+  function rutaBase(nombre) { return FUENTE.tipo === 'base' ? 'libros/' + FUENTE.id + '/' + nombre : nombre; }
+
+  // --- almacenamiento en este navegador (IndexedDB)
+  function almacen(modo, fn) {
+    return new Promise(function (res, rej) {
+      if (!window.indexedDB) { rej(new Error('este navegador no guarda libros (sin IndexedDB)')); return; }
+      var pet;
+      try { pet = indexedDB.open('lector-anotaciones', 1); } catch (e) { rej(e); return; }
+      pet.onupgradeneeded = function () { pet.result.createObjectStore('libros', { keyPath: 'id' }); };
+      pet.onerror = function () { rej(pet.error || new Error('el navegador no permite guardar libros')); };
+      pet.onsuccess = function () {
+        var bd = pet.result, tx, r;
+        try { tx = bd.transaction('libros', modo); r = fn(tx.objectStore('libros')); } catch (e) { bd.close(); rej(e); return; }
+        tx.oncomplete = function () { bd.close(); res(r ? r.result : undefined); };
+        tx.onerror = tx.onabort = function () { bd.close(); rej(tx.error || new Error('no se pudo guardar en este navegador')); };
+      };
+    });
+  }
+  var enNavegador = {
+    listar: function () { return almacen('readonly', function (st) { return st.getAll(); }).then(function (xs) { return (xs || []).map(function (x) { return x.meta; }); }); },
+    leer: function (id) { return almacen('readonly', function (st) { return st.get(id); }).then(function (x) { return x ? x.libro : null; }); },
+    guardar: function (meta, libro) { return almacen('readwrite', function (st) { return st.put({ id: meta.id, meta: meta, libro: libro }); }); },
+    borrar: function (id) { return almacen('readwrite', function (st) { return st.delete(id); }); }
+  };
+
+  // --- biblioteca compartida (la base de la página)
+  function trocear(texto) {
+    var out = [], i = 0;
+    while (i < texto.length) {
+      var trozo = texto.slice(i, i + 60000);
+      while (trozo.length > 1 && bytesJSON({ n: 99999, datos: trozo }) > PARTE_MAX) trozo = trozo.slice(0, Math.floor(trozo.length * 0.7));
+      var c = trozo.charCodeAt(trozo.length - 1);
+      if (trozo.length > 1 && c >= 0xd800 && c <= 0xdbff) trozo = trozo.slice(0, -1);  // no partir un par sustituto
+      out.push(trozo); i += trozo.length;
+    }
+    return out;
+  }
+  // Un rechazo pasajero se reintenta una vez, como en las anotaciones.
+  function conReintento(fn) { return fn().catch(function (e) { if (!esTransitorio(e)) throw e; return new Promise(function (r) { setTimeout(r, 200 + Math.random() * 400); }).then(fn); }); }
+  var compartida = {
+    listar: function (d) { return d.collection('libros').get().then(function (s) { return s.docs.map(function (x) { return x.data(); }).filter(function (m) { return m && m.id && m.partes; }); }); },
+    leer: function (d, id) {
+      return d.collection('libros').doc(id).get().then(function (s) {
+        if (!s.exists) return null;
+        var m = s.data(), ps = [];
+        for (var i = 1; i <= m.partes; i++) ps.push(d.collection('libros/' + id + '/partes').doc(String(i)).get());
+        return Promise.all(ps).then(function (xs) {
+          if (xs.some(function (x) { return !x.exists; })) throw new Error('faltan partes del libro en la base');
+          return JSON.parse(xs.map(function (x) { return x.data().datos; }).join(''));
+        });
+      });
+    },
+    // Primero las partes y al final la ficha que las cuenta: un libro a medio subir no aparece en la lista.
+    guardar: function (d, meta, libro, avance) {
+      var partes = trocear(JSON.stringify(libro)), col = d.collection('libros/' + meta.id + '/partes'), previas = 0;
+      return d.collection('libros').doc(meta.id).get().then(function (s) { previas = s.exists ? (s.data().partes || 0) : 0; })
+        .then(function () {
+          return partes.reduce(function (p, datos, i) {
+            return p.then(function () { avance(i + 1, partes.length); return conReintento(function () { return col.doc(String(i + 1)).set({ n: i + 1, datos: datos }); }); });
+          }, Promise.resolve());
+        })
+        .then(function () { meta.partes = partes.length; return conReintento(function () { return d.collection('libros').doc(meta.id).set(meta); }); })
+        .then(function () { var b = []; for (var i = partes.length + 1; i <= previas; i++) b.push(col.doc(String(i)).delete().catch(function () {})); return Promise.all(b); });
+    },
+    // Se borran el libro y sus partes; sus anotaciones quedan en la base y vuelven si se importa de nuevo.
+    borrar: function (d, id) {
+      return d.collection('libros').doc(id).get().then(function (s) {
+        var n = s.exists ? (s.data().partes || 0) : 0;
+        return d.collection('libros').doc(id).delete().then(function () { var b = []; for (var i = 1; i <= n; i++) b.push(d.collection('libros/' + id + '/partes').doc(String(i)).delete().catch(function () {})); return Promise.all(b); });
+      });
+    }
+  };
+
+  // --- abrir otro libro: recordar la elección y recargar cuando no quede nada por escribir
+  function abrirLibro(tipo, id) {
+    lsSet(ABIERTO_KEY, claveAbierta(tipo, id));
+    estadoBib('Abriendo…');
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();  // guarda la nota en edición
+    var inicio = Date.now();
+    (function esperar() {
+      if (ESCRIBIENDO > 0 && Date.now() - inicio < 4000) { setTimeout(esperar, 100); return; }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      location.reload();
+    })();
+  }
+
+  // --- la ventana de la biblioteca
+  var LISTA = [];      // [{ tipo, id, titulo, autor, detalle }]
+  var PREVIA = null;   // { libro, avisos, origen } del archivo leído, a la espera de confirmar
+  var BASE_BIB = null, PUEDE_COMPARTIR = false;
+  function estadoBib(t, aviso) { var e = $('#bib-estado'); e.textContent = t || ''; e.className = 'bib-estado' + (aviso ? ' aviso' : ''); }
+  function abrirBiblioteca() {
+    abrirDialogo($('#biblioteca'));
+    renderBiblioteca();
+  }
+  function cargarLista() {
+    var pagina = leerLibroPagina().then(function (L) { return [{ tipo: 'pagina', id: L.id || 'libro', titulo: L.titulo || 'Libro', autor: L.autor || '', detalle: 'libro de esta página' }]; }, function () { return []; });
+    var base = Promise.all([usoDb, usoUser]).then(function (r) {
+      BASE_BIB = r[0];
+      if (!BASE_BIB) { PUEDE_COMPARTIR = false; return []; }
+      var permiso = r[1] && r[1].can ? r[1].can('data.write').catch(function () { return null; }) : Promise.resolve(null);
+      return permiso.then(function (p) { PUEDE_COMPARTIR = p !== false && !SOLO_LECTURA; return compartida.listar(BASE_BIB); })
+        .then(function (ms) { return ms.map(function (m) { return { tipo: 'base', id: m.id, titulo: m.titulo, autor: m.autor || '', detalle: 'compartido' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
+    });
+    var nav = enNavegador.listar().then(function (ms) { return ms.map(function (m) { return { tipo: 'local', id: m.id, titulo: m.titulo, autor: m.autor || '', detalle: 'sólo en este navegador' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
+    return Promise.all([pagina, base, nav]).then(function (r) { LISTA = r[0].concat(r[1], r[2]); return LISTA; });
+  }
+  function renderBiblioteca() {
+    var ul = $('#bib-lista');
+    return cargarLista().then(function () {
+      ul.innerHTML = '';
+      $('#bib-intro').textContent = BASE_BIB ? (PUEDE_COMPARTIR ? 'Los libros compartidos los ve todo el que abre esta página; los de este navegador, sólo tú.' : 'Puedes leer los libros compartidos; los que importes quedarán sólo en este navegador.') : 'Sin base compartida: los libros que importes quedan sólo en este navegador.';
+      if (!LISTA.length) ul.appendChild(el('li', { 'class': 'vacio', text: 'Todavía no hay libros. Importa uno abajo.' }));
+      LISTA.forEach(function (x) {
+        var abierto = x.tipo === FUENTE.tipo && (x.tipo === 'pagina' || x.id === FUENTE.id) && !!LIBRO;
+        var li = el('li', { 'class': 'bib-libro' + (abierto ? ' abierto' : '') }, [
+          el('div', { 'class': 'datos' }, [el('div', { 'class': 't', text: x.titulo }), el('div', { 'class': 'd', text: [x.autor, x.detalle, abierto ? 'abierto' : ''].filter(Boolean).join(' · ') })])
+        ]);
+        var acc = el('div', { 'class': 'acc' });
+        if (!abierto) acc.appendChild(el('button', { 'class': 'btn peq primario', type: 'button', text: 'Abrir', onclick: function () { abrirLibro(x.tipo, x.id); } }));
+        acc.appendChild(el('button', { 'class': 'btn peq', type: 'button', text: 'Markdown', title: 'Descargar el libro como Markdown (para la línea de órdenes)', onclick: function () { exportar(x, 'md'); } }));
+        acc.appendChild(el('button', { 'class': 'btn peq', type: 'button', text: 'libro.json', title: 'Descargar el libro.json', onclick: function () { exportar(x, 'json'); } }));
+        if (x.tipo !== 'pagina' && (x.tipo === 'local' || PUEDE_COMPARTIR)) {
+          var del = el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar' });
+          del.addEventListener('click', function () {
+            var si = el('button', { 'class': 'btn peq', type: 'button', text: 'Sí, borrar', onclick: function () { borrarLibro(x); } });
+            var no = el('button', { 'class': 'btn peq', type: 'button', text: 'No', onclick: function () { acc.replaceChild(del, c); del.focus(); } });
+            var c = el('span', { 'class': 'confirmar' }, [el('span', { text: x.tipo === 'base' ? '¿Borrar? (sus anotaciones quedan en la base)' : '¿Borrar? (y sus anotaciones de este navegador)' }), si, no]);
+            acc.replaceChild(c, del); si.focus();
+          });
+          acc.appendChild(del);
+        }
+        li.appendChild(acc);
+        ul.appendChild(li);
+      });
+    });
+  }
+  function libroDe(x) {
+    if (x.tipo === FUENTE.tipo && (x.tipo === 'pagina' || x.id === FUENTE.id) && LIBRO) return Promise.resolve(LIBRO);
+    if (x.tipo === 'pagina') return leerLibroPagina();
+    if (x.tipo === 'base') return compartida.leer(BASE_BIB, x.id);
+    return enNavegador.leer(x.id);
+  }
+  function descargar(nombre, texto) {
+    var uso = window.claude && window.claude.use ? window.claude.use('downloads') : Promise.resolve(null);
+    return uso.then(function (dl) {
+      if (dl) return dl.save({ filename: nombre, data: texto }).then(function () { estadoBib('Listo: ' + nombre); }, function (e) { if (!e || e.code !== 'declined') estadoBib('No se pudo descargar (' + ((e && e.code) || 'error') + ')', true); });
+      var url = URL.createObjectURL(new Blob([texto], { type: 'application/octet-stream' })), a = el('a', { href: url, download: nombre });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+      estadoBib('Descargado: ' + nombre);
+    });
+  }
+  function exportar(x, formato) {
+    estadoBib('Preparando…');
+    libroDe(x).then(function (L) {
+      if (!L) throw new Error('el libro ya no está');
+      return descargar(N.slug(x.titulo || x.id, 60) + (formato === 'md' ? '.md' : '.json'), formato === 'md' ? N.libroAMarkdown(L) : JSON.stringify(L));
+    }).catch(function (e) { estadoBib('No se pudo exportar: ' + ((e && e.message) || e), true); });
+  }
+  function borrarLibro(x) {
+    estadoBib('Borrando…');
+    var hecho = x.tipo === 'base' ? compartida.borrar(BASE_BIB, x.id) : enNavegador.borrar(x.id).then(function () {
+      // las anotaciones de un libro sólo de este navegador viven en su clave local
+      ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) { try { localStorage.removeItem('lector-anotaciones:' + x.id + s); } catch (e) {} });
+    });
+    hecho.then(function () {
+      estadoBib('Libro borrado.');
+      if (x.tipo === FUENTE.tipo && x.id === FUENTE.id) abrirLibro('pagina', null);
+      else renderBiblioteca();
+    }, function (e) { estadoBib('No se pudo borrar (' + ((e && (e.code || e.message)) || 'error') + ')', true); });
+  }
+
+  // --- importar
+  function leerArchivos(files) {
+    return Promise.all(Array.prototype.map.call(files, function (f) { return f.arrayBuffer().then(function (b) { return { nombre: f.name, bytes: new Uint8Array(b) }; }); }));
+  }
+  function prepararImportacion(files) {
+    if (!files || !files.length) return;
+    PREVIA = null; $('#bib-previa').hidden = true;
+    estadoBib('Leyendo ' + (files.length === 1 ? files[0].name : files.length + ' archivos') + '…');
+    leerArchivos(files).then(function (archivos) {
+      return N.importarLibro(archivos, { parsear: function (texto, tipo) { return new DOMParser().parseFromString(texto, tipo); } });
+    }).then(function (r) { PREVIA = r; estadoBib(''); mostrarPrevia(); }, function (e) { estadoBib('No se pudo leer: ' + ((e && e.message) || e), true); });
+  }
+  function idLibre(base, usados) { var id = base, n = 2; while (usados[id]) { id = base + '-' + n; n++; } return id; }
+  // Qué id tendrá el libro y si choca con otro: el de la página no se puede reemplazar; uno importado, sí.
+  function destinoImportacion() {
+    var titulo = $('#bib-titulo').value.trim() || PREVIA.libro.titulo, dondeEl = $('input[name="bib-donde"]:checked'), donde = dondeEl ? dondeEl.value : 'local';
+    // Los ids son únicos en toda la biblioteca (nombran también la copia local de las anotaciones): sólo se reemplaza un
+    // libro del mismo lugar; si el título coincide con uno de otro lugar o con el de la página, el nuevo lleva sufijo.
+    var base = N.slug(titulo), mismos = {}, todos = {}, dePagina = LISTA.filter(function (x) { return x.tipo === 'pagina'; })[0];
+    LISTA.forEach(function (x) { todos[x.id] = 1; if (x.tipo === donde) mismos[x.id] = 1; });
+    var choca = !!mismos[base] && !(dePagina && dePagina.id === base);
+    var reemplazar = choca && (($('input[name="bib-choque"]:checked') || {}).value || 'reemplazar') === 'reemplazar';
+    return { titulo: titulo, donde: donde, choca: choca, id: reemplazar ? base : idLibre(base, todos) };
+  }
+  function actualizarPrevia() {
+    if (!PREVIA) return;
+    var d = destinoImportacion();
+    $('#bib-choque').hidden = !d.choca;
+    $('#bib-importar').textContent = d.choca && d.id === N.slug(d.titulo) ? 'Reemplazar y abrir' : 'Importar y abrir';
+  }
+  function mostrarPrevia() {
+    var L = PREVIA.libro, nb = L.secciones.reduce(function (n, s) { return n + s.bloques.length; }, 0);
+    $('#bib-resumen').textContent = '«' + L.titulo + '»: ' + L.secciones.length + (L.secciones.length === 1 ? ' sección, ' : ' secciones, ') + nb + ' bloques (' + PREVIA.origen + ').';
+    var av = $('#bib-avisos'); av.innerHTML = '';
+    (PREVIA.avisos || []).forEach(function (a) { av.appendChild(el('li', { text: a })); });
+    $('#bib-titulo').value = L.titulo || ''; $('#bib-autor').value = L.autor || '';
+    var base = $('input[name="bib-donde"][value="base"]');
+    base.disabled = !PUEDE_COMPARTIR; base.closest('label').classList.toggle('no', !PUEDE_COMPARTIR);
+    (PUEDE_COMPARTIR ? base : $('input[name="bib-donde"][value="local"]')).checked = true;
+    $('input[name="bib-choque"][value="reemplazar"]').checked = true;
+    $('#bib-previa').hidden = false;
+    actualizarPrevia();
+    $('#bib-titulo').focus();
+  }
+  function confirmarImportacion(ev) {
+    ev.preventDefault();
+    if (!PREVIA) return;
+    var d = destinoImportacion(), L = PREVIA.libro;
+    L.id = d.id; L.titulo = d.titulo; L.autor = $('#bib-autor').value.trim(); L.claves_anteriores = [];
+    var nb = L.secciones.reduce(function (n, s) { return n + s.bloques.length; }, 0);
+    var meta = { id: d.id, titulo: L.titulo, autor: L.autor, subtitulo: L.subtitulo || '', generado: L.generado || null, importado: ahora(), origen: PREVIA.origen, archivos: L.fuentes || [], secciones: L.secciones.length, bloques: nb, por: ME || null };
+    $('#bib-importar').disabled = true;
+    estadoBib('Guardando…');
+    var guardado = d.donde === 'base' ? compartida.guardar(BASE_BIB, meta, L, function (i, n) { if (n > 1) estadoBib('Guardando en la biblioteca compartida… ' + i + ' de ' + n); }) : enNavegador.guardar(meta, L);
+    guardado.then(function () { PREVIA = null; abrirLibro(d.donde, d.id); }, function (e) {
+      $('#bib-importar').disabled = false;
+      estadoBib('No se pudo guardar (' + ((e && (e.code || e.message)) || 'error') + ')' + (d.donde === 'base' ? '; prueba a guardarlo sólo en este navegador.' : '.'), true);
+    });
+  }
+  $('#b-biblioteca').addEventListener('click', abrirBiblioteca);
+  $('#biblioteca').addEventListener('click', function (ev) { if (ev.target === this || ev.target.closest('.dialogo-cab .cerrar')) cerrarDialogo(this); });
+  $('#bib-elegir').addEventListener('click', function () { $('#bib-archivo').click(); });
+  $('#bib-archivo').addEventListener('change', function () { prepararImportacion(this.files); this.value = ''; });
+  $('#bib-previa').addEventListener('submit', confirmarImportacion);
+  $('#bib-cancelar').addEventListener('click', function () { PREVIA = null; $('#bib-previa').hidden = true; estadoBib(''); $('#bib-elegir').focus(); });
+  $('#bib-titulo').addEventListener('input', actualizarPrevia);
+  $$('input[name="bib-donde"], input[name="bib-choque"]').forEach(function (r) { r.addEventListener('change', actualizarPrevia); });
+  (function () {
+    var zona = $('#bib-zona');
+    ['dragenter', 'dragover'].forEach(function (t) { zona.addEventListener(t, function (ev) { ev.preventDefault(); zona.classList.add('arrastrando'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { zona.addEventListener(t, function (ev) { ev.preventDefault(); zona.classList.remove('arrastrando'); }); });
+    zona.addEventListener('drop', function (ev) { prepararImportacion(ev.dataTransfer && ev.dataTransfer.files); });
+  })();
+  // Sin libro que mostrar (la página no trae libro.json): se invita a importar uno.
+  function mostrarSinLibro(motivo) {
+    var lect = $('#lectura'); lect.innerHTML = '';
+    var v = el('div', { 'class': 'vacio' }, [el('div', { text: motivo || 'Esta página todavía no tiene un libro. Importa uno (Markdown, texto, HTML, EPUB o Word) desde la biblioteca.' })]);
+    v.appendChild(el('button', { 'class': 'btn primario', type: 'button', text: 'Abrir la biblioteca', onclick: abrirBiblioteca }));
+    lect.appendChild(v);
+    $('#sub').textContent = 'sin libro';
+    estado('Sin libro abierto', true);
+    abrirBiblioteca();
+  }
   // ------------------------------------------------------------ arranque
   function arrancar() {
     // Primero el libro; la base (o el respaldo local) se conecta cuando el libro ya está en pantalla,
     // porque la clave del respaldo y el pintado de los destacados dependen de él.
-    var libroListo = fetch('libro.json').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (L) {
-      if (!L || !L.secciones || !L.secciones.length) throw new Error('libro.json sin secciones');
-      LIBRO = L; SECS = L.secciones;
+    // El libro de la página o el que se eligió en la biblioteca (ver obtenerLibro).
+    var libroListo = obtenerLibro().then(function (r) {
+      var L = r.libro;
+      if (!L || !L.secciones || !L.secciones.length) throw new Error('el libro no tiene secciones');
+      FUENTE = r.fuente; LIBRO = L; SECS = L.secciones;
       LOCAL_KEY = 'lector-anotaciones:' + (L.id || 'libro');
       document.title = 'Lector · ' + L.titulo;
       VISTO = lsJSON(LOCAL_KEY + ':visto'); LEIDAS = lsJSON(LOCAL_KEY + ':leidas'); CAPAS_ON = lsJSON(LOCAL_KEY + ':capas');
@@ -1748,16 +2904,15 @@ figure img { cursor: zoom-in; }
       var h = (location.hash || '').replace('#', ''), ultima = lsGet(LOCAL_KEY + ':ultima');
       irA(SEC_BY_ID[h] ? h : (SEC_BY_ID[ultima] ? ultima : (SEC_BY_ID[L.inicio] ? L.inicio : SECS[0].id)));
       pintarTodo(); renderPanel(); renderCuentas();
-      estado('Conectando con la base de anotaciones…');
+      if (r.aviso) estado(r.aviso, true); else estado('Conectando con la base de anotaciones…');
     });
     libroListo.catch(function (e) {
-      $('#lectura').innerHTML = '<div class="vacio">No se pudo cargar libro.json: ' + String(e && e.message || e) + '</div>';
-      estado('Sin libro', true);
+      if (e && e.sinLibro) { mostrarSinLibro(); return; }
+      mostrarSinLibro('No se pudo cargar el libro (' + String((e && e.message) || e) + '). Puedes abrir o importar otro desde la biblioteca.');
     });
-    var use = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
-    var useUser = window.claude && window.claude.use ? window.claude.use('user') : Promise.resolve(null);
-    Promise.all([libroListo, use, useUser]).then(function (r) {
-      var d = r[1];
+    Promise.all([libroListo, usoDb, usoUser]).then(function (r) {
+      // un libro guardado sólo en este navegador guarda también aquí sus anotaciones
+      var d = FUENTE.tipo === 'local' ? null : r[1];
       USER = r[2] || null;
       var listoUsuario = USER ? Promise.all([USER.id(), USER.can('data.write')]).then(function (u) { ME = u[0] || null; if (u[1] === false) activarSoloLectura(); }).catch(function () {}) : Promise.resolve();
       listoUsuario.then(function () { renderPanel(); });
@@ -1802,13 +2957,13 @@ figure img { cursor: zoom-in; }
       }
       if (!d) {
         modo = 'local'; var mig = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
-        var aviso = 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
+        var aviso = FUENTE.tipo === 'local' ? 'Libro guardado sólo en este navegador: sus anotaciones también se guardan aquí. Usa «Copiar todo» para enviarlas.' : 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
         if (mig.migradas && mig.guardadas) aviso = mig.migradas + ' anotaciones recuperadas de la versión anterior de la página. ' + aviso;
         if (mig.migradas && !mig.guardadas) aviso = 'No se pudieron guardar ' + mig.migradas + ' anotaciones recuperadas de la versión anterior (almacenamiento lleno o bloqueado); se conservan en la clave anterior. Copia tus anotaciones con el botón.';
         estado(aviso, true);
         return;
       }
-      db = d; col = db.collection('anotaciones'); modo = 'db';
+      db = d; col = db.collection(rutaBase('anotaciones')); modo = 'db';
       var primeraFoto = true;
       col.onSnapshot(function (snap) {
         var cambio = false;

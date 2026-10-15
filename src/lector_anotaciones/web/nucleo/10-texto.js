@@ -1,9 +1,8 @@
 // Núcleo · texto: normalización, identificadores y comparación de objetos. Sin DOM.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Minúsculas y sin diacríticos: la forma con que se busca en el libro y en las notas.
   function normalizar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }

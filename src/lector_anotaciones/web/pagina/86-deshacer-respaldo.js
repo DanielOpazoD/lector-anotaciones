@@ -38,8 +38,8 @@
       actual.push(a); tam += t;
     });
     if (actual.length) partes.push(actual);
-    var colR = db.collection('respaldos'), respaldadas = todas.length - omitidas;
-    var escrituras = partes.map(function (parte, i) { return colR.doc(hoy + '-' + (i + 1)).set({ fecha: hoy, parte: i + 1, partes: partes.length, n: parte.length, anotaciones: JSON.stringify(parte) }); });
+    var colR = db.collection(rutaBase('respaldos')), respaldadas = todas.length - omitidas;
+    var escrituras = partes.map(function (parte, i) { return enCurso(colR.doc(hoy + '-' + (i + 1)).set({ fecha: hoy, parte: i + 1, partes: partes.length, n: parte.length, anotaciones: JSON.stringify(parte) })); });
     Promise.all(escrituras).then(function () { return colR.doc(hoy).set({ fecha: hoy, libro: LIBRO.generado, n: respaldadas, partes: partes.length, omitidas: omitidas }); })
       .catch(function (e) {
         var codigo = (e && e.code) || 'error';

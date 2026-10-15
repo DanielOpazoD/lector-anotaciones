@@ -1,9 +1,8 @@
 // Núcleo · borradores que la base todavía no tiene: qué campos cambió el lector y cómo se funden. Sin DOM.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Lo que el lector edita en la página; el resto (respuesta, cierre, commit…) lo escribe quien edita las fuentes.
   var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado'];

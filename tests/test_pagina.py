@@ -51,7 +51,8 @@ def test_los_fragmentos_se_concatenan_por_orden_de_nombre(tmp_path: Path):
     (web / "pagina" / "99-ultimo.js").write_text("  // marca-ultimo\n", encoding="utf-8")
     (web / "pagina" / "01-primero.js").write_text("  // marca-primero\n", encoding="utf-8")
     html = empaquetar(web)
-    assert html.index("marca-primero") < html.index("// ---") < html.index("marca-ultimo")
+    assert html.index("var LIBRO = null") < html.index("marca-primero") < html.index("function renderLibro")
+    assert html.index("function arrancar") < html.index("marca-ultimo")
 
 
 def test_orden_pagina_escribe_y_comprueba(tmp_path: Path, capsys):

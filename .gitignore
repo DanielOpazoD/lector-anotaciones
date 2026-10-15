@@ -12,6 +12,7 @@ venv/
 # Node (pruebas de la página)
 node_modules/
 package-lock.json
+tests/web/.tmp-*/
 
 # Salidas de construcción
 ejemplo/salida/

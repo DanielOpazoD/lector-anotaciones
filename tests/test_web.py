@@ -17,7 +17,9 @@ def test_la_pagina_es_un_documento_completo_y_autocontenido(web_index: Path):
 def test_contratos_con_el_resto_del_sistema(web_index: Path):
     html = web_index.read_text(encoding="utf-8")
     assert "fetch('libro.json')" in html, "lee el libro generado por `construir`"
-    assert "collection('anotaciones')" in html, "la colección que lee `exportar` y Claude"
+    # el libro de la página guarda en «anotaciones» (lo que lee `exportar` y Claude); uno importado, en libros/<id>/…
+    assert "collection(rutaBase('anotaciones'))" in html, "la colección que lee `exportar` y Claude"
+    assert "FUENTE.tipo === 'base' ? 'libros/' + FUENTE.id + '/' + nombre : nombre" in html
     assert "window.claude.use('db')" in html
     assert "'lector-anotaciones:' + (L.id" in html, "el respaldo local se separa por libro"
     for color in ("revisar", "cortar", "duda", "conservar"):

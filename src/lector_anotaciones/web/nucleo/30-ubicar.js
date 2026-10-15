@@ -5,10 +5,9 @@
 // guardado; si no, se busca (primero en el bloque, luego en la sección, luego en el libro, exigiendo contexto
 // fuera del bloque) y, si no aparece, se declara perdido. Nada de esto modifica la anotación guardada.
 (function (raiz, crear) {
-  var m = crear(raiz);
-  if (typeof module === 'object' && module.exports) module.exports = m;
-  else { raiz.LANucleo = raiz.LANucleo || {}; Object.keys(m).forEach(function (k) { raiz.LANucleo[k] = m[k]; }); }
-})(typeof self !== 'undefined' ? self : this, function () {
+  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
+  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Índice de la cita en `txt`, desambiguado con el contexto: { i, puntos } (puntos de 0 a 2) o null.
   function buscarCita(txt, a) {

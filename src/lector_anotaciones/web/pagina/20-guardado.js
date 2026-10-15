@@ -34,7 +34,7 @@
     // borró o la página pasó a sólo lectura, no hay nada que escribir.
     var a = anots[id]; if (!a) return;
     var rechazo = function (e) { rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
-    col.doc(id).set(a).then(function () {
+    enCurso(col.doc(id).set(a)).then(function () {
       limpiarCampos(id, a);
       // la copia local se suelta sólo si nada se editó después de esta escritura
       if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }
@@ -98,7 +98,7 @@
     // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
     // (con su marca de «sin guardar», si la tenía) y la copia local, si la tenía, la sigue teniendo.
     if (col) {
-      col.doc(id).delete().then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
+      enCurso(col.doc(id).delete()).then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
         .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
     }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }

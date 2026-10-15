@@ -1,10 +1,11 @@
 {
   "name": "lector-anotaciones-web",
   "private": true,
-  "description": "Prueba de humo de la página del lector (Playwright). El paquete Python está en pyproject.toml.",
+  "description": "Pruebas de la página del lector: núcleo (node --test) y navegador (Playwright). El paquete Python está en pyproject.toml.",
   "type": "module",
   "scripts": {
-    "test:web": "node tests/web/smoke.mjs"
+    "test:js": "node --test 'tests/js/**/*.test.js'",
+    "test:web": "node tests/web/smoke.mjs && node tests/web/biblioteca.mjs"
   },
   "devDependencies": {
     "playwright": "1.56.1"

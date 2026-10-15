@@ -2,9 +2,11 @@
   function arrancar() {
     // Primero el libro; la base (o el respaldo local) se conecta cuando el libro ya está en pantalla,
     // porque la clave del respaldo y el pintado de los destacados dependen de él.
-    var libroListo = fetch('libro.json').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (L) {
-      if (!L || !L.secciones || !L.secciones.length) throw new Error('libro.json sin secciones');
-      LIBRO = L; SECS = L.secciones;
+    // El libro de la página o el que se eligió en la biblioteca (ver obtenerLibro).
+    var libroListo = obtenerLibro().then(function (r) {
+      var L = r.libro;
+      if (!L || !L.secciones || !L.secciones.length) throw new Error('el libro no tiene secciones');
+      FUENTE = r.fuente; LIBRO = L; SECS = L.secciones;
       LOCAL_KEY = 'lector-anotaciones:' + (L.id || 'libro');
       document.title = 'Lector · ' + L.titulo;
       VISTO = lsJSON(LOCAL_KEY + ':visto'); LEIDAS = lsJSON(LOCAL_KEY + ':leidas'); CAPAS_ON = lsJSON(LOCAL_KEY + ':capas');
@@ -14,16 +16,15 @@
       var h = (location.hash || '').replace('#', ''), ultima = lsGet(LOCAL_KEY + ':ultima');
       irA(SEC_BY_ID[h] ? h : (SEC_BY_ID[ultima] ? ultima : (SEC_BY_ID[L.inicio] ? L.inicio : SECS[0].id)));
       pintarTodo(); renderPanel(); renderCuentas();
-      estado('Conectando con la base de anotaciones…');
+      if (r.aviso) estado(r.aviso, true); else estado('Conectando con la base de anotaciones…');
     });
     libroListo.catch(function (e) {
-      $('#lectura').innerHTML = '<div class="vacio">No se pudo cargar libro.json: ' + String(e && e.message || e) + '</div>';
-      estado('Sin libro', true);
+      if (e && e.sinLibro) { mostrarSinLibro(); return; }
+      mostrarSinLibro('No se pudo cargar el libro (' + String((e && e.message) || e) + '). Puedes abrir o importar otro desde la biblioteca.');
     });
-    var use = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
-    var useUser = window.claude && window.claude.use ? window.claude.use('user') : Promise.resolve(null);
-    Promise.all([libroListo, use, useUser]).then(function (r) {
-      var d = r[1];
+    Promise.all([libroListo, usoDb, usoUser]).then(function (r) {
+      // un libro guardado sólo en este navegador guarda también aquí sus anotaciones
+      var d = FUENTE.tipo === 'local' ? null : r[1];
       USER = r[2] || null;
       var listoUsuario = USER ? Promise.all([USER.id(), USER.can('data.write')]).then(function (u) { ME = u[0] || null; if (u[1] === false) activarSoloLectura(); }).catch(function () {}) : Promise.resolve();
       listoUsuario.then(function () { renderPanel(); });
@@ -68,13 +69,13 @@
       }
       if (!d) {
         modo = 'local'; var mig = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
-        var aviso = 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
+        var aviso = FUENTE.tipo === 'local' ? 'Libro guardado sólo en este navegador: sus anotaciones también se guardan aquí. Usa «Copiar todo» para enviarlas.' : 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
         if (mig.migradas && mig.guardadas) aviso = mig.migradas + ' anotaciones recuperadas de la versión anterior de la página. ' + aviso;
         if (mig.migradas && !mig.guardadas) aviso = 'No se pudieron guardar ' + mig.migradas + ' anotaciones recuperadas de la versión anterior (almacenamiento lleno o bloqueado); se conservan en la clave anterior. Copia tus anotaciones con el botón.';
         estado(aviso, true);
         return;
       }
-      db = d; col = db.collection('anotaciones'); modo = 'db';
+      db = d; col = db.collection(rutaBase('anotaciones')); modo = 'db';
       var primeraFoto = true;
       col.onSnapshot(function (snap) {
         var cambio = false;

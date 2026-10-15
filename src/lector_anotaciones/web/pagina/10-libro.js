@@ -50,7 +50,8 @@
     else if (b.t === 'h4') n = el('h3', { 'class': 'bloque', html: b.html });
     else if (b.t === 'quote') n = el('blockquote', { 'class': 'bloque', html: b.html });
     else if (b.t === 'ul' || b.t === 'ol') { n = el(b.t, { 'class': 'bloque' }); b.html.forEach(function (it) { n.appendChild(el('li', { html: it })); }); }
-    else if (b.t === 'figure') { n = el('figure', { 'class': 'bloque' }, [el('img', { src: b.html.src, alt: '', loading: 'lazy' }), el('figcaption', { html: b.html.caption })]); }
+    // una figura importada sin imagen (ausente o demasiado grande) conserva su leyenda
+    else if (b.t === 'figure') { n = el('figure', { 'class': 'bloque' }, [b.html.src ? el('img', { src: b.html.src, alt: '', loading: 'lazy' }) : el('div', { 'class': 'fig-ausente', text: 'Figura sin imagen' }), el('figcaption', { html: b.html.caption })]); }
     else if (b.t === 'table') {
       var t = el('table'); b.html.forEach(function (fila, i) { var tr = el('tr'); fila.forEach(function (c) { tr.appendChild(el(i ? 'td' : 'th', { html: c })); }); t.appendChild(tr); });
       n = el('div', { 'class': 'bloque tabla' }, [t]);

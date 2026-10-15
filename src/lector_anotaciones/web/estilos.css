@@ -42,6 +42,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* ningún display de una regla debe anular el atributo hidden */
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -235,6 +236,41 @@ figure img { cursor: zoom-in; }
 #atajos { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px 14px; background: var(--marco); font-size: 13px; line-height: 1.9; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
 #atajos .dialogo-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
 #atajos h2 { font-size: 15px; margin: 0; font-family: var(--serif); }
+#biblioteca { border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 16px; background: var(--marco); width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+#biblioteca .dialogo-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#biblioteca h2 { font-size: 18px; margin: 0; font-family: var(--serif); }
+#biblioteca h3 { font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-2); margin: 18px 0 8px; }
+.bib-intro { color: var(--fg-2); font-size: 13px; margin: 6px 0 10px; }
+.bib-intro:empty { display: none; }
+.bib-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bib-libro { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.bib-libro.abierto { border-color: var(--tinta); box-shadow: inset 3px 0 0 var(--tinta); }
+.bib-libro .datos { flex: 1 1 260px; min-width: 0; }
+.bib-libro .t { font-family: var(--serif); font-weight: 600; }
+.bib-libro .d { font-size: 12px; color: var(--fg-2); }
+.bib-libro .acc { display: flex; flex-wrap: wrap; gap: 4px; }
+.bib-zona { border: 2px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; }
+.bib-zona p { margin: 0 0 8px; font-size: 13px; color: var(--fg-2); }
+.bib-zona.arrastrando { border-color: var(--tinta); background: var(--bg-2); }
+.bib-soltar { font-size: 12px; color: var(--fg-2); }
+#bib-previa { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+#bib-previa[hidden] { display: none; }
+.bib-resumen { margin: 0; font-size: 13px; }
+.bib-avisos { margin: 0; padding-left: 18px; font-size: 12px; color: var(--acento); }
+.bib-avisos:empty { display: none; }
+.bib-campo { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--fg-2); }
+.bib-campo input { font-size: 14px; color: var(--fg); padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.bib-opciones { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.bib-opciones[hidden] { display: none; }  /* display: flex anularía el atributo hidden */
+.bib-opciones legend { font-size: 12px; color: var(--fg-2); padding: 0; margin-bottom: 2px; }
+.bib-opciones label { display: flex; gap: 6px; align-items: baseline; }
+.bib-opciones label.no { opacity: .5; }
+.bib-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.bib-estado { font-size: 13px; margin: 8px 0 0; }
+.bib-estado.aviso { color: var(--acento); }
+.bib-estado:empty { display: none; }
+figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-family: var(--sans); font-size: 12px; padding: 18px; }
+.vacio .btn { margin-top: 10px; }
 #atajos kbd { font-family: var(--sans); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; background: var(--bg-2); margin-right: 4px; }
 .filtros select { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px; background: var(--marco); max-width: 100%; }
 .res.anot { border-left: 3px solid var(--tinta); }

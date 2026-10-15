@@ -8,6 +8,7 @@
   var CAPAS_ON = {}, VISTO = {}, LEIDAS = {}, filtroAutor = '', filtroEtiqueta = '';
   var ultimoBorrado = null, lectura = null;
   var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
+  var ESCRIBIENDO = 0;      // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
   var SIN_GUARDAR = {};     // id -> código del último rechazo de una anotación que la base todavía no tiene
   var RESPALDO_MAX = 180 * 1024;  // bytes de cada documento de respaldo ya envuelto, con margen (la base admite 256 KiB)
   var N = window.LANucleo;  // lógica pura (nucleo/*.js), probada con node --test
@@ -32,5 +33,6 @@
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var igual = N.igual;
   var lsSet = function (k, v) { try { localStorage.setItem(k, v); return localStorage.getItem(k) === v; } catch (e) { return false; } };
+  var enCurso = function (p) { ESCRIBIENDO++; var fin = function () { ESCRIBIENDO--; }; p.then(fin, fin); return p; };
   var bytesJSON = function (v) { var s = JSON.stringify(v); return window.TextEncoder ? new TextEncoder().encode(s).length : unescape(encodeURIComponent(s)).length; };
 
