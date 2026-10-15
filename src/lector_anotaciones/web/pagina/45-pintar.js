@@ -31,14 +31,19 @@
           cubren.sort(function (x, y) { return (x.creado < y.creado) ? -1 : 1; });
           var top = cubren[cubren.length - 1];
           nodo = el('mark', { 'class': 'hl c-' + top.color + (top.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === top.id ? ' foco' : ''), 'data-aids': cubren.map(function (a) { return a.id; }).join(' '), text: seg, tabindex: '0', role: 'button' });
-          nodo.addEventListener('click', function (ev) { ev.stopPropagation(); enfocar(top.id, false, true); });
-          nodo.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); enfocar(top.id, false, true); } });
+          abrirConMarca(nodo, top.id);
         } else nodo = document.createTextNode(seg);
         if (ks.length) { var sp = el('span', { 'class': 'capa ' + ks.map(function (k) { return 'k-' + k; }).join(' '), title: ks.map(function (k) { return (LIBRO.capas || {})[k] || k; }).join(' · ') }); sp.appendChild(nodo); nodo = sp; }
         frag.appendChild(nodo);
       }
       tn.parentNode.replaceChild(frag, tn);
     });
+  }
+  // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo
+  // abrían la última pintada.)
+  function abrirConMarca(nodo, id) {
+    nodo.addEventListener('click', function (ev) { ev.stopPropagation(); enfocar(id, false, true); });
+    nodo.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); enfocar(id, false, true); } });
   }
   function pintarTodo() {
     reubicarTodo();
