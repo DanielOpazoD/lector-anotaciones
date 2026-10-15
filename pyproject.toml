@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lector-anotaciones"
-version = "0.2.8"
+version = "0.2.9"
 description = "Un libro en Markdown convertido en una página de lectura donde el autor destaca y anota, con cada anotación trazable al archivo y la línea de origen."
 readme = "README.md"
 license = { text = "MIT" }

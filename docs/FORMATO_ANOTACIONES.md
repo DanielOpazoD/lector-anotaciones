@@ -1,6 +1,6 @@
 # Formato de las anotaciones
 
-Una anotación es un documento JSON. La página las guarda una a una en la colección `anotaciones` de la base compartida (cuando está publicada en claude.ai) o todas juntas en `localStorage` bajo la clave `lector-anotaciones:<id del libro>`. El botón «Copiar todo (JSON)» produce `{"libro": …, "generado": …, "exportado": …, "anotaciones": [ … ]}`.
+Una anotación es un documento JSON. La página las guarda una a una en la colección `anotaciones` de la base compartida (cuando está publicada en claude.ai) o todas juntas en `localStorage` bajo la clave `lector-anotaciones:<id del libro>` (y, en `<clave>:campos`, qué campos cambió el lector en cada borrador que no ha subido). El botón «Copiar todo (JSON)» produce `{"libro": …, "generado": …, "exportado": …, "anotaciones": [ … ]}`.
 
 ```json
 {

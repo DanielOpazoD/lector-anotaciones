@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.9] - 2026-10-15
+
+### Corregido
+
+- Un borrador recuperado ya no pisa lo que otra sesión escribió entre tanto: la página recuerda qué campos cambió el lector (nota, réplica, color, estado), los guarda junto a la copia local (`<clave>:campos`) y al recargar funde sólo esos campos sobre la versión de la base; respuesta, cierre y demás vienen de la base. Lo mismo cuando un cambio externo llega mientras hay un borrador sin guardar: se muestra debajo sin pisarlo.
+
 ## [0.2.8] - 2026-10-15
 
 ### Corregido

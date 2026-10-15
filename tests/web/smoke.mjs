@@ -703,7 +703,12 @@ try {
   // ---------------------------------------------------------------- un borrador que no subió sobrevive a la recarga
   // la copia local es más reciente que la versión de la base: al recargar manda el borrador y vuelve a subir
   const ctxBr = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctxBr.addInitScript(() => { window.__semilla = { borrador: { id: 'borrador', tipo: 'general', nota: 'Texto original', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-01T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxBr.addInitScript(() => {
+    // en la segunda carga la base ya trae la respuesta que otra sesión escribió mientras el borrador esperaba
+    const carga = (Number(sessionStorage.getItem('carga')) || 0) + 1; sessionStorage.setItem('carga', String(carga));
+    const otra = carga >= 2 ? { respuesta: 'Atendido en otra sesión', cierre: 'atendida', editado: '2026-10-01T00:00:00.000Z' } : {};
+    window.__semilla = { borrador: Object.assign({ id: 'borrador', tipo: 'general', nota: 'Texto original', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-01T00:00:00.000Z', autor: 'u_me' }, otra) };
+  });
   await ctxBr.addInitScript(conBase);
   const pbr = await ctxBr.newPage();
   await pbr.goto(base);
@@ -715,12 +720,18 @@ try {
   await pbr.keyboard.type(' y añadido', { delay: 10 });
   const brMarcado = await esperar(pbr, () => !!document.querySelector('.ficha[data-id="borrador"].sin-guardar'));
   check(brMarcado, 'un borrador rechazado queda marcado «sin guardar»');
+  // un cambio de otra sesión que llega mientras tanto se funde debajo del borrador sin pisarlo
+  await pbr.evaluate(() => window.__cambioExterno('borrador', { respuesta: 'Respondida mientras tanto', cierre: 'pregunta' }));
+  await pbr.waitForSelector('.ficha[data-id="borrador"] .respuesta, .ficha[data-id="borrador"] .resp, .ficha[data-id="borrador"]').catch(() => {});
+  const brFundido = await pbr.evaluate(() => ({ cuadro: (document.querySelector('.ficha[data-id="borrador"] textarea') || {}).value, sinGuardar: !!document.querySelector('.ficha[data-id="borrador"].sin-guardar'), respuesta: /Respondida mientras tanto/.test(document.querySelector('.ficha[data-id="borrador"]').textContent) }));
+  check(brFundido.cuadro === 'Texto original y añadido' && brFundido.sinGuardar && brFundido.respuesta, `un cambio externo mientras hay borrador se muestra sin pisar el borrador (${JSON.stringify(brFundido)})`);
   await pbr.reload();
   await pbr.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   const brSubido = await esperar(pbr, () => window.__docs.borrador && window.__docs.borrador.nota === 'Texto original y añadido', null, 10000);
   await pbr.click('.tab[data-tab="todas"]');
-  const brTras = await pbr.evaluate(() => ({ cuadro: (document.querySelector('.ficha[data-id="borrador"] textarea') || {}).value, sinGuardar: !!document.querySelector('.ficha[data-id="borrador"].sin-guardar'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /borrador/.test(localStorage.getItem(k))) }));
+  const brTras = await pbr.evaluate(() => ({ cuadro: (document.querySelector('.ficha[data-id="borrador"] textarea') || {}).value, sinGuardar: !!document.querySelector('.ficha[data-id="borrador"].sin-guardar'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /borrador/.test(localStorage.getItem(k))), respuesta: window.__docs.borrador.respuesta, cierre: window.__docs.borrador.cierre }));
   check(brSubido && brTras.cuadro === 'Texto original y añadido' && !brTras.sinGuardar && !brTras.local, `al recargar, el borrador local más reciente que la base manda, sube y suelta la copia local (${JSON.stringify(brTras.cuadro)})`);
+  check(brTras.respuesta === 'Atendido en otra sesión' && brTras.cierre === 'atendida', `y lo que otra sesión escribió entre tanto (respuesta, cierre) se conserva al subir el borrador (${brTras.respuesta}, ${brTras.cierre})`);
   await ctxBr.close();
 
   // ---------------------------------------------------------------- la nota de otro lector rechazada por falta de permiso

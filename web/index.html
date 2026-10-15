@@ -412,6 +412,7 @@ figure img { cursor: zoom-in; }
     // manejadores de la ficha pasan una copia con el cambio, nunca el objeto de `anots` ya mutado. Una anotación
     // que la base todavía no tiene (nueva, o rechazada y conservada) no tiene versión previa a la que volver.
     var nueva = !anots[a.id] || !!SIN_GUARDAR[a.id], previa = nueva ? null : JSON.parse(JSON.stringify(anots[a.id]));
+    if (anots[a.id]) marcarCampos(a.id, anots[a.id], a);
     a.editado = ahora();
     anots[a.id] = a;
     var u = ubicar(a); if (u) UBIC[a.id] = u;
@@ -459,7 +460,7 @@ figure img { cursor: zoom-in; }
     // pendientes, y la ficha ofrece reintentar (o sólo copiar, en sólo lectura). Nada que la página mostró se pierde.
     SIN_GUARDAR[id] = codigo;
     if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id);
-    guardarLocal([id]);
+    guardarLocal([id]); escribirCampos();
   }
   function rechazoEscritura(e, id, previa, verbo) {
     // La base no aceptó la escritura: la memoria vuelve a lo que la base tiene, para que no queden anotaciones
@@ -508,6 +509,22 @@ figure img { cursor: zoom-in; }
     else guardarLocal();
     ofrecerDeshacer(a);
   }
+  var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado'];  // lo que el lector edita en la página; el resto lo escribe quien edita las fuentes
+  var CAMPOS_BORRADOR = {};  // id -> campos que el lector cambió en esta sesión y la base todavía no tiene (se guarda junto a la copia local)
+  function marcarCampos(id, antes, despues) {
+    var c = CAMPOS_BORRADOR[id] || (CAMPOS_BORRADOR[id] = {});
+    CAMPOS_LECTOR.forEach(function (k) { if (antes[k] !== despues[k]) c[k] = true; });
+  }
+  function escribirCampos() { lsSet(LOCAL_KEY + ':campos', JSON.stringify(CAMPOS_BORRADOR)); }
+  function fundirBorrador(deBase, borrador, campos) {
+    // Un borrador que no subió aporta sólo los campos que el lector cambió (si no se sabe cuáles, los que edita en
+    // la página y difieren); respuesta, cierre y demás los manda la base, para que recuperar el borrador no borre lo
+    // que otra sesión escribió entre tanto.
+    var r = Object.assign({}, deBase), lista = campos && Object.keys(campos).length ? Object.keys(campos) : CAMPOS_LECTOR;
+    lista.forEach(function (c) { if (borrador[c] !== undefined && borrador[c] !== deBase[c]) r[c] = borrador[c]; });
+    r.editado = borrador.editado || r.editado;
+    return r;
+  }
   function leerLocal() { try { return JSON.parse(lsGet(LOCAL_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function escribirLocal(datos) {
     if (Object.keys(datos).length) return lsSet(LOCAL_KEY, JSON.stringify(datos));
@@ -525,15 +542,16 @@ figure img { cursor: zoom-in; }
   function podarLocal(ids) {
     // Retira de la copia local lo que ya no la necesita: subió a la base, la base ya lo tenía, o se borró.
     if (!ids.length) return;
-    var datos = leerLocal(), habia = false;
-    ids.forEach(function (id) { if (datos[id]) { delete datos[id]; habia = true; } });
+    var datos = leerLocal(), habia = false, campos = false;
+    ids.forEach(function (id) { if (datos[id]) { delete datos[id]; habia = true; } if (CAMPOS_BORRADOR[id]) { delete CAMPOS_BORRADOR[id]; campos = true; } });
     if (habia) escribirLocal(datos);
+    if (campos) escribirCampos();
   }
   function cargarLocal(filtro) {
     // Pasa a memoria lo guardado en el navegador. `filtro(id, anotación)` puede dejar algo fuera: se queda en la copia
     // local sin cargarse. Devuelve las ids cargadas (`nuevas`) y las que ya estaban en memoria (`existentes`).
     try {
-      var j = leerLocal();
+      var j = leerLocal(), campos = lsJSON(LOCAL_KEY + ':campos');
       // Migración: anotaciones guardadas por versiones anteriores de la página bajo otra clave
       // (libro.json las declara en `claves_anteriores`). Se copian sin pisar las ya guardadas y la
       // clave vieja se retira para que un borrado posterior no las resucite.
@@ -553,7 +571,10 @@ figure img { cursor: zoom-in; }
       Object.keys(j).forEach(function (k) {
         var masNueva = anots[k] && j[k] && j[k].editado && anots[k].editado && j[k].editado > anots[k].editado;
         if (anots[k] && !masNueva) existentes.push(k);
-        else if (!filtro || filtro(k, j[k])) { anots[k] = j[k]; nuevas.push(k); }  // un borrador local más reciente que la base manda y vuelve a subir
+        else if (!filtro || filtro(k, j[k])) {  // un borrador local más reciente vuelve a subir, fundido sobre lo que la base tiene
+          if (campos[k]) CAMPOS_BORRADOR[k] = campos[k];
+          anots[k] = masNueva ? fundirBorrador(anots[k], j[k], campos[k]) : j[k]; nuevas.push(k);
+        }
       });
       return { migradas: migradas, guardadas: guardadas, nuevas: nuevas, existentes: existentes };
     } catch (e) { return { migradas: 0, guardadas: true, nuevas: [], existentes: [] }; }
@@ -882,7 +903,7 @@ figure img { cursor: zoom-in; }
     // (`rechazoEscritura` sin versión previa); un rechazo de permiso pasa además la página a sólo lectura. Al
     // recargar, una copia local más reciente que la de la base vuelve a cargarse y a subir (`cargarLocal`).
     var ant = anots[id]; if (!ant || SOLO_LECTURA) return;
-    var a = Object.assign({}, ant, parche); a.editado = ahora(); anots[id] = a;
+    var a = Object.assign({}, ant, parche); a.editado = ahora(); marcarCampos(id, ant, a); anots[id] = a;
     if (col) escribirEnBase(id, null);
     else guardarLocal(modo === 'cargando' ? [id] : undefined);
   }
@@ -1394,7 +1415,12 @@ figure img { cursor: zoom-in; }
         snap.docChanges().forEach(function (ch) {
           var d2 = ch.doc.data();
           if (ch.type === 'removed') { if (anots[ch.doc.id]) { delete anots[ch.doc.id]; cambio = true; } }
-          else if (d2) { var nuevo = Object.assign({}, d2, { id: ch.doc.id }); if (!igual(anots[ch.doc.id], nuevo)) { anots[ch.doc.id] = nuevo; cambio = true; } }
+          else if (d2) {
+            var nuevo = Object.assign({}, d2, { id: ch.doc.id });
+            // si aquí hay un borrador sin guardar de esa anotación, lo que llega de la base se funde debajo sin pisarlo
+            if (SIN_GUARDAR[ch.doc.id] && anots[ch.doc.id]) nuevo = fundirBorrador(nuevo, anots[ch.doc.id], CAMPOS_BORRADOR[ch.doc.id]);
+            if (!igual(anots[ch.doc.id], nuevo)) { anots[ch.doc.id] = nuevo; cambio = true; }
+          }
         });
         if (primeraFoto) { primeraFoto = false; recuperarYSubir(); }
         if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
