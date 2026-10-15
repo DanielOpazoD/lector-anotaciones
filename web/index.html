@@ -421,8 +421,8 @@ figure img { cursor: zoom-in; }
     var codigo = (e && e.code) || 'error';
     if (verbo === 'borrar') {
       if (previa) { anots[id] = previa; var ub = ubicar(previa); if (ub) UBIC[id] = ub; pintar(previa); }
-      // el borrado no ocurrió: no hay nada que deshacer
-      ultimoBorrado = null; var z = $('#deshacer-zona'); if (z) z.innerHTML = '';
+      // el borrado no ocurrió: no hay nada que deshacer (salvo que el enlace ya sea de otro borrado posterior)
+      if (ultimoBorrado && ultimoBorrado.id === id) { ultimoBorrado = null; var z = $('#deshacer-zona'); if (z) z.innerHTML = ''; }
     }
     else if (previa) { anots[id] = previa; var u2 = ubicar(previa); if (u2) UBIC[id] = u2; pintar(previa); }
     else quitarDeMemoria(id);
