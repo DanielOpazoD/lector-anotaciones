@@ -75,12 +75,14 @@ jobs:
         with:
           node-version: "22"
       - run: pip install -e .
+      - run: npm install
+      # formato del JavaScript (Prettier, con la configuración de .prettierrc.json)
+      - run: npm run formato
       # web/index.html se genera desde src/lector_anotaciones/web/: tiene que estar al día con sus fuentes
       - run: lector-anotaciones pagina --salida web/index.html --comprobar
       - name: Núcleo de la página (node --test)
         run: node --test 'tests/js/**/*.test.js'
       - run: lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
-      - run: npm install --no-save playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: node tests/web/smoke.mjs
       - run: node tests/web/biblioteca.mjs
