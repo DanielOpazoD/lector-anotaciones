@@ -81,6 +81,8 @@ La integración continua corre ruff y pytest en Python 3.11–3.13, construye el
 - **Trazabilidad antes que riqueza de formato.** La página renderiza un subconjunto pequeño de Markdown a cambio de que cada bloque tenga un id estable y una línea de origen. Un editor con todo el Markdown pero sin esa trazabilidad no sirve para volcar anotaciones.
 - **La página no tiene compilación.** Un solo archivo HTML, sin paquetes, que corre desde un servidor estático o como artefacto de claude.ai. Los contratos que el resto del sistema da por supuestos (lee `libro.json`, colección `anotaciones`, respaldo local por libro, sin scripts externos) están en `tests/test_web.py`.
 - **Los colores son instrucciones.** Cuatro significados fijos, no una paleta libre, para que quien vuelque las anotaciones no tenga que interpretar.
+- **Un subrayado se comprueba antes de pintarse.** Los ids de bloque son posicionales y cambian si se inserta un párrafo; la página verifica que la cita guardada siga en su sitio y, si no, la busca por el texto y el contexto (y lo dice en la ficha) o la declara no encontrada. Nunca pinta un pasaje equivocado y nunca modifica lo guardado. Detalles en [docs/FORMATO_ANOTACIONES.md](docs/FORMATO_ANOTACIONES.md).
+- **Escribir una nota no se interrumpe.** Los cambios que llegan de la base (el eco de un guardado propio o una edición desde otra sesión) redibujan el panel sin quitar el editor activo, su borrador ni el cursor.
 - **La página impresa se busca, no se calcula.** Los primeros 40 caracteres normalizados de cada bloque se buscan en una ventana de páginas hacia adelante; lo que no se encuentra hereda la página anterior. Es robusto frente a guiones, acentos y cambios de maquetación, y la validación avisa si una página retrocede.
 
 ## Licencia

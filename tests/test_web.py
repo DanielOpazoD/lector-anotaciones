@@ -30,3 +30,20 @@ def test_sin_restos_del_libro_original(web_index: Path):
     html = web_index.read_text(encoding="utf-8")
     assert "hiid" not in html.lower()
     assert "Hechos, inferencias" not in html
+
+
+def test_los_subrayados_se_comprueban_antes_de_pintarse(web_index: Path):
+    """Los ids de bloque son posicionales; la página no puede fiarse de ellos tras una reconstrucción."""
+    html = web_index.read_text(encoding="utf-8")
+    assert "function ubicar(" in html and "function reubicarTodo(" in html
+    for estado in ("'exacto'", "'reubicado'", "'perdido'"):
+        assert estado in html
+    assert "libro: LIBRO ? LIBRO.generado : null" in html, "cada anotación registra con qué versión del libro se hizo"
+
+
+def test_el_panel_conserva_el_editor_activo(web_index: Path):
+    html = web_index.read_text(encoding="utf-8")
+    assert "document.activeElement" in html and "setSelectionRange" in html
+    assert "if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }" in html, (
+        "el eco de un guardado propio no redibuja"
+    )
