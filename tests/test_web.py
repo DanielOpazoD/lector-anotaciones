@@ -4,8 +4,13 @@ import re
 from pathlib import Path
 
 
+def _codigo(ruta: Path) -> str:
+    """El texto de la página con cada tramo de espacios reducido a uno: los contratos son el código, no su formato."""
+    return re.sub(r"\s+", " ", ruta.read_text(encoding="utf-8"))
+
+
 def test_la_pagina_es_un_documento_completo_y_autocontenido(web_index: Path):
-    html = web_index.read_text(encoding="utf-8")
+    html = _codigo(web_index)
     assert html.lower().startswith("<!doctype html>")
     assert '<meta charset="utf-8">' in html
     assert 'name="viewport"' in html
@@ -15,7 +20,7 @@ def test_la_pagina_es_un_documento_completo_y_autocontenido(web_index: Path):
 
 
 def test_contratos_con_el_resto_del_sistema(web_index: Path):
-    html = web_index.read_text(encoding="utf-8")
+    html = _codigo(web_index)
     assert "fetch('libro.json')" in html, "lee el libro generado por `construir`"
     # el libro de la página guarda en «anotaciones» (lo que lee `exportar` y Claude); uno importado, en libros/<id>/…
     assert "collection(rutaBase('anotaciones'))" in html, "la colección que lee `exportar` y Claude"
@@ -30,14 +35,14 @@ def test_contratos_con_el_resto_del_sistema(web_index: Path):
 
 
 def test_sin_restos_del_libro_original(web_index: Path):
-    html = web_index.read_text(encoding="utf-8")
+    html = _codigo(web_index)
     assert "hiid" not in html.lower()
     assert "Hechos, inferencias" not in html
 
 
 def test_los_subrayados_se_comprueban_antes_de_pintarse(web_index: Path):
     """Los ids de bloque son posicionales; la página no puede fiarse de ellos tras una reconstrucción."""
-    html = web_index.read_text(encoding="utf-8")
+    html = _codigo(web_index)
     assert "function ubicar(" in html and "function reubicarTodo(" in html
     for estado in ("'exacto'", "'reubicado'", "'perdido'"):
         assert estado in html
@@ -45,14 +50,14 @@ def test_los_subrayados_se_comprueban_antes_de_pintarse(web_index: Path):
 
 
 def test_migra_las_anotaciones_de_claves_anteriores(web_index: Path):
-    html = web_index.read_text(encoding="utf-8")
+    html = _codigo(web_index)
     assert "LIBRO.claves_anteriores" in html and "localStorage.removeItem(k)" in html
     assert "if (guardadas) anteriores.forEach" in html, "la clave vieja sólo se retira si la copia nueva quedó guardada"
     assert "return localStorage.getItem(k) === v" in html, "lsSet confirma la escritura en vez de tragarse el error"
 
 
 def test_el_panel_conserva_el_editor_activo(web_index: Path):
-    html = web_index.read_text(encoding="utf-8")
+    html = _codigo(web_index)
     assert "document.activeElement" in html and "setSelectionRange" in html
     assert "if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }" in html, (
         "el eco de un guardado propio no redibuja"

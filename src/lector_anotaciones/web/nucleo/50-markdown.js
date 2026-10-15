@@ -6,8 +6,11 @@
 // `estadoLibro()` es también el armazón con que los importadores de HTML, EPUB y Word van abriendo secciones y
 // añadiendo bloques, para que todos los libros salgan con los mismos ids.
 (function (raiz, crear) {
-  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
-  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+  var N = (raiz.LANucleo = raiz.LANucleo || {}),
+    m = crear(N);
+  Object.keys(m).forEach(function (k) {
+    N[k] = m[k];
+  });
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   var ROMANOS = { I: 1, II: 2, III: 3, IV: 4, V: 5 };
@@ -15,7 +18,9 @@
   // signifiquen aquí lo mismo que en markdown.py.
   var ESP = '\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
   var BORDES = new RegExp('^[' + ESP + ']+|[' + ESP + ']+$', 'g');
-  function strip(s) { return s.replace(BORDES, ''); }
+  function strip(s) {
+    return s.replace(BORDES, '');
+  }
   var ABRE_BLOQUE = /^(#{1,4} |- |\p{Nd}+\. |\||> |\[FIGURA|\[\/?PORTADA\]|\[\/?LEGAL\])/u;
   var FIGURA = new RegExp('^\\[FIGURA:[' + ESP + ']*([^' + ESP + ']+)[' + ESP + ']*\\|[' + ESP + ']*([^\\n]+)\\]$');
   var SEPARADOR_TABLA = new RegExp('^\\|[' + ESP + ']*:?-{2,}');
@@ -24,7 +29,8 @@
   function entero(digitos) {
     var n = 0;
     Array.from(digitos).forEach(function (ch) {
-      var cp = ch.codePointAt(0), z = cp;
+      var cp = ch.codePointAt(0),
+        z = cp;
       while (z > 0 && /\p{Nd}/u.test(String.fromCodePoint(z - 1)) && cp - z < 60) z--;
       n = n * 10 + ((cp - z) % 10);
     });
@@ -34,7 +40,9 @@
   // \w de Python sobre texto: letras y números de cualquier escritura, y el guion bajo
   var CURSIVA = /(?<![\p{L}\p{N}_∗])\*([^*\n]+)\*(?![\p{L}\p{N}_])/gu;
 
-  function dos(n) { return n < 10 ? '0' + n : String(n); }
+  function dos(n) {
+    return n < 10 ? '0' + n : String(n);
+  }
   // Id estable y legible para una sección; se registra en `usados` para evitar duplicados.
   function seccionId(titulo, usados) {
     var m, base;
@@ -43,8 +51,12 @@
     else if ((m = /^PARTE (I{1,3}V?|IV)\./.exec(titulo)) && ROMANOS[m[1]]) base = 'parte-' + ROMANOS[m[1]];
     else if ((m = /^Apéndice ([A-Z])\./.exec(titulo))) base = 'ap-' + m[1].toLowerCase();
     else base = N.slug(titulo.split('.')[0]);
-    var sid = base, n = 2;
-    while (usados[sid]) { sid = base + '-' + n; n++; }
+    var sid = base,
+      n = 2;
+    while (usados[sid]) {
+      sid = base + '-' + n;
+      n++;
+    }
     usados[sid] = true;
     return sid;
   }
@@ -71,52 +83,101 @@
   function leerMarcado(lines, i, cierre) {
     var buf = [];
     i += 1;
-    while (i < lines.length && lines[i].indexOf(cierre) !== 0) { if (strip(lines[i])) buf.push(strip(lines[i])); i++; }
+    while (i < lines.length && lines[i].indexOf(cierre) !== 0) {
+      if (strip(lines[i])) buf.push(strip(lines[i]));
+      i++;
+    }
     if (i >= lines.length) throw new Error('falta el cierre ' + cierre);
     return [buf, i + 1];
   }
-  function empieza(s, p) { return s.slice(0, p.length) === p; }
+  function empieza(s, p) {
+    return s.slice(0, p.length) === p;
+  }
   function parseLineas(lines, nombre, st) {
-    var i = 0, m, r, buf, items, filas;
+    var i = 0,
+      m,
+      r,
+      buf,
+      items,
+      filas;
     while (i < lines.length) {
-      var linea = lines[i], src = nombre + ':' + (i + 1);
-      if (!strip(linea)) { i++; continue; }
+      var linea = lines[i],
+        src = nombre + ':' + (i + 1);
+      if (!strip(linea)) {
+        i++;
+        continue;
+      }
       if (empieza(linea, '[PORTADA]')) {
-        r = leerMarcado(lines, i, '[/PORTADA]'); i = r[1];
+        r = leerMarcado(lines, i, '[/PORTADA]');
+        i = r[1];
         st.nueva('Portada', 1, src);
         st.bloque('portada', r[0].map(inline), src);
         continue;
       }
       if (empieza(linea, '[LEGAL]')) {
-        r = leerMarcado(lines, i, '[/LEGAL]'); i = r[1];
+        r = leerMarcado(lines, i, '[/LEGAL]');
+        i = r[1];
         st.nueva('Página legal', 1, src);
-        r[0].forEach(function (p) { st.bloque('p', inline(p), src); });
+        r[0].forEach(function (p) {
+          st.bloque('p', inline(p), src);
+        });
         continue;
       }
-      if (empieza(linea, '# ')) { st.nueva(strip(linea.slice(2)), 1, src); i++; continue; }
-      if (empieza(linea, '## ')) { st.nueva(strip(linea.slice(3)), 2, src); i++; continue; }
-      if (empieza(linea, '### ')) { st.bloque('h3', inline(strip(linea.slice(4))), src); i++; continue; }
-      if (empieza(linea, '#### ')) { st.bloque('h4', inline(strip(linea.slice(5))), src); i++; continue; }
+      if (empieza(linea, '# ')) {
+        st.nueva(strip(linea.slice(2)), 1, src);
+        i++;
+        continue;
+      }
+      if (empieza(linea, '## ')) {
+        st.nueva(strip(linea.slice(3)), 2, src);
+        i++;
+        continue;
+      }
+      if (empieza(linea, '### ')) {
+        st.bloque('h3', inline(strip(linea.slice(4))), src);
+        i++;
+        continue;
+      }
+      if (empieza(linea, '#### ')) {
+        st.bloque('h4', inline(strip(linea.slice(5))), src);
+        i++;
+        continue;
+      }
       if ((m = FIGURA.exec(linea))) {
         st.bloque('figure', { src: st.figs + m[1], caption: inline(strip(m[2])) }, src);
-        i++; continue;
+        i++;
+        continue;
       }
       if (empieza(linea, '- ')) {
         items = [];
-        while (i < lines.length && empieza(lines[i], '- ')) { items.push(inline(strip(lines[i].slice(2)))); i++; }
+        while (i < lines.length && empieza(lines[i], '- ')) {
+          items.push(inline(strip(lines[i].slice(2))));
+          i++;
+        }
         st.bloque('ul', items, src);
         continue;
       }
       if (ITEM_NUMERADO.test(linea)) {
         items = [];
-        while (i < lines.length && (m = ITEM_NUMERADO.exec(lines[i]))) { items.push(inline(strip(lines[i].slice(m[0].length)))); i++; }
+        while (i < lines.length && (m = ITEM_NUMERADO.exec(lines[i]))) {
+          items.push(inline(strip(lines[i].slice(m[0].length))));
+          i++;
+        }
         st.bloque('ol', items, src);
         continue;
       }
       if (empieza(linea, '|')) {
         filas = [];
         while (i < lines.length && empieza(lines[i], '|')) {
-          if (!SEPARADOR_TABLA.test(lines[i])) filas.push(strip(lines[i]).replace(/^\|+|\|+$/g, '').split('|').map(function (c) { return inline(strip(c)); }));
+          if (!SEPARADOR_TABLA.test(lines[i]))
+            filas.push(
+              strip(lines[i])
+                .replace(/^\|+|\|+$/g, '')
+                .split('|')
+                .map(function (c) {
+                  return inline(strip(c));
+                })
+            );
           i++;
         }
         st.bloque('table', filas, src);
@@ -124,14 +185,20 @@
       }
       if (empieza(linea, '> ')) {
         buf = [];
-        while (i < lines.length && empieza(lines[i], '> ')) { buf.push(strip(lines[i].slice(2))); i++; }
+        while (i < lines.length && empieza(lines[i], '> ')) {
+          buf.push(strip(lines[i].slice(2)));
+          i++;
+        }
         st.bloque('quote', inline(buf.join(' ')), src);
         continue;
       }
       // párrafo: líneas consecutivas no vacías que no abren otro bloque
       buf = [strip(linea)];
       i++;
-      while (i < lines.length && strip(lines[i]) && !ABRE_BLOQUE.test(lines[i])) { buf.push(strip(lines[i])); i++; }
+      while (i < lines.length && strip(lines[i]) && !ABRE_BLOQUE.test(lines[i])) {
+        buf.push(strip(lines[i]));
+        i++;
+      }
       st.bloque('p', inline(buf.join(' ')), src);
     }
   }

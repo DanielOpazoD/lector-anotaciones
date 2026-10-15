@@ -1,7 +1,10 @@
 // Núcleo · revisar respuestas y recorrer anotaciones. Sin DOM.
 (function (raiz, crear) {
-  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
-  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+  var N = (raiz.LANucleo = raiz.LANucleo || {}),
+    m = crear(N);
+  Object.keys(m).forEach(function (k) {
+    N[k] = m[k];
+  });
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   'use strict';
   // Una respuesta (de Claude o de quien edita las fuentes) está por revisar si es de una anotación propia —o sin autor,
@@ -17,17 +20,27 @@
     return !!a.respondido && a.respondido !== a.revisado;
   }
   // Lo que se guarda en `revisado` al revisar: el `respondido` de la respuesta, o la hora si no lo trae.
-  function marcaRevision(a, ahora) { return (a && a.respondido) || ahora; }
+  function marcaRevision(a, ahora) {
+    return (a && a.respondido) || ahora;
+  }
   // La posición a la que se pasa desde `actual` (id) en `lista` (en orden) al avanzar `d` (+1 o −1); -1 si ya no hay
   // más en esa dirección. Si la actual ya no está en la lista (un filtro la sacó) y se da `orden` (la clave de orden
   // de la actual y la función que la calcula para cada elemento), se sigue desde donde estaba; si no, desde el
   // principio (o el final al retroceder).
   function vecina(lista, actual, d, orden) {
-    var i = -1, k;
-    for (k = 0; k < lista.length; k++) if (lista[k].id === actual) { i = k; break; }
+    var i = -1,
+      k;
+    for (k = 0; k < lista.length; k++)
+      if (lista[k].id === actual) {
+        i = k;
+        break;
+      }
     if (i < 0 && orden && orden.clave !== null && orden.clave !== undefined) {
-      if (d > 0) { for (k = 0; k < lista.length; k++) if (orden.de(lista[k]) > orden.clave) return k; }
-      else { for (k = lista.length - 1; k >= 0; k--) if (orden.de(lista[k]) < orden.clave) return k; }
+      if (d > 0) {
+        for (k = 0; k < lista.length; k++) if (orden.de(lista[k]) > orden.clave) return k;
+      } else {
+        for (k = lista.length - 1; k >= 0; k--) if (orden.de(lista[k]) < orden.clave) return k;
+      }
       return -1;
     }
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;

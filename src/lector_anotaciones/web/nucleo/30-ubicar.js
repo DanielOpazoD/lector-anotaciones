@@ -5,8 +5,11 @@
 // guardado; si no, se busca (primero en el bloque, luego en la sección, luego en el libro, exigiendo contexto
 // fuera del bloque) y, si no aparece, se declara perdido. Nada de esto modifica la anotación guardada.
 (function (raiz, crear) {
-  var N = raiz.LANucleo = raiz.LANucleo || {}, m = crear(N);
-  Object.keys(m).forEach(function (k) { N[k] = m[k]; });
+  var N = (raiz.LANucleo = raiz.LANucleo || {}),
+    m = crear(N);
+  Object.keys(m).forEach(function (k) {
+    N[k] = m[k];
+  });
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Índice de la cita en `txt`, desambiguado con el contexto: { i, puntos } (puntos de 0 a 2) o null.
@@ -25,15 +28,21 @@
   // Devuelve { pid, inicio, fin, estado: 'exacto' | 'reubicado' | 'perdido' }, o null si no es un subrayado.
   function ubicarEn(a, ctx) {
     if (a.tipo !== 'subrayado' || !a.pid) return null;
-    var existe = ctx.existe(a.pid), txt = existe ? ctx.texto(a.pid) : '';
-    if (existe && txt.slice(a.inicio, a.fin) === a.cita) return { pid: a.pid, inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    var existe = ctx.existe(a.pid),
+      txt = existe ? ctx.texto(a.pid) : '';
+    if (existe && txt.slice(a.inicio, a.fin) === a.cita)
+      return { pid: a.pid, inicio: a.inicio, fin: a.fin, estado: 'exacto' };
     var m = existe ? buscarCita(txt, a) : null;
     if (m) return { pid: a.pid, inicio: m.i, fin: m.i + a.cita.length, estado: 'reubicado' };
     // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque
     // entero, o es larga) vale sólo si es la única en todo el libro.
-    var candidatos = ctx.candidatos(a), sinContexto = !a.antes && !a.despues, hallazgos = [], mejor = null;
+    var candidatos = ctx.candidatos(a),
+      sinContexto = !a.antes && !a.despues,
+      hallazgos = [],
+      mejor = null;
     for (var c = 0; c < candidatos.length; c++) {
-      var p = candidatos[c]; if (p === a.pid) continue;
+      var p = candidatos[c];
+      if (p === a.pid) continue;
       var m2 = buscarCita(ctx.texto(p), a);
       if (!m2) continue;
       var h = { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, puntos: m2.puntos };
@@ -41,7 +50,8 @@
       hallazgos.push(h);
     }
     if (mejor) return { pid: mejor.pid, inicio: mejor.inicio, fin: mejor.fin, estado: 'reubicado' };
-    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40)) return { pid: hallazgos[0].pid, inicio: hallazgos[0].inicio, fin: hallazgos[0].fin, estado: 'reubicado' };
+    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40))
+      return { pid: hallazgos[0].pid, inicio: hallazgos[0].inicio, fin: hallazgos[0].fin, estado: 'reubicado' };
     return { pid: null, inicio: 0, fin: 0, estado: 'perdido' };
   }
   return { buscarCita: buscarCita, ubicarEn: ubicarEn };
