@@ -100,3 +100,41 @@ test('fundirBorrador: el borrador aporta sus campos y la base el resto', () => {
   // sin lista de campos: sólo textos, nunca color ni estado
   assert.equal(B.fundirBorrador(base, borrador, null).estado, 'resuelta');
 });
+
+test('porRevisar: respuestas propias más nuevas que la última revisión', () => {
+  const base = { id: 'x', autor: 'yo', respuesta: 'Hecho', respondido: '2026-10-10T10:00:00Z' };
+  assert.equal(N.porRevisar(base, 'yo'), true);
+  assert.equal(N.porRevisar({ ...base, revisado: '2026-10-11T00:00:00Z' }, 'yo'), false);
+  assert.equal(N.porRevisar({ ...base, revisado: '2026-10-09T00:00:00Z' }, 'yo'), true, 'una respuesta nueva vuelve a la bandeja');
+  assert.equal(N.porRevisar({ ...base, autor: 'otra' }, 'yo'), false, 'las de otros lectores no');
+  assert.equal(N.porRevisar({ ...base, autor: null }, 'yo'), true, 'las sin autor sí');
+  assert.equal(N.porRevisar({ id: 'y', nota: 'sin respuesta' }, 'yo'), false);
+  assert.equal(N.porRevisar({ id: 'z', cierre: 'pregunta', revisado: '2026-10-01' }, null), false, 'sin fecha de respuesta, revisada es revisada');
+  assert.equal(N.porRevisar({ ...base, revisado: '2026-10-10T10:00:00.000Z' }, 'yo'), false, 'la misma hora escrita de otra forma no es más nueva');
+  assert.equal(N.porRevisar({ ...base, respondido: '2026-10-10T09:00:00-03:00', revisado: '2026-10-10T11:00:00.000Z' }, 'yo'), true, 'con zona horaria, se comparan instantes');
+  assert.ok(N.CAMPOS_LECTOR.includes('revisado'), 'revisado viaja con los borradores');
+});
+
+test('vecina: siguiente y anterior, con o sin actual, y los bordes', () => {
+  const L = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.equal(N.vecina(L, 'b', 1), 2);
+  assert.equal(N.vecina(L, 'b', -1), 0);
+  assert.equal(N.vecina(L, 'c', 1), -1);
+  assert.equal(N.vecina(L, 'a', -1), -1);
+  assert.equal(N.vecina(L, null, 1), 0);
+  assert.equal(N.vecina(L, 'fuera', -1), 2);
+  assert.equal(N.vecina([], null, 1), -1);
+});
+
+test('apilar: cada ficha a la altura de su pasaje, sin pisarse, y la activa manda', () => {
+  const items = [{ id: 'a', y: 100, h: 50 }, { id: 'b', y: 120, h: 50 }, { id: 'c', y: 400, h: 30 }, { id: 'd', y: null, h: 20 }];
+  const sin = N.apilar(items, null, 10).tops;
+  assert.deepEqual(sin, { a: 100, b: 160, c: 400, d: 440 });
+  const conB = N.apilar(items, 'b', 10).tops;
+  assert.equal(conB.b, 120, 'la activa queda junto a su pasaje');
+  assert.equal(conB.a, 60, 'la de arriba sube para dejarle sitio');
+  assert.equal(conB.c, 400);
+  const r = N.apilar([{ id: 'x', y: 0, h: 40 }, { id: 'y', y: 0, h: 40 }], 'y', 8);
+  assert.deepEqual(r.tops, { x: -48, y: 0 });
+  assert.equal(r.alto, 40);
+});
