@@ -166,7 +166,7 @@ try {
   await page.$eval('.ficha textarea', (t) => t.blur());
 
   const guardado = await page.evaluate(() => {
-    const k = Object.keys(localStorage).find((x) => x.startsWith('lector-anotaciones:') && !x.endsWith(':ultima'));
+    const k = Object.keys(localStorage).find((x) => /^lector-anotaciones:[a-z0-9-]+$/.test(x));
     return { clave: k, anots: Object.values(JSON.parse(localStorage.getItem(k) || '{}')) };
   });
   check(/^lector-anotaciones:[a-z0-9-]+$/.test(guardado.clave), `clave local por libro (${guardado.clave})`);
@@ -505,7 +505,7 @@ try {
   check(copiaFinal.split('\n').slice(1).join('\n') === '«' + textoUltimo + '»' && !/00_preliminares\.md:\d+ →/.test(copiaFinal), `copiar una selección que sale del último bloque da sólo ese bloque (${copiaFinal.length} caracteres)`);
   await p2.keyboard.press('1');
   await p2.waitForSelector(`[data-pid="${ultimoTexto}"] mark.hl.c-revisar`);
-  const subrayadoFinal = await p2.evaluate((pid) => { const k = Object.keys(localStorage).find((x) => x.startsWith('lector-anotaciones:') && !x.endsWith(':ultima') && !/:(visto|leidas|capas|foco|respaldo)$/.test(x)); const a = Object.values(JSON.parse(localStorage.getItem(k))).find((x) => x.pid === pid); return a && { inicio: a.inicio, fin: a.fin, cita: a.cita }; }, ultimoTexto);
+  const subrayadoFinal = await p2.evaluate((pid) => { const k = Object.keys(localStorage).find((x) => /^lector-anotaciones:[a-z0-9-]+$/.test(x)); const a = Object.values(JSON.parse(localStorage.getItem(k))).find((x) => x.pid === pid); return a && { inicio: a.inicio, fin: a.fin, cita: a.cita }; }, ultimoTexto);
   check(subrayadoFinal && subrayadoFinal.inicio === 0 && subrayadoFinal.fin === subrayadoFinal.cita.length && /separar mejor\.$/.test(subrayadoFinal.cita), 'una selección que sale del último bloque se recorta a ese bloque entero');
   await p2.evaluate(() => window.getSelection().removeAllRanges());
   // el contorno de foco se mueve con la ficha enfocada
@@ -733,6 +733,38 @@ try {
   check(brSubido && brTras.cuadro === 'Texto original y añadido' && !brTras.sinGuardar && !brTras.local, `al recargar, el borrador local más reciente que la base manda, sube y suelta la copia local (${JSON.stringify(brTras.cuadro)})`);
   check(brTras.respuesta === 'Atendido en otra sesión' && brTras.cierre === 'atendida', `y lo que otra sesión escribió entre tanto (respuesta, cierre) se conserva al subir el borrador (${brTras.respuesta}, ${brTras.cierre})`);
   await ctxBr.close();
+
+  // ---------------------------------------------------------------- un borrador editado sin base conserva la lista de campos
+  // borrador recuperado con la lista {nota}; se abre sin base y se escribe la réplica: la lista guardada debe sumar
+  // la réplica, y al conectar después deben subir la nota y la réplica sin pisar la respuesta de la base
+  const claveL = guardado.clave;
+  const borradorX = { id: 'x', tipo: 'general', nota: 'Nota en borrador', estado: 'abierta', cierre: 'pregunta', respuesta: '¿Por qué?', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-05T00:00:00.000Z', autor: 'u_me' };
+  const ctxOff = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxOff.addInitScript(sinBase);
+  await ctxOff.addInitScript(([clave, x]) => { if (!sessionStorage.getItem('sembrado')) { sessionStorage.setItem('sembrado', '1'); localStorage.setItem(clave, JSON.stringify({ x })); localStorage.setItem(clave + ':campos', JSON.stringify({ x: { nota: true } })); } }, [claveL, borradorX]);
+  const poff = await ctxOff.newPage();
+  await poff.goto(base);
+  await poff.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await poff.click('.tab[data-tab="todas"]');
+  await poff.waitForSelector('#nota-x-replica');
+  await poff.fill('#nota-x-replica', 'Porque lo dice la guía');
+  await poff.$eval('#nota-x-replica', (t) => t.blur());
+  const offLocal = await poff.evaluate((clave) => ({ campos: JSON.parse(localStorage.getItem(clave + ':campos') || '{}'), copia: JSON.parse(localStorage.getItem(clave) || '{}') }), claveL);
+  check(offLocal.campos.x && offLocal.campos.x.nota && offLocal.campos.x.replica && offLocal.copia.x.replica === 'Porque lo dice la guía', `sin base, la lista de campos guardada suma la réplica (${JSON.stringify(offLocal.campos.x)})`);
+  const estadoOff = await poff.evaluate((clave) => ({ copia: localStorage.getItem(clave), campos: localStorage.getItem(clave + ':campos') }), claveL);
+  await ctxOff.close();
+  const ctxOn = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxOn.addInitScript(() => { window.__semilla = { x: { id: 'x', tipo: 'general', nota: 'Nota original', estado: 'resuelta', cierre: 'pregunta', respuesta: '¿Por qué? Ampliada en otra sesión', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-02T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxOn.addInitScript(conBase);
+  await ctxOn.addInitScript(([clave, e]) => { if (!sessionStorage.getItem('sembrado')) { sessionStorage.setItem('sembrado', '1'); localStorage.setItem(clave, e.copia); localStorage.setItem(clave + ':campos', e.campos); } }, [claveL, estadoOff]);
+  const pon = await ctxOn.newPage();
+  await pon.goto(base);
+  const onSubido = await esperar(pon, () => window.__docs && window.__docs.x && window.__docs.x.replica === 'Porque lo dice la guía', null, 10000);
+  const onBase = await pon.evaluate((clave) => ({ x: window.__docs.x, copia: localStorage.getItem(clave), campos: JSON.parse(localStorage.getItem(clave + ':campos') || '{}') }), claveL);
+  check(onSubido && onBase.x.nota === 'Nota en borrador' && onBase.x.respuesta === '¿Por qué? Ampliada en otra sesión' && onBase.x.estado === 'resuelta', `al conectar suben la nota y la réplica del borrador, y la respuesta y el estado de la base se conservan (${JSON.stringify({ nota: onBase.x.nota, estado: onBase.x.estado })})`);
+  const sueltas = await esperar(pon, (clave) => !JSON.parse(localStorage.getItem(clave) || '{}').x && !JSON.parse(localStorage.getItem(clave + ':campos') || '{}').x, claveL);
+  check(sueltas, 'y la copia local y su lista de campos se sueltan una vez subidas');
+  await ctxOn.close();
 
   // ---------------------------------------------------------------- la nota de otro lector rechazada por falta de permiso
   // can('data.write') resuelve null (host antiguo, visitante de fuera): la página deja escribir y es el rechazo

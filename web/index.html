@@ -442,7 +442,9 @@ figure img { cursor: zoom-in; }
     var a = anots[id]; if (!a) return;
     var rechazo = function (e) { rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
     col.doc(id).set(a).then(function () {
-      if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; podarLocal([id]); renderPanel(); }
+      limpiarCampos(id, a);
+      // la copia local se suelta sólo si nada se editó después de esta escritura
+      if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }
       estado('Guardado ' + new Date().toLocaleTimeString()); respaldar();
     }).catch(function (e) {
       if (reintento || !esTransitorio(e)) { rechazo(e); return; }
@@ -460,7 +462,7 @@ figure img { cursor: zoom-in; }
     // pendientes, y la ficha ofrece reintentar (o sólo copiar, en sólo lectura). Nada que la página mostró se pierde.
     SIN_GUARDAR[id] = codigo;
     if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id);
-    guardarLocal([id]); escribirCampos();
+    guardarLocal([id]);
   }
   function rechazoEscritura(e, id, previa, verbo) {
     // La base no aceptó la escritura: la memoria vuelve a lo que la base tiene, para que no queden anotaciones
@@ -474,7 +476,7 @@ figure img { cursor: zoom-in; }
       // el borrado no ocurrió: no hay nada que deshacer (salvo que el enlace ya sea de otro borrado posterior)
       if (ultimoBorrado && ultimoBorrado.id === id) { ultimoBorrado = null; var z = $('#deshacer-zona'); if (z) z.innerHTML = ''; }
     }
-    else if (previa) { anots[id] = previa; var u2 = ubicar(previa); if (u2) UBIC[id] = u2; pintar(previa); }
+    else if (previa) { anots[id] = previa; var u2 = ubicar(previa); if (u2) UBIC[id] = u2; pintar(previa); limpiarCampos(id, previa); }
     else { conservarSinGuardar(id, codigo); conservada = true; }
     renderPanel(); renderCuentas();
     if (permiso) activarSoloLectura();
@@ -502,10 +504,10 @@ figure img { cursor: zoom-in; }
     // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
     // (con su marca de «sin guardar», si la tenía) y la copia local, si la tenía, la sigue teniendo.
     if (col) {
-      col.doc(id).delete().then(function () { podarLocal([id]); respaldar(); })
-        .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
+      col.doc(id).delete().then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
+        .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
     }
-    else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); }
+    else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }
     else guardarLocal();
     ofrecerDeshacer(a);
   }
@@ -515,12 +517,15 @@ figure img { cursor: zoom-in; }
     var c = CAMPOS_BORRADOR[id] || (CAMPOS_BORRADOR[id] = {});
     CAMPOS_LECTOR.forEach(function (k) { if (antes[k] !== despues[k]) c[k] = true; });
   }
-  function escribirCampos() { lsSet(LOCAL_KEY + ':campos', JSON.stringify(CAMPOS_BORRADOR)); }
+  function escribirCampos() {
+    if (Object.keys(CAMPOS_BORRADOR).length) lsSet(LOCAL_KEY + ':campos', JSON.stringify(CAMPOS_BORRADOR));
+    else try { localStorage.removeItem(LOCAL_KEY + ':campos'); } catch (e) {}
+  }
   function fundirBorrador(deBase, borrador, campos) {
     // Un borrador que no subió aporta sólo los campos que el lector cambió (si no se sabe cuáles, los que edita en
     // la página y difieren); respuesta, cierre y demás los manda la base, para que recuperar el borrador no borre lo
     // que otra sesión escribió entre tanto.
-    var r = Object.assign({}, deBase), lista = campos && Object.keys(campos).length ? Object.keys(campos) : CAMPOS_LECTOR;
+    var r = Object.assign({}, deBase), lista = campos && Object.keys(campos).length ? Object.keys(campos) : ['nota', 'replica'];
     lista.forEach(function (c) { if (borrador[c] !== undefined && borrador[c] !== deBase[c]) r[c] = borrador[c]; });
     r.editado = borrador.editado || r.editado;
     return r;
@@ -536,16 +541,25 @@ figure img { cursor: zoom-in; }
     // anotaciones en la copia que ya hay sin tocar lo demás: lo pendiente de otra sesión o de otra cuenta.
     var datos = anots;
     if (ids) { datos = leerLocal(); ids.forEach(function (id) { if (anots[id]) datos[id] = anots[id]; }); }
+    escribirCampos();  // la lista de campos cambiados viaja siempre con la copia local
     if (escribirLocal(datos)) estado('Guardado sólo en este navegador', true);
     else estado('No se pudo guardar en este navegador (almacenamiento lleno o bloqueado): copia tus anotaciones con el botón antes de cerrar', true);
   }
   function podarLocal(ids) {
     // Retira de la copia local lo que ya no la necesita: subió a la base, la base ya lo tenía, o se borró.
     if (!ids.length) return;
-    var datos = leerLocal(), habia = false, campos = false;
-    ids.forEach(function (id) { if (datos[id]) { delete datos[id]; habia = true; } if (CAMPOS_BORRADOR[id]) { delete CAMPOS_BORRADOR[id]; campos = true; } });
+    var datos = leerLocal(), habia = false;
+    ids.forEach(function (id) { if (datos[id]) { delete datos[id]; habia = true; } });
     if (habia) escribirLocal(datos);
-    if (campos) escribirCampos();
+  }
+  function limpiarCampos(id, enBase) {
+    // Quita las marcas de los campos que la base ya tiene con el valor de la memoria (`enBase`: lo que se escribió,
+    // o la versión de la base a la que se volvió); sin `enBase`, todas (la anotación se borró). Lo que se siguió
+    // editando después conserva su marca.
+    var c = CAMPOS_BORRADOR[id]; if (!c) return;
+    Object.keys(c).forEach(function (k) { if (!enBase || !anots[id] || anots[id][k] === enBase[k]) delete c[k]; });
+    if (!Object.keys(c).length) delete CAMPOS_BORRADOR[id];
+    escribirCampos();
   }
   function cargarLocal(filtro) {
     // Pasa a memoria lo guardado en el navegador. `filtro(id, anotación)` puede dejar algo fuera: se queda en la copia
@@ -1385,13 +1399,16 @@ figure img { cursor: zoom-in; }
           var rec = cargarLocal(function (id, a) { return !(a.autor && ME && a.autor !== ME); });
           rec.nuevas.forEach(function (id) { if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id); });
           if (rec.nuevas.length) { pintarTodo(); renderPanel(); renderCuentas(); }
-          podarLocal(rec.existentes.filter(function (id) { return pendientesBase.indexOf(id) < 0; }));
+          var obsoletas = rec.existentes.filter(function (id) { return pendientesBase.indexOf(id) < 0; });
+          podarLocal(obsoletas); obsoletas.forEach(function (id) { limpiarCampos(id, anots[id]); });
           if (SOLO_LECTURA) { marcarSinSubir(); return; }
           var ids = pendientesBase.splice(0).filter(function (id) { var a = anots[id]; if (!a) return false; if (!a.autor && ME) a.autor = ME; return true; });
           if (!ids.length) return;
-          Promise.all(ids.map(function (id) { return col.doc(id).set(anots[id]).then(function () { return true; }).catch(function (e) { return (e && e.code) || 'error'; }); })).then(function (ok) {
+          var escritas = {};
+          Promise.all(ids.map(function (id) { escritas[id] = anots[id]; return col.doc(id).set(anots[id]).then(function () { return true; }).catch(function (e) { return (e && e.code) || 'error'; }); })).then(function (ok) {
             var subieron = ids.filter(function (id, i) { return ok[i] === true; }), fallidas = ids.filter(function (id, i) { return ok[i] !== true; });
-            podarLocal(subieron);
+            subieron.forEach(function (id) { limpiarCampos(id, escritas[id]); });
+            podarLocal(subieron.filter(function (id) { return anots[id] === escritas[id]; }));
             if (!fallidas.length) { respaldar(); return; }
             // la ficha de cada una lo dice y ofrece reintentar
             fallidas.forEach(function (id) { SIN_GUARDAR[id] = ok[ids.indexOf(id)]; });

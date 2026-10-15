@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.10] - 2026-10-15
+
+### Corregido
+
+- La lista de campos que el lector cambió en un borrador se escribe junto con cada escritura de la copia local, también sin base compartida y también por `guardar` (color y estado): una réplica escrita sin conexión sobre un borrador recuperado ya no se pierde al volver a conectar.
+- Las marcas de campos se retiran sólo cuando la base tiene ese valor (escritura confirmada, vuelta a la versión de la base, borrado), no al podar la copia local; lo que se siguió editando después conserva su marca, y la copia local no se suelta si hubo ediciones posteriores a la escritura confirmada.
+- Un borrador sin lista de campos (anterior a 0.2.9) sólo aporta la nota y la réplica: el color y el estado los manda la base, para no pisar un estado compartido con una copia vieja.
+
 ## [0.2.9] - 2026-10-15
 
 ### Corregido
