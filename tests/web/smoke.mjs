@@ -677,14 +677,18 @@ try {
   await p3.waitForFunction(() => /No se pudo guardar \(quota_exceeded\)/.test(document.querySelector('#estado').textContent));
   const estadoRechazado = await p3.evaluate((id) => ({ resuelta: document.querySelector(`.ficha[data-id="${id}"]`).classList.contains('resuelta'), boton: document.querySelector(`.ficha[data-id="${id}"] button[data-accion="estado"]`).textContent, base: window.__docs[id].estado }), mio.id);
   check(!estadoRechazado.resuelta && estadoRechazado.boton === 'Resuelta' && estadoRechazado.base === 'abierta', `un cambio de estado rechazado vuelve al estado que la base tiene (${estadoRechazado.boton}, base ${estadoRechazado.base})`);
-  // una nota rechazada mientras se escribe vuelve al texto guardado, también en el cuadro que tiene el foco
+  // una nota rechazada mientras se escribe no se pierde: el borrador sigue en el cuadro (con el foco), la ficha queda
+  // «sin guardar» con reintento y copia local, y la base conserva lo suyo hasta que el reintento la actualiza
   await p3.evaluate(() => { document.querySelector('#estado').textContent = ''; });
   await p3.focus('.ficha[data-id="atendida"] textarea');
   await p3.keyboard.type(' y el adverbio', { delay: 10 });
-  await p3.waitForFunction(() => /el cuadro vuelve al texto guardado/.test(document.querySelector('#estado').textContent));
-  const notaRechazada = await p3.evaluate(() => ({ cuadro: document.querySelector('.ficha[data-id="atendida"] textarea').value, foco: document.activeElement.id, base: window.__docs.atendida.nota, exportado: /adverbio/.test(JSON.stringify(Object.values(window.__docs))) }));
-  check(notaRechazada.cuadro === 'Quitar el adjetivo' && notaRechazada.foco === 'nota-atendida' && notaRechazada.base === 'Quitar el adjetivo', `una nota rechazada vuelve al texto guardado sin quitar el foco del cuadro (${JSON.stringify(notaRechazada.cuadro)})`);
+  const borradorAvisado = await esperar(p3, () => /sigue aquí/.test(document.querySelector('#estado').textContent) && !!document.querySelector('.ficha[data-id="atendida"].sin-guardar'));
+  const notaRechazada = await p3.evaluate(() => ({ cuadro: document.querySelector('.ficha[data-id="atendida"] textarea').value, foco: document.activeElement.id, base: window.__docs.atendida.nota, reintentar: !!document.querySelector('.ficha[data-id="atendida"] button[data-accion="reintentar"]'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /adverbio/.test(localStorage.getItem(k))) }));
+  check(borradorAvisado && notaRechazada.cuadro === 'Quitar el adjetivo y el adverbio' && notaRechazada.foco === 'nota-atendida' && notaRechazada.base === 'Quitar el adjetivo' && notaRechazada.reintentar && notaRechazada.local, `una nota rechazada conserva el borrador en el cuadro con el foco, marcada «sin guardar» con reintento y copia local, y la base sigue con lo suyo (${JSON.stringify(notaRechazada.cuadro)}, base ${JSON.stringify(notaRechazada.base)})`);
   await p3.evaluate(() => { window.__rechazar = null; window.getSelection().removeAllRanges(); });
+  await p3.click('.ficha[data-id="atendida"] button[data-accion="reintentar"]');
+  const reintentada = await esperar(p3, () => window.__docs.atendida.nota === 'Quitar el adjetivo y el adverbio' && !document.querySelector('.ficha[data-id="atendida"].sin-guardar'));
+  check(reintentada, 'reintentar desde la ficha lleva el borrador a la base y quita la marca');
   await p3.$eval('.ficha[data-id="atendida"] textarea', (t) => t.blur());
   await p3.click('.ficha[data-id="ajena"] .acciones button:has-text("Borrar")');
   await p3.click('.ficha[data-id="ajena"] .confirmar button:has-text("Sí")');
@@ -695,6 +699,29 @@ try {
   check(true, 'deshacer devuelve la anotación a la base');
   check(errores3.length === 0, `sin errores de página con base y usuario${errores3.length ? ': ' + errores3.join(' | ') : ''}`);
   await ctx3.close();
+
+  // ---------------------------------------------------------------- un borrador que no subió sobrevive a la recarga
+  // la copia local es más reciente que la versión de la base: al recargar manda el borrador y vuelve a subir
+  const ctxBr = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxBr.addInitScript(() => { window.__semilla = { borrador: { id: 'borrador', tipo: 'general', nota: 'Texto original', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-01T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxBr.addInitScript(conBase);
+  const pbr = await ctxBr.newPage();
+  await pbr.goto(base);
+  await pbr.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pbr.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await pbr.click('.tab[data-tab="todas"]');
+  await pbr.evaluate(() => { window.__rechazar = 'unavailable'; });
+  await pbr.focus('.ficha[data-id="borrador"] textarea');
+  await pbr.keyboard.type(' y añadido', { delay: 10 });
+  const brMarcado = await esperar(pbr, () => !!document.querySelector('.ficha[data-id="borrador"].sin-guardar'));
+  check(brMarcado, 'un borrador rechazado queda marcado «sin guardar»');
+  await pbr.reload();
+  await pbr.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const brSubido = await esperar(pbr, () => window.__docs.borrador && window.__docs.borrador.nota === 'Texto original y añadido', null, 10000);
+  await pbr.click('.tab[data-tab="todas"]');
+  const brTras = await pbr.evaluate(() => ({ cuadro: (document.querySelector('.ficha[data-id="borrador"] textarea') || {}).value, sinGuardar: !!document.querySelector('.ficha[data-id="borrador"].sin-guardar'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /borrador/.test(localStorage.getItem(k))) }));
+  check(brSubido && brTras.cuadro === 'Texto original y añadido' && !brTras.sinGuardar && !brTras.local, `al recargar, el borrador local más reciente que la base manda, sube y suelta la copia local (${JSON.stringify(brTras.cuadro)})`);
+  await ctxBr.close();
 
   // ---------------------------------------------------------------- la nota de otro lector rechazada por falta de permiso
   // can('data.write') resuelve null (host antiguo, visitante de fuera): la página deja escribir y es el rechazo
@@ -707,6 +734,7 @@ try {
   await pf.goto(base);
   await pf.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pf.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  check(await pf.$eval('#sl-chip', (c) => getComputedStyle(c).display === 'none'), 'con permiso de escritura el chip «sólo lectura» no se ve');
   await pf.click('.tab[data-tab="todas"]');
   await pf.waitForSelector('.ficha[data-id="ajena"] textarea');
   await pf.evaluate(() => { window.__rechazar = 'invalid_argument'; });
@@ -715,8 +743,8 @@ try {
   await pf.waitForFunction(() => document.body.classList.contains('solo-lectura'));
   await pf.click('#b-copiar');
   const exportadoF = await pf.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  const fantasma = await pf.evaluate(() => ({ texto: (document.querySelector('.ficha[data-id="ajena"] .nota-texto') || {}).textContent, cuadro: !!document.querySelector('.ficha textarea'), base: window.__docs.ajena.nota, chip: !document.querySelector('#sl-chip').hidden, tb: document.querySelector('#sel-tb').getAttribute('aria-label'), estado: document.querySelector('#estado').textContent }));
-  check(fantasma.texto === 'Nota de otra lectora' && !fantasma.cuadro && fantasma.base === 'Nota de otra lectora' && !/sin permiso/.test(exportadoF), `una nota rechazada por falta de permiso vuelve a lo guardado, no se exporta y la página pasa a sólo lectura (${JSON.stringify(fantasma.texto)})`);
+  const fantasma = await pf.evaluate(() => ({ texto: (document.querySelector('.ficha[data-id="ajena"] .nota-texto') || {}).textContent, sinGuardar: !!document.querySelector('.ficha[data-id="ajena"].sin-guardar'), cuadro: !!document.querySelector('.ficha textarea'), base: window.__docs.ajena.nota, chip: getComputedStyle(document.querySelector('#sl-chip')).display !== 'none', tb: document.querySelector('#sel-tb').getAttribute('aria-label'), estado: document.querySelector('#estado').textContent }));
+  check(fantasma.texto === 'Nota de otra lectora, cambiada sin permiso' && fantasma.sinGuardar && !fantasma.cuadro && fantasma.base === 'Nota de otra lectora' && (() => { try { const j = JSON.parse(exportadoF); const a = j.anotaciones.find((x) => x.id === 'ajena'); return a.nota === 'Nota de otra lectora, cambiada sin permiso' && a.sin_guardar === 'invalid_argument'; } catch (e) { return false; } })(), `una nota rechazada por falta de permiso conserva el borrador marcado «sin guardar», se exporta con esa señal, la base no cambia y la página pasa a sólo lectura (${JSON.stringify(fantasma.texto)})`);
   check(fantasma.chip && fantasma.tb === 'Copiar la selección' && /sólo lectura/i.test(fantasma.estado), `el modo sólo lectura se señala con el chip, la barra de selección y el estado (${fantasma.estado.slice(0, 60)})`);
   await pf.evaluate(() => window.__cambioExterno('ajena', { estado: 'resuelta' }));
   await pf.waitForSelector('.ficha[data-id="ajena"].resuelta');

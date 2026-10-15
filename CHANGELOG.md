@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.8] - 2026-10-15
+
+### Corregido
+
+- Una nota o réplica que la base rechaza ya no se descarta: el borrador sigue en el cuadro (con el foco) y en memoria marcado «sin guardar», con copia en el navegador y reintento desde la ficha; un rechazo de permiso pasa además la página a sólo lectura y lo exportado lleva la señal. Sustituye el comportamiento de 0.2.7, que reponía el texto guardado en el cuadro y perdía lo escrito.
+- Al recargar, una copia local más reciente que la versión de la base (un borrador que no subió) manda, se muestra y vuelve a subir.
+- El chip «sólo lectura» quedaba visible aunque se pudiera escribir, porque la regla de `.chip` fijaba `display` por encima del atributo `hidden`.
+
 ## [0.2.7] - 2026-10-15
 
 Segunda revisión adversarial con agentes independientes (20 hallazgos confirmados sobre 0.2.2; cuatro ya estaban cerrados en 0.2.3–0.2.6) y sus correcciones, cada rama revisada por un agente distinto antes de fusionarla.

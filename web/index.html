@@ -158,6 +158,7 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
 .bloque.cambiado { box-shadow: -3px 0 0 var(--hl-duda-ink); }
 .marca-cambio { position: absolute; left: -56px; top: 1.7em; width: 46px; text-align: right; font-family: var(--sans); font-size: 10px; color: var(--hl-duda-ink); background: none; border: 0; padding: 0 4px; cursor: pointer; }
 #sl-chip { color: var(--acento); border: 1px solid currentColor; background: none; }
+#sl-chip[hidden] { display: none; }  /* .chip fija display, que de otro modo anularía el atributo hidden */
 .ficha.sin-guardar { border-style: dashed; }
 .ficha .aviso-guardar { font-family: var(--sans); font-size: 11px; color: var(--acento); margin: 2px 0 4px; }
 .bloque .pg + .marca-cambio { top: 1.7em; }
@@ -550,8 +551,9 @@ figure img { cursor: zoom-in; }
       // Lo que ya está en memoria (recién anotado, o traído de la base) manda sobre la copia local.
       var nuevas = [], existentes = [];
       Object.keys(j).forEach(function (k) {
-        if (anots[k]) existentes.push(k);
-        else if (!filtro || filtro(k, j[k])) { anots[k] = j[k]; nuevas.push(k); }
+        var masNueva = anots[k] && j[k] && j[k].editado && anots[k].editado && j[k].editado > anots[k].editado;
+        if (anots[k] && !masNueva) existentes.push(k);
+        else if (!filtro || filtro(k, j[k])) { anots[k] = j[k]; nuevas.push(k); }  // un borrador local más reciente que la base manda y vuelve a subir
       });
       return { migradas: migradas, guardadas: guardadas, nuevas: nuevas, existentes: existentes };
     } catch (e) { return { migradas: 0, guardadas: true, nuevas: [], existentes: [] }; }
@@ -874,21 +876,15 @@ figure img { cursor: zoom-in; }
     f.appendChild(acc);
     return f;
   }
-  function guardarSilencioso(id, parche, cuadro) {
-    // Las ediciones de nota y réplica siguen la misma política que `guardar`: la versión previa se toma antes de
-    // aplicar el parche y, si la base rechaza, la memoria vuelve a ella (y la página a sólo lectura cuando el rechazo
-    // es de permiso). Si el cuadro sigue enfocado, también él vuelve al texto guardado, y la barra lo dice.
+  function guardarSilencioso(id, parche) {
+    // Ediciones de nota y réplica. Lo escrito es trabajo del lector y no se tira: si la base rechaza, el borrador
+    // sigue en el cuadro y en memoria marcado «sin guardar», con copia en el navegador y reintento desde la ficha
+    // (`rechazoEscritura` sin versión previa); un rechazo de permiso pasa además la página a sólo lectura. Al
+    // recargar, una copia local más reciente que la de la base vuelve a cargarse y a subir (`cargarLocal`).
     var ant = anots[id]; if (!ant || SOLO_LECTURA) return;
-    var previa = SIN_GUARDAR[id] ? null : JSON.parse(JSON.stringify(ant));
     var a = Object.assign({}, ant, parche); a.editado = ahora(); anots[id] = a;
-    if (col) {
-      escribirEnBase(id, previa, function (e) {
-        var c = cuadro && document.getElementById(cuadro), campo = Object.keys(parche)[0];
-        if (!previa || !c || document.activeElement !== c) return;
-        c.value = previa[campo] || '';
-        estado('No se pudo guardar (' + ((e && e.code) || 'error') + '): el cuadro vuelve al texto guardado', true);
-      });
-    } else guardarLocal(modo === 'cargando' ? [id] : undefined);
+    if (col) escribirEnBase(id, null);
+    else guardarLocal(modo === 'cargando' ? [id] : undefined);
   }
   function irAAnot(a) {
     var pid = pidEfectivo(a);
