@@ -101,17 +101,20 @@ test('fundirBorrador: el borrador aporta sus campos y la base el resto', () => {
   assert.equal(B.fundirBorrador(base, borrador, null).estado, 'resuelta');
 });
 
-test('porRevisar: respuestas propias más nuevas que la última revisión', () => {
+test('porRevisar: respuestas propias que el autor no revisó', () => {
   const base = { id: 'x', autor: 'yo', respuesta: 'Hecho', respondido: '2026-10-10T10:00:00Z' };
   assert.equal(N.porRevisar(base, 'yo'), true);
-  assert.equal(N.porRevisar({ ...base, revisado: '2026-10-11T00:00:00Z' }, 'yo'), false);
-  assert.equal(N.porRevisar({ ...base, revisado: '2026-10-09T00:00:00Z' }, 'yo'), true, 'una respuesta nueva vuelve a la bandeja');
+  assert.equal(N.porRevisar({ ...base, revisado: N.marcaRevision(base, 'ahora') }, 'yo'), false, 'revisada');
+  assert.equal(N.marcaRevision(base, 'ahora'), '2026-10-10T10:00:00Z', 'se guarda el respondido revisado, no la hora del navegador');
+  // el reloj de quien responde no se compara con el del navegador: otra respuesta es otro `respondido`, aunque sea anterior
+  assert.equal(N.porRevisar({ ...base, respondido: '2026-10-10T09:58:00Z', revisado: '2026-10-10T10:00:00Z' }, 'yo'), true, 'una respuesta nueva con un reloj atrasado vuelve a la bandeja');
   assert.equal(N.porRevisar({ ...base, autor: 'otra' }, 'yo'), false, 'las de otros lectores no');
   assert.equal(N.porRevisar({ ...base, autor: null }, 'yo'), true, 'las sin autor sí');
+  assert.equal(N.porRevisar({ ...base, autor: 'otra' }, null), false, 'sin identidad, las de otros lectores tampoco');
+  assert.equal(N.porRevisar({ ...base, autor: null }, null), true, 'sin identidad, las sin autor sí');
   assert.equal(N.porRevisar({ id: 'y', nota: 'sin respuesta' }, 'yo'), false);
-  assert.equal(N.porRevisar({ id: 'z', cierre: 'pregunta', revisado: '2026-10-01' }, null), false, 'sin fecha de respuesta, revisada es revisada');
-  assert.equal(N.porRevisar({ ...base, revisado: '2026-10-10T10:00:00.000Z' }, 'yo'), false, 'la misma hora escrita de otra forma no es más nueva');
-  assert.equal(N.porRevisar({ ...base, respondido: '2026-10-10T09:00:00-03:00', revisado: '2026-10-10T11:00:00.000Z' }, 'yo'), true, 'con zona horaria, se comparan instantes');
+  const sinFecha = { id: 'z', cierre: 'pregunta', respuesta: '¿?' };
+  assert.equal(N.porRevisar({ ...sinFecha, revisado: N.marcaRevision(sinFecha, '2026-10-01T00:00:00Z') }, null), false, 'sin fecha de respuesta, revisada es revisada');
   assert.ok(N.CAMPOS_LECTOR.includes('revisado'), 'revisado viaja con los borradores');
 });
 
@@ -124,6 +127,13 @@ test('vecina: siguiente y anterior, con o sin actual, y los bordes', () => {
   assert.equal(N.vecina(L, null, 1), 0);
   assert.equal(N.vecina(L, 'fuera', -1), 2);
   assert.equal(N.vecina([], null, 1), -1);
+  // la actual salió de la lista (un filtro): se sigue desde su lugar en el orden, no desde el principio
+  const orden = { de: (x) => x.k, clave: 2 };
+  const M = [{ id: 'a', k: 1 }, { id: 'c', k: 3 }, { id: 'd', k: 4 }];
+  assert.equal(N.vecina(M, 'b', 1, orden), 1);
+  assert.equal(N.vecina(M, 'b', -1, orden), 0);
+  assert.equal(N.vecina(M, 'e', 1, { de: (x) => x.k, clave: 5 }), -1);
+  assert.equal(N.vecina(M, 'z', -1, { de: (x) => x.k, clave: 0 }), -1);
 });
 
 test('apilar: cada ficha a la altura de su pasaje, sin pisarse, y la activa manda', () => {

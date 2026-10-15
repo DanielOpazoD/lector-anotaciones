@@ -331,7 +331,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
 .ficha:not(.foco) { cursor: pointer; }
 .ficha:not(.foco) .cita { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ficha:not(.foco) .respuesta { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
-.ficha:not(.foco):not(:focus-within) .acciones:not(.siempre) { display: none; }
+/* las acciones de una ficha en reposo no se ven pero siguen en el orden de Tab (también hacia atrás) y para los lectores
+   de pantalla: al recibir el foco, la ficha las muestra */
+.ficha:not(.foco):not(:focus-within) .acciones:not(.siempre) { height: 0; margin: 0; padding: 0; overflow: hidden; opacity: 0; }
+.solo-lectores { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* la nota en reposo se lee como texto; activa, es un cuadro de edición */
 .ficha textarea.nota, .ficha textarea.replica { display: block; min-height: 0; resize: none; overflow: hidden; border: 1px solid transparent; background: transparent; padding: 2px 6px; margin: 0 -6px; width: calc(100% + 12px); line-height: 1.45; font-size: 13px; cursor: text; }
 .ficha textarea.replica { margin-top: 4px; }
@@ -344,7 +347,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
 .ficha .nueva.hecha { background: var(--hl-conservar); color: var(--hl-conservar-ink); }
 .ficha.por-revisar { box-shadow: inset 0 0 0 1px var(--tinta); }
 .ficha.por-revisar.foco { box-shadow: 0 0 0 2px var(--acento); }
-.ficha.revisada { opacity: .72; }
+/* revisada: el borde punteado lo dice sin apagar el texto (el contraste se mantiene) */
+.ficha.revisada { border-top-style: dashed; border-right-style: dashed; border-bottom-style: dashed; opacity: 1; }
 .cuenta-tab:not(:empty) { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--acento); color: var(--sobre-acento); font-size: 11px; line-height: 16px; text-align: center; font-weight: 600; }
 .tab.activa .cuenta-tab:not(:empty) { background: var(--sobre-tinta); color: var(--tinta); }
 .bandeja-cab { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; font-size: 12px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--radius); }

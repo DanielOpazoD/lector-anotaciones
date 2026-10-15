@@ -5,24 +5,33 @@
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   'use strict';
   // Una respuesta (de Claude o de quien edita las fuentes) está por revisar si es de una anotación propia —o sin autor,
-  // como las de un navegador sin identidad— y llegó después de la última revisión del autor. `revisado` lo escribe la
-  // página al marcarla atendida, reabrirla o contestar una pregunta; `respondido`, quien responde.
+  // como las de un navegador sin identidad— y el autor no revisó todavía esa respuesta. `respondido` lo escribe quien
+  // responde, con su reloj; `revisado`, la página al marcarla atendida, reabrirla o contestar la pregunta, y guarda el
+  // `respondido` de la respuesta revisada (`marcaRevision`), no la hora del navegador: así no se comparan dos relojes,
+  // y cualquier `respondido` distinto —también uno anterior— es una respuesta nueva. Sin identidad conocida (`yo`
+  // nulo) sólo cuentan las anotaciones sin autor: las de otros lectores no son para revisar aquí.
   function porRevisar(a, yo) {
     if (!a || !(a.respuesta || a.cierre)) return false;
-    if (a.autor && yo && a.autor !== yo) return false;
+    if (a.autor && a.autor !== yo) return false;
     if (!a.revisado) return true;
-    if (!a.respondido) return false;
-    // instantes, no textos: «12:00:00Z», «12:00:00.000Z» y «09:00:00-03:00» son la misma hora
-    var r = Date.parse(a.respondido), v = Date.parse(a.revisado);
-    return isNaN(r) || isNaN(v) ? a.revisado < a.respondido : v < r;
+    return !!a.respondido && a.respondido !== a.revisado;
   }
-  // La posición a la que se pasa desde `actual` (id) en `lista` (en orden) al avanzar `d` (+1 o −1): sin una actual en
-  // la lista, la primera (o la última al retroceder); -1 si ya no hay más en esa dirección.
-  function vecina(lista, actual, d) {
-    var i = -1;
-    for (var k = 0; k < lista.length; k++) if (lista[k].id === actual) { i = k; break; }
+  // Lo que se guarda en `revisado` al revisar: el `respondido` de la respuesta, o la hora si no lo trae.
+  function marcaRevision(a, ahora) { return (a && a.respondido) || ahora; }
+  // La posición a la que se pasa desde `actual` (id) en `lista` (en orden) al avanzar `d` (+1 o −1); -1 si ya no hay
+  // más en esa dirección. Si la actual ya no está en la lista (un filtro la sacó) y se da `orden` (la clave de orden
+  // de la actual y la función que la calcula para cada elemento), se sigue desde donde estaba; si no, desde el
+  // principio (o el final al retroceder).
+  function vecina(lista, actual, d, orden) {
+    var i = -1, k;
+    for (k = 0; k < lista.length; k++) if (lista[k].id === actual) { i = k; break; }
+    if (i < 0 && orden && orden.clave !== null && orden.clave !== undefined) {
+      if (d > 0) { for (k = 0; k < lista.length; k++) if (orden.de(lista[k]) > orden.clave) return k; }
+      else { for (k = lista.length - 1; k >= 0; k--) if (orden.de(lista[k]) < orden.clave) return k; }
+      return -1;
+    }
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;
     return j >= 0 && j < lista.length ? j : -1;
   }
-  return { porRevisar: porRevisar, vecina: vecina };
+  return { porRevisar: porRevisar, marcaRevision: marcaRevision, vecina: vecina };
 });

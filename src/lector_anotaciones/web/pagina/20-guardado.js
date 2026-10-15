@@ -35,8 +35,14 @@
     var a = anots[id]; if (!a) { delete EN_VUELO[id]; return; }
     EN_VUELO[id] = 1;
     var rechazo = function (e) { delete EN_VUELO[id]; rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
-    enCurso(col.doc(id).set(a)).then(function () {
-      delete EN_VUELO[id];
+    // Si la base ya tiene el documento, se escriben sólo los campos que el lector cambió (y `editado`) con `update`: lo
+    // que quien edita las fuentes escribió entre tanto (respuesta, cierre, respondido…) y todavía no llegó a esta
+    // página no se pisa. Si el documento ya no está (otra sesión lo borró), `update` lo rechaza y se crea entero.
+    var escritura = EN_BASE[id] && !SIN_GUARDAR[id]
+      ? col.doc(id).update(camposDelLector(id, a)).catch(function (e) { if (e && e.code === 'invalid_argument') return col.doc(id).set(a); throw e; })
+      : col.doc(id).set(a);
+    enCurso(escritura).then(function () {
+      delete EN_VUELO[id]; EN_BASE[id] = 1;
       limpiarCampos(id, a);
       // la copia local se suelta sólo si nada se editó después de esta escritura
       if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }
@@ -45,6 +51,11 @@
       if (reintento || !esTransitorio(e)) { rechazo(e); return; }
       setTimeout(function () { if (SOLO_LECTURA) rechazo(e); else escribirEnBase(id, previa, alRechazar, true); }, 100 + Math.random() * 300);
     });
+  }
+  function camposDelLector(id, a) {
+    var p = { editado: a.editado };
+    Object.keys(CAMPOS_BORRADOR[id] || {}).forEach(function (k) { p[k] = a[k] === undefined ? null : a[k]; });
+    return p;
   }
   function reintentar(id) { if (col && anots[id] && !SOLO_LECTURA) { estado('Reintentando…'); escribirEnBase(id, null); } }
   function quitarDeMemoria(id) {
@@ -100,8 +111,8 @@
     // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
     // (con su marca de «sin guardar», si la tenía) y la copia local, si la tenía, la sigue teniendo.
     if (col) {
-      enCurso(col.doc(id).delete()).then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
-        .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
+      enCurso(col.doc(id).delete()).then(function () { delete EN_BASE[id]; podarLocal([id]); limpiarCampos(id); respaldar(); })
+        .catch(function (e) { if (e && e.code === 'not_found') { delete EN_BASE[id]; podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
     }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }
     else { guardarLocal(); limpiarCampos(id); }

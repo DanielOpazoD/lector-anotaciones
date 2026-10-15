@@ -27,7 +27,7 @@
     if (a.nota) out.push('Nota: ' + a.nota);
     if (a.respuesta || a.cierre) out.push('Respuesta' + (a.cierre ? ' (' + a.cierre + (a.commit ? ', ' + a.commit : '') + ')' : '') + ': ' + (a.respuesta || ''));
     if (a.replica) out.push('Réplica: ' + a.replica);
-    if (reabierta(a)) out.push('Reabierta por el autor (' + a.revisado.slice(0, 10) + ') tras la respuesta.');
+    if (reabierta(a)) out.push('Reabierta por el autor tras la respuesta.');
     return out.join('\n');
   }
   function copiarSeleccion(boton) {
@@ -70,7 +70,7 @@
       else out.push('- [' + a.tipo + (a.pagina ? ' p. ' + a.pagina : '') + (a.estado === 'resuelta' ? ', resuelta' : '') + '] ' + (a.nota || '(sin texto)').replace(/\n/g, ' ') + senalSinGuardar(a));
       if (a.respuesta || a.cierre) out.push('  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' '));
       if (a.replica) out.push('  - Réplica: ' + a.replica.replace(/\n/g, ' '));
-      if (reabierta(a)) out.push('  - Reabierta por el autor (' + a.revisado.slice(0, 10) + ') tras la respuesta.');
+      if (reabierta(a)) out.push('  - Reabierta por el autor tras la respuesta.');
     });
     return out.join('\n');
   }

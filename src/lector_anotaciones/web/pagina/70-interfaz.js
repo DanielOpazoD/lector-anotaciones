@@ -43,9 +43,7 @@
   }
   function quitarFiltros() { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; }
   $$('.tab').forEach(function (t) { t.addEventListener('click', function () {
-    // al salir de «Por revisar», las revisadas en esta visita dejan la bandeja
-    if (tab === 'revisar' && t.getAttribute('data-tab') !== 'revisar') REVISADAS = {};
-    tab = t.getAttribute('data-tab'); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel();
+    cambiarTab(t.getAttribute('data-tab')); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel();
   }); });
   $('.tabs').addEventListener('keydown', function (ev) {
     var ts = $$('.tab'), i = ts.indexOf(document.activeElement); if (i < 0) return;
@@ -53,7 +51,7 @@
     if (j === null) return;
     ev.preventDefault(); j = (j + ts.length) % ts.length; ts[j].focus(); ts[j].click();
   });
-  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); if (tab === 'buscar') { tab = 'todas'; marcarTab(); } renderPanel(); }); });
+  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); if (tab === 'buscar') { cambiarTab('todas'); marcarTab(); } renderPanel(); }); });
 
   // ------------------------------------------------------------ controles
   // el menú «+ Nota» se cierra al elegir (la nota nueva queda abierta con el cursor en ella)
@@ -232,6 +230,8 @@
     else if (ev.key === ',') { ev.preventDefault(); navegar(-1); }
     else if (tab === 'revisar' && fichaFoco && anots[fichaFoco] && !SOLO_LECTURA && /^[arvARV]$/.test(ev.key)) {
       ev.preventDefault();
+      // una tecla mantenida no resuelve varias de seguido, y nada se resuelve sin verse (concentración, panel cerrado)
+      if (ev.repeat || !enfocable($('.ficha[data-id="' + fichaFoco + '"]'))) return;
       var k = ev.key.toLowerCase();
       if (k === 'v') verCambio(fichaFoco);
       else if (porRevisar(anots[fichaFoco])) revisar(fichaFoco, k === 'a' ? 'atendida' : 'reabrir');

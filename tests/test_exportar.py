@@ -105,7 +105,7 @@ def test_a_markdown_incluye_respuesta_cierre_replica_y_lector():
 def test_a_markdown_senala_lo_reabierto_desde_por_revisar():
     devuelta = dict(SUBRAYADO, id="a9", respuesta="Hecho.", cierre="atendida", revisado="2026-10-17T08:00:00.000Z")
     md = a_markdown([devuelta], ahora=AHORA)
-    assert "  - Respuesta (atendida): Hecho.\n  - Reabierta por el autor (2026-10-17) tras la respuesta." in md
+    assert "  - Respuesta (atendida): Hecho.\n  - Reabierta por el autor tras la respuesta." in md
     revisada = dict(devuelta, estado="resuelta")
     assert "Reabierta" not in a_markdown([revisada], ahora=AHORA), "atendida y revisada no es reabierta"
     pregunta = dict(devuelta, cierre="pregunta")

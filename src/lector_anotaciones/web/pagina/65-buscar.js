@@ -1,8 +1,9 @@
   // ------------------------------------------------------------ búsqueda
   function buscar(q) {
-    tab = 'buscar'; marcarTab();
+    cambiarTab('buscar'); marcarTab();
     if (mqMovil.matches) cerrarHerramientas();
-    var box = $('#lista'); box.innerHTML = '';
+    // los resultados son una lista que se desplaza, no fichas al margen
+    var box = $('#lista'); box.innerHTML = ''; box.classList.remove('al-margen'); $('#panel').classList.remove('margen'); soltarMargen();
     q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
     var norm = N.normalizar;
     var nq = norm(q), n = 0;

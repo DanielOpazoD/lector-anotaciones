@@ -2,6 +2,8 @@
   // Pestañas: «Sección» (las de la sección abierta; en escritorio, al margen de su pasaje), «Todas», «Por revisar» (las
   // respuestas que el autor todavía no revisó) y «Búsqueda».
   var REVISADAS = {};  // ids revisados en esta visita a «Por revisar»: siguen a la vista, marcados, hasta salir de la pestaña
+  // Todo cambio de pestaña pasa por aquí: al salir de «Por revisar», las revisadas en esta visita dejan la bandeja.
+  function cambiarTab(t) { if (tab === 'revisar' && t !== 'revisar') REVISADAS = {}; tab = t; }
   function porRevisar(a) { return N.porRevisar(a, ME); }
   function cuantasPorRevisar() { return Object.keys(anots).filter(function (k) { return porRevisar(anots[k]); }).length; }
   // `todoElLibro`: sin la restricción de la pestaña «Sección» (para recorrer con . y , de una sección a otra).
@@ -39,7 +41,7 @@
     var box = $('#lista'), desplaz = box.scrollTop; box.innerHTML = '';
     renderSelectores(); marcarFiltro(); renderCuentaRevisar();
     var L = lista(), margen = margenActivo() && L.length > 0;
-    box.classList.toggle('al-margen', margen); $('#panel').classList.toggle('margen', margen);
+    box.classList.toggle('al-margen', margen); $('#panel').classList.toggle('margen', margen); if (!margen) soltarMargen();
     resolverPerfiles(L.map(function (a) { return a.autor; }).filter(Boolean));
     $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
     if (tab === 'revisar') box.appendChild(cabezaBandeja(L));
@@ -83,8 +85,10 @@
   function renderCuentaRevisar() {
     var n = cuantasPorRevisar();
     $('#n-revisar').textContent = n ? String(n) : '';
-    $('#n-panel-revisar').textContent = n ? String(n) : '';
-    $('#n-panel-revisar').title = n ? n + (n === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : '';
+    // en el botón del teléfono el número va con su significado para quien usa lector de pantalla
+    var bp = $('#n-panel-revisar'); bp.textContent = '';
+    if (n) { bp.appendChild(el('span', { 'class': 'solo-lectores', text: ', ' })); bp.appendChild(document.createTextNode(String(n))); bp.appendChild(el('span', { 'class': 'solo-lectores', text: n === 1 ? ' respuesta por revisar' : ' respuestas por revisar' })); }
+    bp.title = n ? n + (n === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : '';
   }
   function etiqueta(a) {
     if (a.tipo === 'subrayado') return (a.sidTitulo || '').replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
@@ -101,14 +105,23 @@
   function ajustarAlto(ta) {
     if (!ta || !ta.isConnected) return;
     ta.style.height = 'auto';
-    var h = ta.scrollHeight;
+    fijarAlto(ta, ta.scrollHeight);
+  }
+  function fijarAlto(ta, h) {
     if (!h) { ta.style.height = ''; return; }  // el panel no se ve (concentración): se ajusta al mostrarse
     var activa = !!ta.closest('.ficha.foco') || document.activeElement === ta;
     var tope = activa ? Math.max(140, Math.round(window.innerHeight * 0.45)) : ALTO_REPOSO;
     ta.style.height = (Math.min(h, tope) + 2) + 'px';
     ta.classList.toggle('recortada', !activa && h > ALTO_REPOSO);
   }
-  function ajustarTextareas(raiz) { $$('.ficha textarea', raiz || $('#lista')).forEach(ajustarAlto); }
+  // Por lotes: primero todas las escrituras, luego todas las lecturas, luego todas las escrituras; así el navegador
+  // calcula la maquetación una vez y no una por nota (con cientos de fichas, redibujar o cambiar el ancho no se traba).
+  function ajustarTextareas(raiz) {
+    var tas = $$('.ficha textarea', raiz || $('#lista'));
+    tas.forEach(function (ta) { ta.style.height = 'auto'; });
+    var hs = tas.map(function (ta) { return ta.scrollHeight; });
+    tas.forEach(function (ta, i) { fijarAlto(ta, hs[i]); });
+  }
   function activar(id) {
     if (fichaFoco === id) return;
     fichaFoco = id;
@@ -117,7 +130,7 @@
     var f = $('.ficha[data-id="' + id + '"]');
     if (f) { f.classList.add('foco'); ajustarTextareas(f); }
     $$('mark.hl[data-aids~="' + id + '"]').forEach(function (m) { m.classList.add('foco'); });
-    if (margenActivo()) { colocarMargen(); asegurarVisibleMargen(id); }
+    if (margenActivo()) reacomodarPorActivar(id);
     actualizarNav();
   }
   function ficha(a) {
@@ -189,7 +202,7 @@
       var guardarReplica = function () {
         var vivo = anots[a.id]; if (!vivo || rp.value === (vivo.replica || '')) return;
         var parche = { replica: rp.value };
-        if (rp.value.trim() && porRevisar(vivo)) { parche.revisado = ahora(); REVISADAS[a.id] = 1; }
+        if (rp.value.trim() && porRevisar(vivo)) { parche.revisado = N.marcaRevision(vivo, ahora()); if (tab === 'revisar') REVISADAS[a.id] = 1; }
         guardarSilencioso(a.id, parche, rp.id);
         if (parche.revisado) renderCuentaRevisar();
       };
@@ -274,9 +287,19 @@
     if (!a || a.tipo !== 'subrayado' || !a.cita) return null;
     var u = UBIC[a.id], pe = pidEfectivo(a), b = pe && BLOQUES[pe];
     if (u && u.estado !== 'perdido') return b && b.anterior && (!a.bh || b.h !== a.bh) ? pe : null;
-    var buscarEn = function (bloques) { return bloques.filter(function (x) { return x.anterior && x.anterior.indexOf(a.cita) >= 0; })[0]; };
-    var x = SEC_BY_ID[a.sid] ? buscarEn(SEC_BY_ID[a.sid].bloques) : null;
-    for (var i = 0; !x && i < SECS.length; i++) x = buscarEn(SECS[i].bloques);
+    // de los bloques cuyo texto anterior contenía la cita: el suyo, si es uno; si no, el que la tenía con su contexto
+    var elegir = function (bloques) {
+      var mejor = null, puntos = -1;
+      bloques.forEach(function (x) {
+        if (!x.anterior) return;
+        var m = N.buscarCita(x.anterior, a); if (!m) return;
+        var p = m.puntos + (x.id === a.pid ? 3 : 0);
+        if (p > puntos) { mejor = x; puntos = p; }
+      });
+      return mejor;
+    };
+    var x = SEC_BY_ID[a.sid] ? elegir(SEC_BY_ID[a.sid].bloques) : null;
+    for (var i = 0; !x && i < SECS.length; i++) x = elegir(SECS[i].bloques);
     return x ? x.id : null;
   }
   function verCambio(id) {
@@ -289,15 +312,22 @@
   // el cursor en la réplica (si era una pregunta) o en la nota, para escribir qué falta.
   function revisar(id, accion) {
     var a = anots[id]; if (!a || SOLO_LECTURA) return;
-    REVISADAS[id] = 1;
+    var enBandeja = tab === 'revisar';
+    if (enBandeja) REVISADAS[id] = 1;
     if (accion === 'atendida') {
-      var sig = lista().filter(function (x) { return porRevisar(x) && x.id !== id && ordenKey(x) > ordenKey(a); })[0] || lista().filter(function (x) { return porRevisar(x) && x.id !== id; })[0];
-      guardar(Object.assign({}, a, { estado: 'resuelta', revisado: ahora() }));
-      if (sig) irARevisar(sig);
-      else { anunciar('No quedan respuestas por revisar'); var cab = $('.bandeja-cab'); if (cab) { cab.setAttribute('tabindex', '-1'); cab.focus({ preventScroll: true }); } }
+      // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
+      // (en «Sección» o «Todas») se queda en la ficha
+      var pend = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (x) { return porRevisar(x) && x.id !== id; })
+        .sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
+      var sig = pend.filter(function (x) { return ordenKey(x) > ordenKey(a); })[0] || pend[0];
+      guardar(Object.assign({}, a, { estado: 'resuelta', revisado: N.marcaRevision(a, ahora()) }));
+      if (enBandeja && sig) { irARevisar(sig); return; }
+      anunciar(pend.length ? 'Atendida' : 'Atendida. No quedan respuestas por revisar');
+      var destino = enBandeja ? $('.bandeja-cab') : $('.ficha[data-id="' + id + '"]');
+      if (destino) { destino.setAttribute('tabindex', '-1'); destino.focus({ preventScroll: true }); }
       return;
     }
-    guardar(Object.assign({}, a, { estado: 'abierta', revisado: ahora() }));
+    guardar(Object.assign({}, a, { estado: 'abierta', revisado: N.marcaRevision(a, ahora()) }));
     var f = $('.ficha[data-id="' + id + '"]'), ta = f && ($('textarea.replica', f) || $('textarea.nota', f));
     if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
   }
@@ -310,7 +340,7 @@
   function navegar(d) {
     var L = listaNavegable();
     if (!L.length) { anunciar('No hay anotaciones que recorrer'); return; }
-    var j = N.vecina(L, fichaFoco, d);
+    var j = N.vecina(L, fichaFoco, d, { de: ordenKey, clave: anots[fichaFoco] ? ordenKey(anots[fichaFoco]) : null });
     if (j < 0) { anunciar(d > 0 ? 'Es la última anotación' : 'Es la primera anotación'); return; }
     if (tab === 'revisar') irARevisar(L[j]); else irAAnot(L[j], mqMovil.matches);
   }
@@ -339,9 +369,14 @@
     fichaFoco = id;
     var a = anots[id]; if (!a) return;
     if (previo) pintarPid(previo);
-    if (tab === 'buscar') tab = 'todas';
-    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) tab = 'todas';
-    if (lista().indexOf(a) < 0) { if (tab === 'revisar') tab = 'todas'; quitarFiltros(); }
+    if (tab === 'buscar') cambiarTab('todas');
+    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) cambiarTab('todas');
+    // fuera de la lista: si es por la sección (una nota de página sin su página en el texto), a «Todas» con los mismos
+    // filtros; si es por un filtro o por la bandeja, a «Todas» sin filtros
+    if (lista().indexOf(a) < 0) {
+      if (tab === 'revisar' || (tab === 'capitulo' && lista(true).indexOf(a) >= 0)) cambiarTab('todas');
+      if (lista().indexOf(a) < 0) quitarFiltros();
+    }
     marcarTab();
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
     // en concentración el panel no se ve: para escribir o mostrar la ficha se sale de ella

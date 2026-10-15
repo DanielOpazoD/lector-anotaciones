@@ -10,6 +10,7 @@
   var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
   var avisoRevisar = false;  // ya se anunció en esta visita que hay respuestas por revisar
   var EN_VUELO = {};        // id -> 1 mientras la base no confirma (o rechaza del todo) su escritura, reintento incluido
+  var EN_BASE = {};         // id -> 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
   var ESCRIBIENDO = 0;      // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
   var SIN_GUARDAR = {};     // id -> código del último rechazo de una anotación que la base todavía no tiene
   var RESPALDO_MAX = 180 * 1024;  // bytes de cada documento de respaldo ya envuelto, con margen (la base admite 256 KiB)

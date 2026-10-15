@@ -81,7 +81,7 @@ def _cola(a: dict) -> list[str]:
     if a.get("replica"):
         lineas.append(f"  - Réplica: {a['replica'].strip().replace(chr(10), ' ')}")
     if reabierta(a):
-        lineas.append(f"  - Reabierta por el autor ({a['revisado'][:10]}) tras la respuesta.")
+        lineas.append("  - Reabierta por el autor tras la respuesta.")
     return lineas
 
 

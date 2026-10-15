@@ -341,7 +341,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
 .ficha:not(.foco) { cursor: pointer; }
 .ficha:not(.foco) .cita { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ficha:not(.foco) .respuesta { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
-.ficha:not(.foco):not(:focus-within) .acciones:not(.siempre) { display: none; }
+/* las acciones de una ficha en reposo no se ven pero siguen en el orden de Tab (también hacia atrás) y para los lectores
+   de pantalla: al recibir el foco, la ficha las muestra */
+.ficha:not(.foco):not(:focus-within) .acciones:not(.siempre) { height: 0; margin: 0; padding: 0; overflow: hidden; opacity: 0; }
+.solo-lectores { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* la nota en reposo se lee como texto; activa, es un cuadro de edición */
 .ficha textarea.nota, .ficha textarea.replica { display: block; min-height: 0; resize: none; overflow: hidden; border: 1px solid transparent; background: transparent; padding: 2px 6px; margin: 0 -6px; width: calc(100% + 12px); line-height: 1.45; font-size: 13px; cursor: text; }
 .ficha textarea.replica { margin-top: 4px; }
@@ -354,7 +357,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
 .ficha .nueva.hecha { background: var(--hl-conservar); color: var(--hl-conservar-ink); }
 .ficha.por-revisar { box-shadow: inset 0 0 0 1px var(--tinta); }
 .ficha.por-revisar.foco { box-shadow: 0 0 0 2px var(--acento); }
-.ficha.revisada { opacity: .72; }
+/* revisada: el borde punteado lo dice sin apagar el texto (el contraste se mantiene) */
+.ficha.revisada { border-top-style: dashed; border-right-style: dashed; border-bottom-style: dashed; opacity: 1; }
 .cuenta-tab:not(:empty) { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--acento); color: var(--sobre-acento); font-size: 11px; line-height: 16px; text-align: center; font-weight: 600; }
 .tab.activa .cuenta-tab:not(:empty) { background: var(--sobre-tinta); color: var(--tinta); }
 .bandeja-cab { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; font-size: 12px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
@@ -672,26 +676,35 @@ aside.panel.margen { overflow: hidden; }
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   'use strict';
   // Una respuesta (de Claude o de quien edita las fuentes) está por revisar si es de una anotación propia —o sin autor,
-  // como las de un navegador sin identidad— y llegó después de la última revisión del autor. `revisado` lo escribe la
-  // página al marcarla atendida, reabrirla o contestar una pregunta; `respondido`, quien responde.
+  // como las de un navegador sin identidad— y el autor no revisó todavía esa respuesta. `respondido` lo escribe quien
+  // responde, con su reloj; `revisado`, la página al marcarla atendida, reabrirla o contestar la pregunta, y guarda el
+  // `respondido` de la respuesta revisada (`marcaRevision`), no la hora del navegador: así no se comparan dos relojes,
+  // y cualquier `respondido` distinto —también uno anterior— es una respuesta nueva. Sin identidad conocida (`yo`
+  // nulo) sólo cuentan las anotaciones sin autor: las de otros lectores no son para revisar aquí.
   function porRevisar(a, yo) {
     if (!a || !(a.respuesta || a.cierre)) return false;
-    if (a.autor && yo && a.autor !== yo) return false;
+    if (a.autor && a.autor !== yo) return false;
     if (!a.revisado) return true;
-    if (!a.respondido) return false;
-    // instantes, no textos: «12:00:00Z», «12:00:00.000Z» y «09:00:00-03:00» son la misma hora
-    var r = Date.parse(a.respondido), v = Date.parse(a.revisado);
-    return isNaN(r) || isNaN(v) ? a.revisado < a.respondido : v < r;
+    return !!a.respondido && a.respondido !== a.revisado;
   }
-  // La posición a la que se pasa desde `actual` (id) en `lista` (en orden) al avanzar `d` (+1 o −1): sin una actual en
-  // la lista, la primera (o la última al retroceder); -1 si ya no hay más en esa dirección.
-  function vecina(lista, actual, d) {
-    var i = -1;
-    for (var k = 0; k < lista.length; k++) if (lista[k].id === actual) { i = k; break; }
+  // Lo que se guarda en `revisado` al revisar: el `respondido` de la respuesta, o la hora si no lo trae.
+  function marcaRevision(a, ahora) { return (a && a.respondido) || ahora; }
+  // La posición a la que se pasa desde `actual` (id) en `lista` (en orden) al avanzar `d` (+1 o −1); -1 si ya no hay
+  // más en esa dirección. Si la actual ya no está en la lista (un filtro la sacó) y se da `orden` (la clave de orden
+  // de la actual y la función que la calcula para cada elemento), se sigue desde donde estaba; si no, desde el
+  // principio (o el final al retroceder).
+  function vecina(lista, actual, d, orden) {
+    var i = -1, k;
+    for (k = 0; k < lista.length; k++) if (lista[k].id === actual) { i = k; break; }
+    if (i < 0 && orden && orden.clave !== null && orden.clave !== undefined) {
+      if (d > 0) { for (k = 0; k < lista.length; k++) if (orden.de(lista[k]) > orden.clave) return k; }
+      else { for (k = lista.length - 1; k >= 0; k--) if (orden.de(lista[k]) < orden.clave) return k; }
+      return -1;
+    }
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;
     return j >= 0 && j < lista.length ? j : -1;
   }
-  return { porRevisar: porRevisar, vecina: vecina };
+  return { porRevisar: porRevisar, marcaRevision: marcaRevision, vecina: vecina };
 });
 // Núcleo · Markdown → secciones y bloques. Es el mismo dialecto y la misma salida que `markdown.py` del paquete
 // (la paridad se comprueba en tests/test_paridad_js.py): `#`/`##` abren secciones de nivel 1 y 2, `###`/`####` son
@@ -1600,6 +1613,7 @@ aside.panel.margen { overflow: hidden; }
   var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
   var avisoRevisar = false;  // ya se anunció en esta visita que hay respuestas por revisar
   var EN_VUELO = {};        // id -> 1 mientras la base no confirma (o rechaza del todo) su escritura, reintento incluido
+  var EN_BASE = {};         // id -> 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
   var ESCRIBIENDO = 0;      // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
   var SIN_GUARDAR = {};     // id -> código del último rechazo de una anotación que la base todavía no tiene
   var RESPALDO_MAX = 180 * 1024;  // bytes de cada documento de respaldo ya envuelto, con margen (la base admite 256 KiB)
@@ -1755,8 +1769,14 @@ aside.panel.margen { overflow: hidden; }
     var a = anots[id]; if (!a) { delete EN_VUELO[id]; return; }
     EN_VUELO[id] = 1;
     var rechazo = function (e) { delete EN_VUELO[id]; rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
-    enCurso(col.doc(id).set(a)).then(function () {
-      delete EN_VUELO[id];
+    // Si la base ya tiene el documento, se escriben sólo los campos que el lector cambió (y `editado`) con `update`: lo
+    // que quien edita las fuentes escribió entre tanto (respuesta, cierre, respondido…) y todavía no llegó a esta
+    // página no se pisa. Si el documento ya no está (otra sesión lo borró), `update` lo rechaza y se crea entero.
+    var escritura = EN_BASE[id] && !SIN_GUARDAR[id]
+      ? col.doc(id).update(camposDelLector(id, a)).catch(function (e) { if (e && e.code === 'invalid_argument') return col.doc(id).set(a); throw e; })
+      : col.doc(id).set(a);
+    enCurso(escritura).then(function () {
+      delete EN_VUELO[id]; EN_BASE[id] = 1;
       limpiarCampos(id, a);
       // la copia local se suelta sólo si nada se editó después de esta escritura
       if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }
@@ -1765,6 +1785,11 @@ aside.panel.margen { overflow: hidden; }
       if (reintento || !esTransitorio(e)) { rechazo(e); return; }
       setTimeout(function () { if (SOLO_LECTURA) rechazo(e); else escribirEnBase(id, previa, alRechazar, true); }, 100 + Math.random() * 300);
     });
+  }
+  function camposDelLector(id, a) {
+    var p = { editado: a.editado };
+    Object.keys(CAMPOS_BORRADOR[id] || {}).forEach(function (k) { p[k] = a[k] === undefined ? null : a[k]; });
+    return p;
   }
   function reintentar(id) { if (col && anots[id] && !SOLO_LECTURA) { estado('Reintentando…'); escribirEnBase(id, null); } }
   function quitarDeMemoria(id) {
@@ -1820,8 +1845,8 @@ aside.panel.margen { overflow: hidden; }
     // pero sólo cuando la base lo confirma (o no tenía nada que borrar): si lo rechaza, la anotación vuelve a la memoria
     // (con su marca de «sin guardar», si la tenía) y la copia local, si la tenía, la sigue teniendo.
     if (col) {
-      enCurso(col.doc(id).delete()).then(function () { podarLocal([id]); limpiarCampos(id); respaldar(); })
-        .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
+      enCurso(col.doc(id).delete()).then(function () { delete EN_BASE[id]; podarLocal([id]); limpiarCampos(id); respaldar(); })
+        .catch(function (e) { if (e && e.code === 'not_found') { delete EN_BASE[id]; podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
     }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }
     else { guardarLocal(); limpiarCampos(id); }
@@ -2062,6 +2087,8 @@ aside.panel.margen { overflow: hidden; }
   // Pestañas: «Sección» (las de la sección abierta; en escritorio, al margen de su pasaje), «Todas», «Por revisar» (las
   // respuestas que el autor todavía no revisó) y «Búsqueda».
   var REVISADAS = {};  // ids revisados en esta visita a «Por revisar»: siguen a la vista, marcados, hasta salir de la pestaña
+  // Todo cambio de pestaña pasa por aquí: al salir de «Por revisar», las revisadas en esta visita dejan la bandeja.
+  function cambiarTab(t) { if (tab === 'revisar' && t !== 'revisar') REVISADAS = {}; tab = t; }
   function porRevisar(a) { return N.porRevisar(a, ME); }
   function cuantasPorRevisar() { return Object.keys(anots).filter(function (k) { return porRevisar(anots[k]); }).length; }
   // `todoElLibro`: sin la restricción de la pestaña «Sección» (para recorrer con . y , de una sección a otra).
@@ -2099,7 +2126,7 @@ aside.panel.margen { overflow: hidden; }
     var box = $('#lista'), desplaz = box.scrollTop; box.innerHTML = '';
     renderSelectores(); marcarFiltro(); renderCuentaRevisar();
     var L = lista(), margen = margenActivo() && L.length > 0;
-    box.classList.toggle('al-margen', margen); $('#panel').classList.toggle('margen', margen);
+    box.classList.toggle('al-margen', margen); $('#panel').classList.toggle('margen', margen); if (!margen) soltarMargen();
     resolverPerfiles(L.map(function (a) { return a.autor; }).filter(Boolean));
     $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
     if (tab === 'revisar') box.appendChild(cabezaBandeja(L));
@@ -2143,8 +2170,10 @@ aside.panel.margen { overflow: hidden; }
   function renderCuentaRevisar() {
     var n = cuantasPorRevisar();
     $('#n-revisar').textContent = n ? String(n) : '';
-    $('#n-panel-revisar').textContent = n ? String(n) : '';
-    $('#n-panel-revisar').title = n ? n + (n === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : '';
+    // en el botón del teléfono el número va con su significado para quien usa lector de pantalla
+    var bp = $('#n-panel-revisar'); bp.textContent = '';
+    if (n) { bp.appendChild(el('span', { 'class': 'solo-lectores', text: ', ' })); bp.appendChild(document.createTextNode(String(n))); bp.appendChild(el('span', { 'class': 'solo-lectores', text: n === 1 ? ' respuesta por revisar' : ' respuestas por revisar' })); }
+    bp.title = n ? n + (n === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : '';
   }
   function etiqueta(a) {
     if (a.tipo === 'subrayado') return (a.sidTitulo || '').replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
@@ -2161,14 +2190,23 @@ aside.panel.margen { overflow: hidden; }
   function ajustarAlto(ta) {
     if (!ta || !ta.isConnected) return;
     ta.style.height = 'auto';
-    var h = ta.scrollHeight;
+    fijarAlto(ta, ta.scrollHeight);
+  }
+  function fijarAlto(ta, h) {
     if (!h) { ta.style.height = ''; return; }  // el panel no se ve (concentración): se ajusta al mostrarse
     var activa = !!ta.closest('.ficha.foco') || document.activeElement === ta;
     var tope = activa ? Math.max(140, Math.round(window.innerHeight * 0.45)) : ALTO_REPOSO;
     ta.style.height = (Math.min(h, tope) + 2) + 'px';
     ta.classList.toggle('recortada', !activa && h > ALTO_REPOSO);
   }
-  function ajustarTextareas(raiz) { $$('.ficha textarea', raiz || $('#lista')).forEach(ajustarAlto); }
+  // Por lotes: primero todas las escrituras, luego todas las lecturas, luego todas las escrituras; así el navegador
+  // calcula la maquetación una vez y no una por nota (con cientos de fichas, redibujar o cambiar el ancho no se traba).
+  function ajustarTextareas(raiz) {
+    var tas = $$('.ficha textarea', raiz || $('#lista'));
+    tas.forEach(function (ta) { ta.style.height = 'auto'; });
+    var hs = tas.map(function (ta) { return ta.scrollHeight; });
+    tas.forEach(function (ta, i) { fijarAlto(ta, hs[i]); });
+  }
   function activar(id) {
     if (fichaFoco === id) return;
     fichaFoco = id;
@@ -2177,7 +2215,7 @@ aside.panel.margen { overflow: hidden; }
     var f = $('.ficha[data-id="' + id + '"]');
     if (f) { f.classList.add('foco'); ajustarTextareas(f); }
     $$('mark.hl[data-aids~="' + id + '"]').forEach(function (m) { m.classList.add('foco'); });
-    if (margenActivo()) { colocarMargen(); asegurarVisibleMargen(id); }
+    if (margenActivo()) reacomodarPorActivar(id);
     actualizarNav();
   }
   function ficha(a) {
@@ -2249,7 +2287,7 @@ aside.panel.margen { overflow: hidden; }
       var guardarReplica = function () {
         var vivo = anots[a.id]; if (!vivo || rp.value === (vivo.replica || '')) return;
         var parche = { replica: rp.value };
-        if (rp.value.trim() && porRevisar(vivo)) { parche.revisado = ahora(); REVISADAS[a.id] = 1; }
+        if (rp.value.trim() && porRevisar(vivo)) { parche.revisado = N.marcaRevision(vivo, ahora()); if (tab === 'revisar') REVISADAS[a.id] = 1; }
         guardarSilencioso(a.id, parche, rp.id);
         if (parche.revisado) renderCuentaRevisar();
       };
@@ -2334,9 +2372,19 @@ aside.panel.margen { overflow: hidden; }
     if (!a || a.tipo !== 'subrayado' || !a.cita) return null;
     var u = UBIC[a.id], pe = pidEfectivo(a), b = pe && BLOQUES[pe];
     if (u && u.estado !== 'perdido') return b && b.anterior && (!a.bh || b.h !== a.bh) ? pe : null;
-    var buscarEn = function (bloques) { return bloques.filter(function (x) { return x.anterior && x.anterior.indexOf(a.cita) >= 0; })[0]; };
-    var x = SEC_BY_ID[a.sid] ? buscarEn(SEC_BY_ID[a.sid].bloques) : null;
-    for (var i = 0; !x && i < SECS.length; i++) x = buscarEn(SECS[i].bloques);
+    // de los bloques cuyo texto anterior contenía la cita: el suyo, si es uno; si no, el que la tenía con su contexto
+    var elegir = function (bloques) {
+      var mejor = null, puntos = -1;
+      bloques.forEach(function (x) {
+        if (!x.anterior) return;
+        var m = N.buscarCita(x.anterior, a); if (!m) return;
+        var p = m.puntos + (x.id === a.pid ? 3 : 0);
+        if (p > puntos) { mejor = x; puntos = p; }
+      });
+      return mejor;
+    };
+    var x = SEC_BY_ID[a.sid] ? elegir(SEC_BY_ID[a.sid].bloques) : null;
+    for (var i = 0; !x && i < SECS.length; i++) x = elegir(SECS[i].bloques);
     return x ? x.id : null;
   }
   function verCambio(id) {
@@ -2349,15 +2397,22 @@ aside.panel.margen { overflow: hidden; }
   // el cursor en la réplica (si era una pregunta) o en la nota, para escribir qué falta.
   function revisar(id, accion) {
     var a = anots[id]; if (!a || SOLO_LECTURA) return;
-    REVISADAS[id] = 1;
+    var enBandeja = tab === 'revisar';
+    if (enBandeja) REVISADAS[id] = 1;
     if (accion === 'atendida') {
-      var sig = lista().filter(function (x) { return porRevisar(x) && x.id !== id && ordenKey(x) > ordenKey(a); })[0] || lista().filter(function (x) { return porRevisar(x) && x.id !== id; })[0];
-      guardar(Object.assign({}, a, { estado: 'resuelta', revisado: ahora() }));
-      if (sig) irARevisar(sig);
-      else { anunciar('No quedan respuestas por revisar'); var cab = $('.bandeja-cab'); if (cab) { cab.setAttribute('tabindex', '-1'); cab.focus({ preventScroll: true }); } }
+      // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
+      // (en «Sección» o «Todas») se queda en la ficha
+      var pend = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (x) { return porRevisar(x) && x.id !== id; })
+        .sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
+      var sig = pend.filter(function (x) { return ordenKey(x) > ordenKey(a); })[0] || pend[0];
+      guardar(Object.assign({}, a, { estado: 'resuelta', revisado: N.marcaRevision(a, ahora()) }));
+      if (enBandeja && sig) { irARevisar(sig); return; }
+      anunciar(pend.length ? 'Atendida' : 'Atendida. No quedan respuestas por revisar');
+      var destino = enBandeja ? $('.bandeja-cab') : $('.ficha[data-id="' + id + '"]');
+      if (destino) { destino.setAttribute('tabindex', '-1'); destino.focus({ preventScroll: true }); }
       return;
     }
-    guardar(Object.assign({}, a, { estado: 'abierta', revisado: ahora() }));
+    guardar(Object.assign({}, a, { estado: 'abierta', revisado: N.marcaRevision(a, ahora()) }));
     var f = $('.ficha[data-id="' + id + '"]'), ta = f && ($('textarea.replica', f) || $('textarea.nota', f));
     if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
   }
@@ -2370,7 +2425,7 @@ aside.panel.margen { overflow: hidden; }
   function navegar(d) {
     var L = listaNavegable();
     if (!L.length) { anunciar('No hay anotaciones que recorrer'); return; }
-    var j = N.vecina(L, fichaFoco, d);
+    var j = N.vecina(L, fichaFoco, d, { de: ordenKey, clave: anots[fichaFoco] ? ordenKey(anots[fichaFoco]) : null });
     if (j < 0) { anunciar(d > 0 ? 'Es la última anotación' : 'Es la primera anotación'); return; }
     if (tab === 'revisar') irARevisar(L[j]); else irAAnot(L[j], mqMovil.matches);
   }
@@ -2399,9 +2454,14 @@ aside.panel.margen { overflow: hidden; }
     fichaFoco = id;
     var a = anots[id]; if (!a) return;
     if (previo) pintarPid(previo);
-    if (tab === 'buscar') tab = 'todas';
-    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) tab = 'todas';
-    if (lista().indexOf(a) < 0) { if (tab === 'revisar') tab = 'todas'; quitarFiltros(); }
+    if (tab === 'buscar') cambiarTab('todas');
+    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) cambiarTab('todas');
+    // fuera de la lista: si es por la sección (una nota de página sin su página en el texto), a «Todas» con los mismos
+    // filtros; si es por un filtro o por la bandeja, a «Todas» sin filtros
+    if (lista().indexOf(a) < 0) {
+      if (tab === 'revisar' || (tab === 'capitulo' && lista(true).indexOf(a) >= 0)) cambiarTab('todas');
+      if (lista().indexOf(a) < 0) quitarFiltros();
+    }
     marcarTab();
     renderPanel(); var pe = pidEfectivo(a); if (pe) pintarPid(pe);
     // en concentración el panel no se ve: para escribir o mostrar la ficha se sale de ella
@@ -2456,41 +2516,92 @@ aside.panel.margen { overflow: hidden; }
     if (a.tipo === 'pagina') return $('.pg[data-pg="' + a.pagina + '"]', art);
     return $('h1.sec-titulo', art);
   }
+  // Las fichas se colocan en coordenadas del artículo (y = 0 en su borde superior). Ninguna queda más arriba de
+  // `piso`: lo que, con el texto al principio, queda bajo la cabecera del panel (las de la sección, el título, un
+  // pasaje al comienzo); así se ven todas con el texto arriba del todo y, al bajar, se van con él.
+  var artConAlto = null;  // el artículo al que se le alargó el alto para alcanzar las últimas fichas
   function colocarMargen() {
-    var box = $('#lista'), capa = $('.capa-margen', box), art = articuloActual();
+    var box = $('#lista'), capa = $('.capa-margen', box), art = articuloActual(), lect = $('#lectura');
     if (!capa || !art) return;
-    var ref = art.getBoundingClientRect().top, desfase = ref - box.getBoundingClientRect().top;
+    observarArticulo(art);
+    var ref = art.getBoundingClientRect().top, rb = box.getBoundingClientRect();
+    var piso = rb.top - (ref + lect.scrollTop) + 8;
     var fichas = $$('.ficha', capa), items = fichas.map(function (f) {
       var id = f.getAttribute('data-id'), a = anots[id], n = a ? anclaDe(a, art) : null, r = n ? n.getBoundingClientRect() : null;
-      var y = r && (r.width || r.height) ? r.top - ref : null;
-      // la activa nunca queda por encima de lo que se ve de la lista (su pasaje arriba del todo, bajo la cabecera)
-      if (id === fichaFoco && y !== null) y = Math.max(y, 8 - desfase);
-      return { id: id, y: y, h: f.offsetHeight };
+      var y = r && (r.width || r.height) ? Math.max(r.top - ref, piso) : null;
+      // la activa tampoco queda por encima de lo que se ve ahora de la lista; si es más alta que la lista, puede subir lo
+      // que le sobra, para que con el texto desplazado se vea su final (las acciones, a las que se llega con Tab)
+      var h = f.offsetHeight;
+      if (id === fichaFoco && y !== null) y = Math.max(y, rb.top - ref + 8 - Math.max(0, h + 16 - rb.height));
+      return { id: id, y: y, h: h };
     });
+    // las que no tienen dónde anclarse van al final, y nunca sobre el piso
+    if (!items.some(function (it) { return it.y !== null; }) && items.length) items[0].y = piso;
     var lugar = N.apilar(items, fichaFoco, 8);
     fichas.forEach(function (f) { f.style.top = Math.round(lugar.tops[f.getAttribute('data-id')]) + 'px'; });
     capa.style.height = Math.max(0, Math.round(lugar.alto)) + 'px';
+    // si las fichas pasan del final del artículo, el artículo se alarga (alto mínimo) lo justo para llevarlas a la vista
+    alargar(art, Math.round(lugar.alto + 16));
     sincronizarMargen();
+  }
+  function alargar(art, alto) {
+    if (artConAlto && artConAlto !== art) { artConAlto.style.minHeight = ''; artConAlto = null; }
+    var v = alto ? alto + 'px' : '';
+    if (art.style.minHeight !== v) art.style.minHeight = v;
+    artConAlto = alto ? art : null;
   }
   function sincronizarMargen() {
     var box = $('#lista'), capa = $('.capa-margen', box), art = articuloActual();
     if (!capa || !art) return;
     capa.style.transform = 'translateY(' + Math.round(art.getBoundingClientRect().top - box.getBoundingClientRect().top) + 'px)';
   }
-  // Para cambios que mueven el texto o las fichas (una imagen que carga, una nota que crece, un diff que se abre).
+  // Fuera del margen el artículo vuelve a su alto.
+  function soltarMargen() { if (artConAlto) { artConAlto.style.minHeight = ''; artConAlto = null; } }
+  // Para cambios que mueven el texto o las fichas (una imagen que carga, una nota que crece, un diff que se abre, el
+  // tamaño o la letra del texto, una fuente que llega tarde, la cabecera del panel que crece).
   function colocarMargenPronto() {
     if (!$('#lista .capa-margen')) return;
     clearTimeout(margenTemporizador);
-    margenTemporizador = setTimeout(colocarMargen, 60);
+    margenTemporizador = setTimeout(function () { if (punteroAbajo) colocarAlSoltar = true; else colocarMargen(); }, 60);
+  }
+  var observador = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(function () { colocarMargenPronto(); }) : null, observado = null;
+  function observarArticulo(art) {
+    if (!observador || observado === art) return;
+    if (observado) observador.unobserve(observado);
+    observador.observe(art); observado = art;
+  }
+  if (observador) observador.observe($('#lista'));
+  // Mientras el botón del puntero está abajo, las fichas no se reacomodan: la que se está tocando no se mueve bajo él
+  // (el cursor quedaría en otro sitio de la nota, o el clic fuera de la ficha). Se reacomodan al soltar.
+  var punteroAbajo = false, colocarAlSoltar = false;
+  document.addEventListener('pointerdown', function () { punteroAbajo = true; }, true);
+  var alSoltar = function () {
+    if (!punteroAbajo) return;
+    punteroAbajo = false;
+    // después del clic (que todavía tiene que llegar a donde se soltó), no antes
+    if (colocarAlSoltar) { colocarAlSoltar = false; setTimeout(function () { if ($('#lista .capa-margen')) { colocarMargen(); if (fichaFoco) asegurarVisibleMargen(fichaFoco); } }, 0); }
+  };
+  document.addEventListener('pointerup', alSoltar, true);
+  document.addEventListener('pointercancel', alSoltar, true);
+  window.addEventListener('blur', alSoltar);
+  // Activar una ficha al margen: se reacomodan las fichas y se lleva la activa a la vista (al soltar, si se tocó).
+  function reacomodarPorActivar(id) {
+    if (punteroAbajo) { colocarAlSoltar = true; return; }
+    colocarMargen(); asegurarVisibleMargen(id);
   }
   // La ficha activa queda a la vista: si está por encima o por debajo de lo que se ve de la lista (su pasaje cerca del
   // borde de la ventana, o una ficha a la que se llegó con Tab), se desplaza el texto, y la ficha con él.
   function asegurarVisibleMargen(id) {
-    var box = $('#lista'), f = $('.capa-margen .ficha[data-id="' + id + '"]', box), lect = $('#lectura');
-    if (!f) return;
-    var rb = box.getBoundingClientRect(), rf = f.getBoundingClientRect(), d = 0;
+    var f = $('.capa-margen .ficha[data-id="' + id + '"]', $('#lista'));
+    if (f) asegurarVisible(f, true);
+  }
+  // `n` (una ficha o un control dentro de ella) a la vista desplazando el texto. Con `cabeza`, si no cabe entera, manda
+  // su borde superior.
+  function asegurarVisible(n, cabeza) {
+    var box = $('#lista'), lect = $('#lectura');
+    var rb = box.getBoundingClientRect(), rf = n.getBoundingClientRect(), d = 0;
     if (rf.top < rb.top + 8) d = rf.top - rb.top - 16;
-    else if (rf.bottom > rb.bottom - 8) d = Math.min(rf.bottom - rb.bottom + 16, rf.top - rb.top - 16);
+    else if (rf.bottom > rb.bottom - 8) d = cabeza ? Math.min(rf.bottom - rb.bottom + 16, rf.top - rb.top - 16) : rf.bottom - rb.bottom + 16;
     if (d) { lect.scrollTop += d; sincronizarMargen(); }
   }
   $('#lectura').addEventListener('scroll', function () {
@@ -2501,11 +2612,30 @@ aside.panel.margen { overflow: hidden; }
   $('#lista').addEventListener('scroll', function () {
     if (!$('.capa-margen', this) || !this.scrollTop) return;
     this.scrollTop = 0;
-    if (fichaFoco) asegurarVisibleMargen(fichaFoco);
+    var a = document.activeElement;
+    if (a && this.contains(a) && a !== this) asegurarVisible(a, false); else if (fichaFoco) asegurarVisibleMargen(fichaFoco);
+  });
+  // con el teclado, el control que recibe el foco (el cuadro de la respuesta, «Borrar»…) se ve aunque la ficha sea más
+  // alta que la lista
+  $('#lista').addEventListener('focusin', function (ev) {
+    if (!$('.capa-margen', this) || ev.target === this || punteroAbajo) return;
+    var t = ev.target;
+    requestAnimationFrame(function () { if (document.activeElement === t && t.isConnected) asegurarVisible(t, false); });
   });
   $('#panel').addEventListener('scroll', function () { if (this.classList.contains('margen') && this.scrollTop) this.scrollTop = 0; });
   $('#lectura').addEventListener('load', function (ev) { if (ev.target && ev.target.tagName === 'IMG') colocarMargenPronto(); }, true);
-  window.addEventListener('resize', function () { ajustarTextareas(); if (margenActivo()) colocarMargenPronto(); });
+  // Al cambiar el ancho de la ventana se reajustan las notas (una vez por cuadro, y sólo si cambió el ancho: el alto
+  // no cambia cómo se parten sus líneas).
+  var anchoPrevio = window.innerWidth, cuadroAncho = 0;
+  window.addEventListener('resize', function () {
+    if (cuadroAncho) return;
+    cuadroAncho = requestAnimationFrame(function () {
+      cuadroAncho = 0;
+      if (window.innerWidth === anchoPrevio) { if (margenActivo()) colocarMargenPronto(); return; }
+      anchoPrevio = window.innerWidth;
+      ajustarTextareas(); if (margenActivo()) colocarMargenPronto();
+    });
+  });
   $('#b-margen').setAttribute('aria-pressed', margenPref ? 'true' : 'false');
   $('#b-margen').addEventListener('click', function () {
     margenPref = !margenPref;
@@ -2542,7 +2672,7 @@ aside.panel.margen { overflow: hidden; }
     if (a.nota) out.push('Nota: ' + a.nota);
     if (a.respuesta || a.cierre) out.push('Respuesta' + (a.cierre ? ' (' + a.cierre + (a.commit ? ', ' + a.commit : '') + ')' : '') + ': ' + (a.respuesta || ''));
     if (a.replica) out.push('Réplica: ' + a.replica);
-    if (reabierta(a)) out.push('Reabierta por el autor (' + a.revisado.slice(0, 10) + ') tras la respuesta.');
+    if (reabierta(a)) out.push('Reabierta por el autor tras la respuesta.');
     return out.join('\n');
   }
   function copiarSeleccion(boton) {
@@ -2585,7 +2715,7 @@ aside.panel.margen { overflow: hidden; }
       else out.push('- [' + a.tipo + (a.pagina ? ' p. ' + a.pagina : '') + (a.estado === 'resuelta' ? ', resuelta' : '') + '] ' + (a.nota || '(sin texto)').replace(/\n/g, ' ') + senalSinGuardar(a));
       if (a.respuesta || a.cierre) out.push('  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' '));
       if (a.replica) out.push('  - Réplica: ' + a.replica.replace(/\n/g, ' '));
-      if (reabierta(a)) out.push('  - Reabierta por el autor (' + a.revisado.slice(0, 10) + ') tras la respuesta.');
+      if (reabierta(a)) out.push('  - Reabierta por el autor tras la respuesta.');
     });
     return out.join('\n');
   }
@@ -2597,9 +2727,10 @@ aside.panel.margen { overflow: hidden; }
 
   // ------------------------------------------------------------ búsqueda
   function buscar(q) {
-    tab = 'buscar'; marcarTab();
+    cambiarTab('buscar'); marcarTab();
     if (mqMovil.matches) cerrarHerramientas();
-    var box = $('#lista'); box.innerHTML = '';
+    // los resultados son una lista que se desplaza, no fichas al margen
+    var box = $('#lista'); box.innerHTML = ''; box.classList.remove('al-margen'); $('#panel').classList.remove('margen'); soltarMargen();
     q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
     var norm = N.normalizar;
     var nq = norm(q), n = 0;
@@ -2679,9 +2810,7 @@ aside.panel.margen { overflow: hidden; }
   }
   function quitarFiltros() { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; }
   $$('.tab').forEach(function (t) { t.addEventListener('click', function () {
-    // al salir de «Por revisar», las revisadas en esta visita dejan la bandeja
-    if (tab === 'revisar' && t.getAttribute('data-tab') !== 'revisar') REVISADAS = {};
-    tab = t.getAttribute('data-tab'); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel();
+    cambiarTab(t.getAttribute('data-tab')); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel();
   }); });
   $('.tabs').addEventListener('keydown', function (ev) {
     var ts = $$('.tab'), i = ts.indexOf(document.activeElement); if (i < 0) return;
@@ -2689,7 +2818,7 @@ aside.panel.margen { overflow: hidden; }
     if (j === null) return;
     ev.preventDefault(); j = (j + ts.length) % ts.length; ts[j].focus(); ts[j].click();
   });
-  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); if (tab === 'buscar') { tab = 'todas'; marcarTab(); } renderPanel(); }); });
+  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); if (tab === 'buscar') { cambiarTab('todas'); marcarTab(); } renderPanel(); }); });
 
   // ------------------------------------------------------------ controles
   // el menú «+ Nota» se cierra al elegir (la nota nueva queda abierta con el cursor en ella)
@@ -2868,6 +2997,8 @@ aside.panel.margen { overflow: hidden; }
     else if (ev.key === ',') { ev.preventDefault(); navegar(-1); }
     else if (tab === 'revisar' && fichaFoco && anots[fichaFoco] && !SOLO_LECTURA && /^[arvARV]$/.test(ev.key)) {
       ev.preventDefault();
+      // una tecla mantenida no resuelve varias de seguido, y nada se resuelve sin verse (concentración, panel cerrado)
+      if (ev.repeat || !enfocable($('.ficha[data-id="' + fichaFoco + '"]'))) return;
       var k = ev.key.toLowerCase();
       if (k === 'v') verCambio(fichaFoco);
       else if (porRevisar(anots[fichaFoco])) revisar(fichaFoco, k === 'a' ? 'atendida' : 'reabrir');
@@ -3555,7 +3686,7 @@ aside.panel.margen { overflow: hidden; }
           var escritas = {};
           Promise.all(ids.map(function (id) { escritas[id] = anots[id]; return col.doc(id).set(anots[id]).then(function () { return true; }).catch(function (e) { return (e && e.code) || 'error'; }); })).then(function (ok) {
             var subieron = ids.filter(function (id, i) { return ok[i] === true; }), fallidas = ids.filter(function (id, i) { return ok[i] !== true; });
-            subieron.forEach(function (id) { limpiarCampos(id, escritas[id]); });
+            subieron.forEach(function (id) { EN_BASE[id] = 1; limpiarCampos(id, escritas[id]); });
             podarLocal(subieron.filter(function (id) { return anots[id] === escritas[id]; }));
             if (!fallidas.length) { respaldar(); return; }
             // la ficha de cada una lo dice y ofrece reintentar
@@ -3579,22 +3710,25 @@ aside.panel.margen { overflow: hidden; }
         var cambio = false;
         snap.docChanges().forEach(function (ch) {
           var d2 = ch.doc.data();
-          if (ch.type === 'removed') { if (anots[ch.doc.id]) { delete anots[ch.doc.id]; cambio = true; } }
+          if (ch.type === 'removed') { delete EN_BASE[ch.doc.id]; if (anots[ch.doc.id]) { delete anots[ch.doc.id]; cambio = true; } }
           else if (d2) {
+            EN_BASE[ch.doc.id] = 1;
             var nuevo = Object.assign({}, d2, { id: ch.doc.id });
             // si aquí hay un borrador sin guardar de esa anotación, lo que llega de la base se funde debajo sin pisarlo
             if (SIN_GUARDAR[ch.doc.id] && anots[ch.doc.id]) nuevo = fundirBorrador(nuevo, anots[ch.doc.id], CAMPOS_BORRADOR[ch.doc.id]);
             if (!igual(anots[ch.doc.id], nuevo)) { anots[ch.doc.id] = nuevo; cambio = true; }
           }
         });
-        if (primeraFoto) { primeraFoto = false; recuperarYSubir(); }
-        if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
-        if (!snap.metadata.fromCache) {
+        // qué es propio se sabe cuando se conoce al usuario: la cuenta y el aviso esperan a saberlo (y se registran antes
+        // que la recuperación de lo que quedó en el navegador, para que su aviso, si lo hay, quede encima)
+        if (!snap.metadata.fromCache) listoUsuario.then(function () {
           var nr = cuantasPorRevisar();
           estado('Conectado · ' + Object.keys(anots).length + ' anotaciones' + (nr ? ' · ' + nr + (nr === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : ''));
           // las respuestas nuevas se anuncian una vez por visita, al llegar
           if (nr && !avisoRevisar) { avisoRevisar = true; anunciar(nr + (nr === 1 ? ' respuesta nueva por revisar' : ' respuestas nuevas por revisar') + ': pestaña «Por revisar» del panel.'); }
-        }
+        });
+        if (primeraFoto) { primeraFoto = false; recuperarYSubir(); }
+        if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
       }, function (e) { estado('La base dejó de responder (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
     }).catch(function () { /* el error del libro ya se mostró */ });
   }

@@ -62,7 +62,7 @@
           var escritas = {};
           Promise.all(ids.map(function (id) { escritas[id] = anots[id]; return col.doc(id).set(anots[id]).then(function () { return true; }).catch(function (e) { return (e && e.code) || 'error'; }); })).then(function (ok) {
             var subieron = ids.filter(function (id, i) { return ok[i] === true; }), fallidas = ids.filter(function (id, i) { return ok[i] !== true; });
-            subieron.forEach(function (id) { limpiarCampos(id, escritas[id]); });
+            subieron.forEach(function (id) { EN_BASE[id] = 1; limpiarCampos(id, escritas[id]); });
             podarLocal(subieron.filter(function (id) { return anots[id] === escritas[id]; }));
             if (!fallidas.length) { respaldar(); return; }
             // la ficha de cada una lo dice y ofrece reintentar
@@ -86,22 +86,25 @@
         var cambio = false;
         snap.docChanges().forEach(function (ch) {
           var d2 = ch.doc.data();
-          if (ch.type === 'removed') { if (anots[ch.doc.id]) { delete anots[ch.doc.id]; cambio = true; } }
+          if (ch.type === 'removed') { delete EN_BASE[ch.doc.id]; if (anots[ch.doc.id]) { delete anots[ch.doc.id]; cambio = true; } }
           else if (d2) {
+            EN_BASE[ch.doc.id] = 1;
             var nuevo = Object.assign({}, d2, { id: ch.doc.id });
             // si aquí hay un borrador sin guardar de esa anotación, lo que llega de la base se funde debajo sin pisarlo
             if (SIN_GUARDAR[ch.doc.id] && anots[ch.doc.id]) nuevo = fundirBorrador(nuevo, anots[ch.doc.id], CAMPOS_BORRADOR[ch.doc.id]);
             if (!igual(anots[ch.doc.id], nuevo)) { anots[ch.doc.id] = nuevo; cambio = true; }
           }
         });
-        if (primeraFoto) { primeraFoto = false; recuperarYSubir(); }
-        if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
-        if (!snap.metadata.fromCache) {
+        // qué es propio se sabe cuando se conoce al usuario: la cuenta y el aviso esperan a saberlo (y se registran antes
+        // que la recuperación de lo que quedó en el navegador, para que su aviso, si lo hay, quede encima)
+        if (!snap.metadata.fromCache) listoUsuario.then(function () {
           var nr = cuantasPorRevisar();
           estado('Conectado · ' + Object.keys(anots).length + ' anotaciones' + (nr ? ' · ' + nr + (nr === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : ''));
           // las respuestas nuevas se anuncian una vez por visita, al llegar
           if (nr && !avisoRevisar) { avisoRevisar = true; anunciar(nr + (nr === 1 ? ' respuesta nueva por revisar' : ' respuestas nuevas por revisar') + ': pestaña «Por revisar» del panel.'); }
-        }
+        });
+        if (primeraFoto) { primeraFoto = false; recuperarYSubir(); }
+        if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
       }, function (e) { estado('La base dejó de responder (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
     }).catch(function () { /* el error del libro ya se mostró */ });
   }
