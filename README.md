@@ -2,7 +2,7 @@
 
 Un libro escrito en Markdown se convierte en una página de lectura donde el autor **destaca** pasajes con colores que significan algo, les deja **notas**, y anota también **por página**, **por sección** y en general. Cada anotación sale trazable al archivo y la línea de las fuentes y a la página impresa del PDF, de modo que una persona o un asistente pueda volcarla a las fuentes sin ambigüedad.
 
-Nació para editar *Hechos, inferencias e incertidumbre* y está generalizado para cualquier libro en Markdown sencillo.
+Nació para editar *Hechos, inferencias e incertidumbre* y sirve para cualquier libro: se construye desde Markdown con la línea de órdenes (con la página impresa de cada bloque, si hay PDF) o se **importa desde la propia página** a partir de Markdown, texto, HTML, EPUB o Word. Ver [docs/IMPORTAR.md](docs/IMPORTAR.md).
 
 ## Cómo funciona
 
@@ -23,13 +23,16 @@ Lo que la página añade a la lectura:
 - **Capas editoriales.** Frases largas, muletillas, términos retirados, repeticiones cercanas y citas narrativas, calculadas al construir y activables desde el menú «Capas», con el recuento por sección.
 - **Lectores con identidad.** Cada anotación guarda el id de quien la hizo (capacidad `user` de claude.ai); con varios lectores, las fichas llevan el nombre y el panel filtra por lector.
 - **Progreso y concentración.** Casilla «Leída» por sección, barra de avance por parte en el índice, modo concentración sin índice ni panel, y atajos: 1 a 4 subrayan, N subraya con nota, C copia la selección, J/K cambian de sección, L marca leída, F concentración, ? ayuda.
+- **Biblioteca.** Además del libro que trae la página, importa otros (Markdown o texto, HTML, EPUB, Word `.docx` o un `libro.json`) y los guarda en la biblioteca compartida de la página o sólo en el navegador; reemplazar un libro por una versión nueva conserva y reubica sus anotaciones; cada libro se descarga como Markdown o `libro.json`. Una página publicada sin `libro.json` es una biblioteca vacía lista para importar.
+- **Anotar sin estorbos.** Un clic fuera de la ficha (en el texto) sale de ella; Esc o Ctrl+Enter en una nota la guarda y devuelve el foco al pasaje. En el teléfono, el panel es una hoja que sube desde abajo y deja ver el pasaje anotado; índice y panel se cierran tocando fuera o con «×»; la barra de subrayado va abajo con botones grandes.
+- **Accesible.** Navegable con teclado (pestañas con flechas, «Saltar al texto», diálogos modales que devuelven el foco), anunciado a lectores de pantalla (estado, pestañas, filtros y colores con su estado; la categoría escrita en cada ficha, no sólo su color), áreas táctiles de 40 px, compatible con alto contraste del sistema y movimiento reducido. «Aa» ajusta el tamaño del texto, el tema (claro, oscuro o el del sistema) y la letra (con o sin serifa).
 - **Menores.** Búsqueda también en las notas; `#etiquetas` en las notas con filtro; deshacer un borrado durante ocho segundos; respaldo diario de todas las anotaciones en la colección `respaldos`; lectura en voz alta de la sección con el párrafo iluminado; figuras ampliables.
 
 Publicada como página privada en claude.ai con la capacidad `db`, la página guarda cada anotación en una base compartida que Claude lee directamente en la sesión siguiente. Sin esa base, guarda en el navegador y lo dice. Ver [docs/PUBLICAR.md](docs/PUBLICAR.md).
 
 ## Cómo llegan las anotaciones a quien edita las fuentes
 
-- **Base compartida (automática).** Publicada en claude.ai con la capacidad `db`, cada anotación queda en la colección `anotaciones`; un asistente la lee directamente en la sesión siguiente sin que el autor copie nada.
+- **Base compartida (automática).** Publicada en claude.ai con la capacidad `db`, cada anotación queda en la colección `anotaciones` (las de un libro importado a la biblioteca compartida, en `libros/<id>/anotaciones`); un asistente la lee directamente en la sesión siguiente sin que el autor copie nada.
 - **Una anotación.** El botón «Copiar» de cada ficha copia un texto breve con color, sección, página, `archivo:línea`, la cita y la nota, listo para pegarlo en un chat o un correo.
 - **Una selección.** Al seleccionar texto, la barra ofrece «Copiar»: el pasaje con su sección, página y `archivo:línea`, para comentar algo sin anotarlo.
 - **Todo.** «Copiar todo» en JSON (para `exportar` o para un asistente) o en Markdown (para leerlo).
@@ -74,10 +77,18 @@ src/lector_anotaciones/   paquete Python
   paginas.py              PDF → texto por página; búsqueda y herencia de la página impresa
   construir.py            arma y valida libro.json
   exportar.py             anotaciones JSON → Markdown de tareas
-  cli.py                  órdenes `construir` y `exportar`
-web/index.html            la página (HTML, CSS y JS sin dependencias)
-tests/                    pytest (paquete) y tests/web/smoke.mjs (Playwright sobre la página)
-docs/                     formatos de libro.json y de las anotaciones; cómo publicar
+  pagina.py               empaqueta las fuentes de la página en un solo index.html
+  cli.py                  órdenes `construir`, `pagina` y `exportar`
+  web/                    fuentes de la página
+    plantilla.html        el documento, con las marcas {{ESTILOS}}, {{NUCLEO}} y {{PAGINA}}
+    estilos.css
+    nucleo/*.js           lógica pura, sin DOM: texto, diferencias, ubicar subrayados, borradores,
+                          Markdown, armar y sanear libros, ZIP e importadores (probada con node --test)
+    pagina/*.js           la interfaz, en fragmentos que se concatenan por orden de nombre
+web/index.html            la página empaquetada (generada; la CI comprueba que esté al día)
+tests/                    pytest (paquete, paridad Python/JS), tests/js (núcleo), tests/web (Playwright),
+                          tests/fixtures (libros de muestra EPUB y Word, generados por generar.py)
+docs/                     formatos de libro.json y de las anotaciones; importar libros; cómo publicar
 ejemplo/                  libro de prueba con figura
 ```
 
@@ -87,15 +98,19 @@ ejemplo/                  libro de prueba con figura
 pip install -e ".[dev]"
 ruff check . && ruff format --check .
 pytest
-npm install && npx playwright install chromium && npm run test:web   # pruebas de la página
+lector-anotaciones pagina --salida web/index.html     # tras tocar src/lector_anotaciones/web/
+npm run test:js                                        # núcleo de la página (node --test)
+npm install && npx playwright install chromium && npm run test:web   # la página en Chromium
 ```
 
-La integración continua corre ruff y pytest en Python 3.11–3.13 (con `poppler-utils`, para leer un PDF de verdad), construye el ejemplo con un PDF mínimo generado en el propio trabajo y pasa la prueba de humo de la página en Chromium. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
+La página se edita en `src/lector_anotaciones/web/` y se empaqueta con `lector-anotaciones pagina` (también `construir --pagina` deja un `index.html` junto al libro). La integración continua corre ruff y pytest en Python 3.11–3.13 (con `poppler-utils`, para leer un PDF de verdad), construye el ejemplo con un PDF mínimo generado en el propio trabajo, comprueba que `web/index.html` esté al día con sus fuentes, corre las pruebas del núcleo y pasa en Chromium la prueba de humo y la de la biblioteca. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Decisiones de diseño
 
 - **Trazabilidad antes que riqueza de formato.** La página renderiza un subconjunto pequeño de Markdown a cambio de que cada bloque tenga un id estable y una línea de origen. Un editor con todo el Markdown pero sin esa trazabilidad no sirve para volcar anotaciones.
-- **La página no tiene compilación.** Un solo archivo HTML, sin paquetes, que corre desde un servidor estático o como artefacto de claude.ai. Los contratos que el resto del sistema da por supuestos (lee `libro.json`, colección `anotaciones`, respaldo local por libro, sin scripts externos) están en `tests/test_web.py`.
+- **La página se publica como un solo archivo, sin dependencias.** Se escribe en módulos (estilos, núcleo puro probado en Node, fragmentos de interfaz) que `lector-anotaciones pagina` concatena en un `index.html` que corre desde un servidor estático o como artefacto de claude.ai; no hay compilador ni paquetes de npm en tiempo de ejecución. Los contratos que el resto del sistema da por supuestos (lee `libro.json`, colección `anotaciones`, respaldo local por libro, sin scripts externos) están en `tests/test_web.py`.
+- **Un libro de afuera es texto, no HTML.** Lo importado (y lo que la biblioteca compartida trae de la base, donde escribe cualquier colaborador) se reduce a texto, negrita y cursiva antes de mostrarse; nada de un archivo se ejecuta ni carga otros sitios.
+- **Un libro por carga.** Cambiar de libro recarga la página, para que nada de uno (escrituras en curso, borradores, la cola de pendientes) se cruce con otro.
 - **Los colores son instrucciones.** Cuatro significados fijos, no una paleta libre, para que quien vuelque las anotaciones no tenga que interpretar.
 - **Un subrayado se comprueba antes de pintarse.** Los ids de bloque son posicionales y cambian si se inserta un párrafo; la página verifica que la cita guardada siga en su sitio y, si no, la busca por el texto y el contexto (y lo dice en la ficha) o la declara no encontrada. Nunca pinta un pasaje equivocado y nunca modifica lo guardado. Detalles en [docs/FORMATO_ANOTACIONES.md](docs/FORMATO_ANOTACIONES.md).
 - **Escribir una nota no se interrumpe.** Los cambios que llegan de la base (el eco de un guardado propio o una edición desde otra sesión) redibujan el panel sin quitar el editor activo, su borrador ni el cursor.

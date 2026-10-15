@@ -96,4 +96,6 @@ Una palabra precedida de `#` dentro de la nota (`#carmen`, `#dato`) es una etiqu
 
 ## Cómo se vuelcan a las fuentes
 
+Las anotaciones del libro de la página están en la colección `anotaciones`; las de un libro importado a la biblioteca compartida, en `libros/<id>/anotaciones`, con el mismo formato (ver [IMPORTAR.md](IMPORTAR.md)). En un libro importado, `src` es `archivo:n`, el n-ésimo bloque de ese archivo (de ese capítulo del EPUB, o del documento de Word), no una línea.
+
 `lector-anotaciones exportar anotaciones.json --agrupar archivo` produce una lista de tareas ordenada por archivo y línea, que es el orden en que conviene aplicar los cambios. Un asistente que lea la colección directamente debe tratar cada documento como una instrucción del autor sobre el bloque `pid` del archivo `src`, usar `cita` (y `antes`/`despues`) para ubicar el pasaje exacto, y marcar `estado: "resuelta"` cuando lo haya atendido.

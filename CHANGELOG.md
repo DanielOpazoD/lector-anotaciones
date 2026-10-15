@@ -2,6 +2,27 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.3.0] - 2026-10-15
+
+### Añadido
+
+- **Biblioteca: otros libros, importados desde la página.** Markdown o texto (uno o varios capítulos, con sus imágenes), HTML, EPUB 2 y 3, Word `.docx` y `libro.json`. Vista previa con título y autor editables; se guardan en la biblioteca compartida de la página (colección `libros`, troceados en `libros/<id>/partes`) o sólo en el navegador (IndexedDB). Reemplazar un libro por una versión nueva conserva y reubica sus anotaciones. Cada libro se descarga como Markdown (para la línea de órdenes) o `libro.json`, y se puede borrar. Las anotaciones y respaldos de un libro importado van en `libros/<id>/…`. Una página sin `libro.json` abre la biblioteca e invita a importar. Ver `docs/IMPORTAR.md`.
+- Salir de una ficha con un clic fuera (en el texto o en el fondo); Esc o Ctrl/Cmd+Enter en una nota la guarda y devuelve el foco al pasaje. Esc cierra de a una capa (menú, cajón, concentración, ficha).
+- En pantalla estrecha, índice y panel con velo: tocar fuera o «×» los cierra, el foco entra y vuelve a donde estaba, y lo de detrás queda inerte. El panel es una hoja que sube desde abajo y deja ver el pasaje; tocar un subrayado la abre con su ficha. La barra se reduce a una fila; búsqueda y herramientas se despliegan con «⋯».
+- Ajustes de lectura («Aa»): tamaño del texto, tema claro, oscuro o del sistema, y letra con o sin serifa; recordados en el navegador.
+- Accesibilidad: estado como región `status`, pestañas con patrón `tablist` y flechas, filtros, colores y concentración con `aria-pressed`, sección actual con `aria-current`, «Saltar al texto», categoría escrita en cada ficha, atajos, figura ampliada y biblioteca como `<dialog>` modales (clic en el fondo cierra; la figura lleva su leyenda como texto alternativo), áreas táctiles de 40 px y barra de subrayado abajo en pantallas táctiles, alto contraste del sistema.
+- «Deshacer borrado» como aviso flotante, a mano también con el panel abierto en el teléfono. Al borrar, el foco pasa a la ficha vecina.
+- Panel más despejado: filtros y exportación en desplegables, con el filtro activo resumido; «Quitar filtros» cuando un filtro deja la lista vacía.
+- Orden `lector-anotaciones pagina [--salida index.html] [--comprobar]` y opción `construir --pagina`.
+
+### Cambiado
+
+- La página se escribe en módulos (`src/lector_anotaciones/web/`: plantilla, estilos, núcleo puro y fragmentos de interfaz) y se empaqueta en el mismo `index.html` único y sin dependencias; la CI comprueba que esté al día. El núcleo (texto, diferencias, ubicar subrayados, borradores, Markdown, libros, ZIP, importadores) tiene pruebas con `node --test`, y el Markdown y las huellas, una prueba de paridad con el paquete Python.
+
+### Seguridad
+
+- Lo que no es el libro de la página (importado de un archivo, o leído de la biblioteca compartida, donde escribe cualquier colaborador) se reduce a texto, `<strong>` y `<em>` antes de mostrarse; las figuras sólo admiten rutas relativas o `data:image`.
+
 ## [0.2.12] - 2026-10-15
 
 ### Corregido
