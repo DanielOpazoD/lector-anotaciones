@@ -35,6 +35,12 @@ def _parser() -> argparse.ArgumentParser:
         help="texto con que empieza la página impresa 1 en el PDF (p. ej. el encabezado corrido y «Prefacio»)",
     )
     c.add_argument("--ventana", type=int, default=5, help="páginas hacia adelante en que se busca cada bloque")
+    c.add_argument(
+        "--claves-anteriores",
+        nargs="*",
+        default=[],
+        help="claves de localStorage de versiones anteriores de la página; sus anotaciones se migran al cargar",
+    )
     c.add_argument("--estricto", action="store_true", help="termina con error si la validación encuentra problemas")
 
     e = sub.add_parser("exportar", help="convierte las anotaciones (JSON) en un Markdown de trabajo")
@@ -61,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
                 figs=args.figs,
                 marca_pagina_1=args.marca_pagina_1,
                 ventana=args.ventana,
+                claves_anteriores=args.claves_anteriores,
                 avisos=avisos,
             )
         except (FileNotFoundError, HerramientaFaltante, ValueError) as e:

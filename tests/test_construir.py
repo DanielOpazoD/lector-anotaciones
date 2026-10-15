@@ -18,6 +18,8 @@ def test_construir_sin_pdf(ejemplo_fuentes: Path):
     assert libro["paginas_fisicas"] is None and libro["desfase_paginas"] == 0
     assert libro["fuentes"] == sorted(p.name for p in ejemplo_fuentes.glob("*.md"))
     assert libro["inicio"] == next(s["id"] for s in libro["secciones"] if s["nivel"] == 2)
+    assert libro["claves_anteriores"] == []
+    assert construir([ejemplo_fuentes], claves_anteriores=["lector-viejo"])["claves_anteriores"] == ["lector-viejo"]
     assert validar(libro) == []
     assert all("texto" not in b for s in libro["secciones"] for b in s["bloques"])
     assert all(b["pagina"] is None for s in libro["secciones"] for b in s["bloques"])
@@ -85,9 +87,23 @@ def test_escribir_y_resumen(ejemplo_fuentes: Path, tmp_path: Path):
 
 def test_cli_construir(ejemplo_fuentes: Path, tmp_path: Path, capsys):
     salida = tmp_path / "libro.json"
-    codigo = main(["construir", str(ejemplo_fuentes), "--salida", str(salida), "--titulo", "Ejemplo", "--estricto"])
+    codigo = main(
+        [
+            "construir",
+            str(ejemplo_fuentes),
+            "--salida",
+            str(salida),
+            "--titulo",
+            "Ejemplo",
+            "--estricto",
+            "--claves-anteriores",
+            "a",
+            "b",
+        ]
+    )
     assert codigo == 0
     assert salida.exists()
+    assert json.loads(salida.read_text(encoding="utf-8"))["claves_anteriores"] == ["a", "b"]
     assert capsys.readouterr().out.startswith(f"ok {salida}:")
 
 

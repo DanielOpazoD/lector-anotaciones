@@ -337,7 +337,22 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
     else guardarLocal();
   }
   function guardarLocal() { lsSet(LOCAL_KEY, JSON.stringify(anots)); estado('Guardado sólo en este navegador', true); }
-  function cargarLocal() { try { var j = JSON.parse(lsGet(LOCAL_KEY) || '{}'); Object.keys(j).forEach(function (k) { anots[k] = j[k]; }); } catch (e) {} }
+  function cargarLocal() {
+    try {
+      var j = JSON.parse(lsGet(LOCAL_KEY) || '{}');
+      // Migración: anotaciones guardadas por versiones anteriores de la página bajo otra clave
+      // (libro.json las declara en `claves_anteriores`). Se copian sin pisar las ya guardadas y la
+      // clave vieja se retira para que un borrado posterior no las resucite.
+      var anteriores = (LIBRO && LIBRO.claves_anteriores) || [], migradas = 0;
+      anteriores.forEach(function (k) {
+        if (k === LOCAL_KEY) return;
+        try { var v = JSON.parse(lsGet(k) || '{}'); Object.keys(v).forEach(function (id) { if (!j[id]) { j[id] = v[id]; migradas++; } }); } catch (e) {}
+      });
+      if (migradas) { lsSet(LOCAL_KEY, JSON.stringify(j)); anteriores.forEach(function (k) { if (k !== LOCAL_KEY) try { localStorage.removeItem(k); } catch (e) {} }); }
+      Object.keys(j).forEach(function (k) { anots[k] = j[k]; });
+      return migradas;
+    } catch (e) { return 0; }
+  }
 
   // ------------------------------------------------------------ anotaciones: creación
   function base(tipo, sid) {
@@ -681,8 +696,8 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
     Promise.all([libroListo, use]).then(function (r) {
       var d = r[1];
       if (!d) {
-        modo = 'local'; cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
-        estado('Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.', true);
+        modo = 'local'; var migradas = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
+        estado((migradas ? migradas + ' anotaciones recuperadas de la versión anterior de la página. ' : '') + 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.', true);
         return;
       }
       db = d; col = db.collection('anotaciones'); modo = 'db';

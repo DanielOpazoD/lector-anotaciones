@@ -25,6 +25,7 @@ def construir(
     figs: str = "figs/",
     marca_pagina_1: str | None = None,
     ventana: int = 5,
+    claves_anteriores: list[str] | None = None,
     avisos: list[str] | None = None,
 ) -> dict:
     """Lee las fuentes (y el PDF, si se da) y devuelve el libro como diccionario listo para JSON."""
@@ -59,6 +60,7 @@ def construir(
         "paginas_fisicas": paginas_fisicas,
         "desfase_paginas": desfase,
         "inicio": inicio,
+        "claves_anteriores": list(claves_anteriores or []),
         "secciones": secciones,
     }
 

@@ -220,6 +220,29 @@ try {
   check(erroresDb.length === 0, `sin errores de página con base${erroresDb.length ? ': ' + erroresDb.join(' | ') : ''}`);
   await ctxDb.close();
 
+  // ---------------------------------------------------------------- migración desde una clave anterior
+  // Una versión anterior de la página guardaba bajo otra clave; libro.json la declara en claves_anteriores.
+  const ctxMig = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxMig.addInitScript(sinBase);
+  await ctxMig.addInitScript(() => {
+    localStorage.setItem('lector-viejo', JSON.stringify({ vieja1: { id: 'vieja1', tipo: 'general', nota: 'Nota heredada', estado: 'abierta', creado: '2026-01-01T00:00:00.000Z' } }));
+  });
+  const pmig = await ctxMig.newPage();
+  await pmig.route('**/libro.json', async (route) => {
+    const L = JSON.parse(fs.readFileSync(LIBRO, 'utf8'));
+    L.claves_anteriores = ['lector-viejo'];
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(L) });
+  });
+  await pmig.goto(base);
+  await pmig.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pmig.waitForFunction(() => /recuperadas/.test(document.querySelector('#estado').textContent));
+  await pmig.click('.tab[data-tab="todas"]');
+  const heredada = await pmig.$$eval('.ficha textarea', (ts) => ts.map((t) => t.value));
+  check(heredada.includes('Nota heredada'), 'las anotaciones de la clave anterior aparecen tras cargar');
+  const claves = await pmig.evaluate(() => ({ vieja: localStorage.getItem('lector-viejo'), nueva: Object.keys(localStorage).find((k) => /^lector-anotaciones:/.test(k) && !/:ultima$/.test(k)) }));
+  check(claves.vieja === null && !!claves.nueva, 'quedan bajo la clave nueva y la vieja se retira');
+  await ctxMig.close();
+
   // ---------------------------------------------------------------- ancho de teléfono
   const movil = await browser.newContext({ viewport: { width: 400, height: 800 } });
   await movil.addInitScript(sinBase);
