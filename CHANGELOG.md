@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.11] - 2026-10-15
+
+### Corregido
+
+- Escribir la lista de campos cambiados ya no reemplaza la lista guardada entera: sólo actualiza las anotaciones que se tocaron y conserva las de borradores aún no cargados (o de otra cuenta). Antes, anotar algo mientras la base conectaba borraba la lista de un borrador anterior, y al recuperarlo se subía también su réplica vieja encima de una más reciente de la base.
+- Borrar una anotación sin base compartida retira también su entrada de la lista de campos.
+
 ## [0.2.10] - 2026-10-15
 
 ### Corregido

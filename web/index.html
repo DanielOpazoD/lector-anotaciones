@@ -508,7 +508,7 @@ figure img { cursor: zoom-in; }
         .catch(function (e) { if (e && e.code === 'not_found') { podarLocal([id]); limpiarCampos(id); return; } if (marca) SIN_GUARDAR[id] = marca; rechazoEscritura(e, id, a, 'borrar'); });
     }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }
-    else guardarLocal();
+    else { guardarLocal(); limpiarCampos(id); }
     ofrecerDeshacer(a);
   }
   var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado'];  // lo que el lector edita en la página; el resto lo escribe quien edita las fuentes
@@ -517,8 +517,12 @@ figure img { cursor: zoom-in; }
     var c = CAMPOS_BORRADOR[id] || (CAMPOS_BORRADOR[id] = {});
     CAMPOS_LECTOR.forEach(function (k) { if (antes[k] !== despues[k]) c[k] = true; });
   }
-  function escribirCampos() {
-    if (Object.keys(CAMPOS_BORRADOR).length) lsSet(LOCAL_KEY + ':campos', JSON.stringify(CAMPOS_BORRADOR));
+  function escribirCampos(ids) {
+    // Actualiza en la lista guardada sólo esas anotaciones; las demás entradas (borradores de otra sesión aún no
+    // cargados, o de otra cuenta) se conservan tal como estaban.
+    var guardados = lsJSON(LOCAL_KEY + ':campos');
+    ids.forEach(function (id) { var c = CAMPOS_BORRADOR[id]; if (c && Object.keys(c).length) guardados[id] = c; else delete guardados[id]; });
+    if (Object.keys(guardados).length) lsSet(LOCAL_KEY + ':campos', JSON.stringify(guardados));
     else try { localStorage.removeItem(LOCAL_KEY + ':campos'); } catch (e) {}
   }
   function fundirBorrador(deBase, borrador, campos) {
@@ -541,7 +545,7 @@ figure img { cursor: zoom-in; }
     // anotaciones en la copia que ya hay sin tocar lo demás: lo pendiente de otra sesión o de otra cuenta.
     var datos = anots;
     if (ids) { datos = leerLocal(); ids.forEach(function (id) { if (anots[id]) datos[id] = anots[id]; }); }
-    escribirCampos();  // la lista de campos cambiados viaja siempre con la copia local
+    escribirCampos(ids || Object.keys(anots));  // la lista de campos cambiados viaja siempre con la copia local
     if (escribirLocal(datos)) estado('Guardado sólo en este navegador', true);
     else estado('No se pudo guardar en este navegador (almacenamiento lleno o bloqueado): copia tus anotaciones con el botón antes de cerrar', true);
   }
@@ -556,10 +560,12 @@ figure img { cursor: zoom-in; }
     // Quita las marcas de los campos que la base ya tiene con el valor de la memoria (`enBase`: lo que se escribió,
     // o la versión de la base a la que se volvió); sin `enBase`, todas (la anotación se borró). Lo que se siguió
     // editando después conserva su marca.
-    var c = CAMPOS_BORRADOR[id]; if (!c) return;
-    Object.keys(c).forEach(function (k) { if (!enBase || !anots[id] || anots[id][k] === enBase[k]) delete c[k]; });
-    if (!Object.keys(c).length) delete CAMPOS_BORRADOR[id];
-    escribirCampos();
+    var c = CAMPOS_BORRADOR[id];
+    if (c) {
+      Object.keys(c).forEach(function (k) { if (!enBase || !anots[id] || anots[id][k] === enBase[k]) delete c[k]; });
+      if (!Object.keys(c).length) delete CAMPOS_BORRADOR[id];
+    }
+    escribirCampos([id]);
   }
   function cargarLocal(filtro) {
     // Pasa a memoria lo guardado en el navegador. `filtro(id, anotación)` puede dejar algo fuera: se queda en la copia

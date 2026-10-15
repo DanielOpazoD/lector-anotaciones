@@ -766,6 +766,29 @@ try {
   check(sueltas, 'y la copia local y su lista de campos se sueltan una vez subidas');
   await ctxOn.close();
 
+  // ---------------------------------------------------------------- anotar mientras conecta no borra la lista de otro borrador
+  // la copia local trae el borrador x con lista {nota}; se anota algo mientras la base conecta (eso escribe la lista);
+  // al conectar, x debe subir sólo su nota, sin pisar la réplica más reciente que otra sesión dejó en la base
+  const ctxLst = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxLst.addInitScript(() => { window.__retrasoDb = 1500; window.__semilla = { x: { id: 'x', tipo: 'general', nota: 'Nota base', replica: 'Réplica nueva de otra sesión', cierre: 'pregunta', respuesta: '¿Por qué?', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-02T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxLst.addInitScript(conBase);
+  await ctxLst.addInitScript((clave) => { if (!sessionStorage.getItem('sembrado')) { sessionStorage.setItem('sembrado', '1'); localStorage.setItem(clave, JSON.stringify({ x: { id: 'x', tipo: 'general', nota: 'Nota del borrador', replica: 'Réplica vieja', cierre: 'pregunta', respuesta: '¿Por qué?', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-05T00:00:00.000Z', autor: 'u_me' } })); localStorage.setItem(clave + ':campos', JSON.stringify({ x: { nota: true }, ajena9: { nota: true } })); } }, claveL);
+  const plst = await ctxLst.newPage();
+  await plst.goto(base);
+  await plst.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await plst.waitForFunction(() => /Conectando/.test(document.querySelector('#estado').textContent));
+  const pidLst = await seleccionar(plst, 10);
+  await plst.waitForSelector('#sel-tb', { state: 'visible' });
+  await plst.click('#sel-tb .col-btn[data-c="revisar"]');
+  await plst.waitForSelector(`[data-pid="${pidLst}"] mark.hl`);
+  const listaIntacta = await plst.evaluate((clave) => JSON.parse(localStorage.getItem(clave + ':campos') || '{}'), claveL);
+  check(listaIntacta.x && listaIntacta.x.nota && listaIntacta.ajena9, `anotar mientras la base conecta no borra la lista de campos de los borradores aún no cargados (${JSON.stringify(listaIntacta)})`);
+  const lstSubido = await esperar(plst, () => window.__docs && window.__docs.x && window.__docs.x.nota === 'Nota del borrador', null, 10000);
+  const lstBase = await plst.evaluate((clave) => ({ x: window.__docs.x, campos: JSON.parse(localStorage.getItem(clave + ':campos') || '{}') }), claveL);
+  check(lstSubido && lstBase.x.replica === 'Réplica nueva de otra sesión', `al conectar, el borrador sube su nota y la réplica más reciente de la base se conserva (${JSON.stringify(lstBase.x.replica)})`);
+  check(!lstBase.campos.x && !!lstBase.campos.ajena9, `y su lista se suelta, mientras la de otra anotación no cargada se conserva (${JSON.stringify(lstBase.campos)})`);
+  await ctxLst.close();
+
   // ---------------------------------------------------------------- la nota de otro lector rechazada por falta de permiso
   // can('data.write') resuelve null (host antiguo, visitante de fuera): la página deja escribir y es el rechazo
   // invalid_argument de la base el que decide: la nota vuelve a lo guardado y la página pasa a sólo lectura.
