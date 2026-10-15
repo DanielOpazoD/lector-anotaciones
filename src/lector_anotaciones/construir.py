@@ -2,18 +2,57 @@
 
 from __future__ import annotations
 
+import hashlib
+import html as html_mod
 import json
 import re
 from datetime import date
 from pathlib import Path
 
 from . import __version__
+from .capas import ConfigCapas, calcular_capas
 from .markdown import expandir_fuentes, parse_fuentes
 from .paginas import asignar_paginas, calcular_desfase, sin_paginas, texto_paginas_pdf
-from .util import slug
+from .util import slug, texto_plano
 
-FORMATO = 1
+FORMATO = 2
 _ID_BLOQUE = re.compile(r"^(.+)-b(\d+)$")
+
+
+def texto_render(b: dict) -> str:
+    """El texto del bloque tal como lo muestra la página (su `textContent`, sin marcador de página).
+
+    Es el sistema de coordenadas de los subrayados y de las capas, y lo que se resume en `h`.
+    """
+    h = b["html"]
+    if isinstance(h, str):
+        return html_mod.unescape(texto_plano(h))
+    if isinstance(h, dict):
+        return html_mod.unescape(texto_plano(h.get("caption", "")))
+    if isinstance(h, list):
+        partes = []
+        for x in h:
+            if isinstance(x, list):
+                partes.extend(html_mod.unescape(texto_plano(c)) for c in x)
+            else:
+                partes.append(html_mod.unescape(texto_plano(x)))
+        return "".join(partes)
+    return ""
+
+
+def huella(texto: str) -> str:
+    return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:12]
+
+
+def cargar_anterior(ruta: Path | None) -> dict | None:
+    """La salida anterior, si existe, para marcar qué bloques cambiaron desde entonces."""
+    if ruta is None or not Path(ruta).is_file():
+        return None
+    try:
+        libro = json.loads(Path(ruta).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return libro if isinstance(libro, dict) and "secciones" in libro else None
 
 
 def construir(
@@ -26,11 +65,36 @@ def construir(
     marca_pagina_1: str | None = None,
     ventana: int = 5,
     claves_anteriores: list[str] | None = None,
+    anterior: dict | None = None,
+    capas: ConfigCapas | None = None,
     avisos: list[str] | None = None,
 ) -> dict:
-    """Lee las fuentes (y el PDF, si se da) y devuelve el libro como diccionario listo para JSON."""
+    """Lee las fuentes (y el PDF, si se da) y devuelve el libro como diccionario listo para JSON.
+
+    `anterior` es la salida previa: los bloques cuyo texto cambió desde entonces llevan `anterior` con
+    el texto viejo, para que la página muestre qué cambió. `capas` configura las capas editoriales
+    (None las desactiva).
+    """
     rutas = expandir_fuentes(fuentes)
     secciones = parse_fuentes(rutas, figs=figs)
+    previos: dict[str, dict] = {}
+    if anterior:
+        for s in anterior.get("secciones", []):
+            for b in s.get("bloques", []):
+                previos[b["id"]] = b
+    cambios = 0
+    for sec in secciones:
+        for b in sec["bloques"]:
+            texto = texto_render(b)
+            b["h"] = huella(texto)
+            if capas is not None:
+                m = calcular_capas(texto, capas)
+                if m:
+                    b["m"] = m
+            prev = previos.get(b["id"])
+            if prev is not None and prev.get("h") and prev["h"] != b["h"]:
+                b["anterior"] = texto_render(prev)
+                cambios += 1
     paginas_fisicas = None
     desfase = 0
     if pdf is not None:
@@ -61,6 +125,17 @@ def construir(
         "desfase_paginas": desfase,
         "inicio": inicio,
         "claves_anteriores": list(claves_anteriores or []),
+        "anterior_generado": anterior.get("generado") if anterior else None,
+        "cambios": cambios,
+        "capas": {
+            "fl": f"frases largas (más de {capas.frase_larga} palabras)",
+            "mu": "muletillas",
+            "tr": "términos retirados",
+            "rep": "repeticiones cercanas",
+            "cn": "citas narrativas",
+        }
+        if capas is not None
+        else {},
         "secciones": secciones,
     }
 
@@ -78,6 +153,8 @@ def validar(libro: dict) -> list[str]:
             for clave in ("id", "t", "html", "src"):
                 if clave not in b:
                     problemas.append(f"bloque sin «{clave}» en {sec['id']}")
+            if "h" not in b:
+                problemas.append(f"bloque sin «h» en {sec['id']}")
             m = _ID_BLOQUE.match(b.get("id", ""))
             if not m or m.group(1) != sec["id"] or int(m.group(2)) != n:
                 problemas.append(f"id de bloque fuera de patrón: {b.get('id')} (esperado {sec['id']}-b{n})")
@@ -101,9 +178,11 @@ def resumen(libro: dict) -> str:
     secciones = libro["secciones"]
     nb = sum(len(s["bloques"]) for s in secciones)
     sin = sum(1 for s in secciones for b in s["bloques"] if b.get("pagina") is None)
+    con_capas = sum(1 for s in secciones for b in s["bloques"] if b.get("m"))
     return (
         f"{len(secciones)} secciones, {nb} bloques, {sin} sin página, "
-        f"desfase {libro['desfase_paginas']}, páginas físicas {libro['paginas_fisicas']}"
+        f"desfase {libro['desfase_paginas']}, páginas físicas {libro['paginas_fisicas']}, "
+        f"{libro.get('cambios', 0)} bloques cambiados desde la salida anterior, {con_capas} con señales editoriales"
     )
 
 

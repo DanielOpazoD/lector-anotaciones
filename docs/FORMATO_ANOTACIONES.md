@@ -21,7 +21,14 @@ Una anotación es un documento JSON. La página las guarda una a una en la colec
   "estado": "abierta",
   "creado": "2026-10-15T14:02:11.000Z",
   "editado": "2026-10-15T14:03:40.000Z",
-  "libro": "2026-10-15"
+  "libro": "2026-10-15",
+  "bh": "3f2a9c1d0b7e",
+  "autor": "u_0123456789abcdefghijkl",
+  "respuesta": "Reescrito en el commit indicado: la frase ahora separa el vómito referido de la aspiración no presenciada.",
+  "cierre": "atendida",
+  "commit": "9f1e2d3",
+  "respondido": "2026-10-16T09:10:00.000Z",
+  "replica": ""
 }
 ```
 
@@ -44,6 +51,13 @@ Una anotación es un documento JSON. La página las guarda una a una en la colec
 | `estado` | todos | `abierta` o `resuelta`. |
 | `creado`, `editado` | todos | ISO 8601. |
 | `libro` | todos | Valor de `generado` del `libro.json` con que se hizo la anotación. |
+| `bh` | subrayado | Huella `h` del bloque en el momento de anotar; si difiere de la actual, la ficha avisa que el bloque cambió. |
+| `autor` | todos | Id opaco de quien anotó (capacidad `user`), o `null` sin identidad. Nunca se guarda el nombre: la página lo resuelve al mostrar. |
+| `respuesta` | todos | Texto de quien edita las fuentes (Claude o una persona) sobre qué hizo con la anotación. |
+| `cierre` | todos | `atendida` (se aplicó), `descartada` (no se aplicó, con el motivo en `respuesta`) o `pregunta` (hace falta una decisión del autor). |
+| `commit` | todos | Identificador del commit que aplicó el cambio, si lo hubo. |
+| `respondido` | todos | ISO 8601 de la respuesta. |
+| `replica` | todos | La respuesta del autor a una `pregunta`; la escribe en la ficha. |
 
 ## Los cuatro colores
 
@@ -65,6 +79,19 @@ Los ids de bloque son posicionales (`cap-01-b7` es el séptimo bloque del capít
 3. Si no aparece, no se pinta nada y la ficha dice «No encontrado en esta versión del libro», con la cita a la vista.
 
 Nada de esto modifica la anotación guardada: `pid`, `inicio` y `fin` siguen siendo los originales, y `libro` dice con qué versión se hicieron. Quien vuelque las anotaciones a las fuentes debe aplicar la misma regla: localizar por `cita` y contexto, y usar `pid` y `src` como pista, no como verdad.
+
+## Cómo responde quien edita
+
+Cada anotación es una conversación corta. Quien vuelque la anotación a las fuentes (Claude desde la sesión de trabajo, con `ArtifactData` sobre la colección `anotaciones`, o una persona desde cualquier cliente de la base) la cierra escribiendo en el mismo documento:
+
+- `respuesta` con una línea de qué cambió o por qué no, `cierre` con `atendida` o `descartada`, `commit` si lo hay, `respondido` con la fecha, y `estado: "resuelta"`;
+- o `cierre: "pregunta"` y `respuesta` con la pregunta, dejando `estado: "abierta"`. La ficha muestra entonces un cuadro para la réplica; cuando el autor escribe en él, `replica` queda en el documento y la siguiente sesión puede leerla.
+
+La página muestra la respuesta bajo la nota, con el cierre como etiqueta, y ofrece los filtros «con respuesta» y «preguntas». Nada de esto toca la nota del autor.
+
+## Etiquetas
+
+Una palabra precedida de `#` dentro de la nota (`#carmen`, `#dato`) es una etiqueta: la ficha la muestra como chip y el panel ofrece un selector para filtrar por ella. No hay lista fija.
 
 ## Cómo se vuelcan a las fuentes
 

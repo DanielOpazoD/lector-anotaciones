@@ -2,6 +2,21 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.0] - 2026-10-15
+
+### Añadido
+
+- Respuesta en cada ficha: `respuesta`, `cierre` (atendida, descartada, pregunta), `commit`, `respondido` y `replica`; filtros «con respuesta» y «preguntas»; `exportar` las incluye.
+- Qué cambió: huella `h` por bloque, `bh` en cada subrayado, `anterior` con el texto previo cuando la salida anterior existe (`--anterior`, `--sin-anterior`), marca «cambió» al margen con diferencia palabra por palabra, y marca «cambió desde tu última lectura» por lector.
+- Capas editoriales (`capas.py`): frases largas, muletillas, términos retirados, repeticiones cercanas y citas narrativas, en `m` por bloque; menú «Capas» con recuentos por sección; opciones `--sin-capas`, `--frase-larga`, `--muletillas`, `--terminos-retirados`.
+- Lectores con identidad: `autor` por anotación (capacidad `user`), nombre resuelto al mostrar, selector de lector, modo sólo lectura cuando no se puede escribir.
+- Progreso por parte, casilla «Leída», modo concentración y atajos de teclado (1–4, N, C, J/K, L, F, ?).
+- Búsqueda en las notas, `#etiquetas` con filtro, deshacer un borrado, respaldo diario en la colección `respaldos`, lectura en voz alta, figuras ampliables, navegación por el hash de la URL.
+
+### Cambiado
+
+- `libro.json` pasa a `formato` 2.
+
 ## [0.1.0] - 2026-10-15
 
 Primera versión, extraída del lector construido para el libro *Hechos, inferencias e incertidumbre* y generalizada para cualquier libro en Markdown.

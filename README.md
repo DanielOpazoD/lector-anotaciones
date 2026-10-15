@@ -14,7 +14,16 @@ fuentes/*.md  ──construir──▶  libro.json  ──▶  web/index.html  �
 
 1. **`lector-anotaciones construir`** lee las fuentes (y el PDF maquetado, si lo hay) y escribe `libro.json`: cada párrafo, lista, cita, tabla o figura es un bloque con id estable, `archivo.md:línea` de origen y página impresa.
 2. **`web/index.html`** muestra el libro por secciones con los números de página al margen. Seleccionar texto abre una barra con cuatro colores; cada color es una instrucción: **revisar** (ámbar), **cortar** (rojo), **duda o verificar** (violeta), **conservar** (verde). Clic en un número de página deja una nota de página; hay botones para notas de sección y generales; filtros, búsqueda, estado abierta/resuelta y «Copiar todo» en JSON o Markdown.
-3. **`lector-anotaciones exportar`** convierte el JSON de anotaciones en una lista de tareas en Markdown, por sección o por archivo de origen.
+3. **`lector-anotaciones exportar`** convierte el JSON de anotaciones en una lista de tareas en Markdown, por sección o por archivo de origen, con la respuesta y el cierre de cada una.
+
+Lo que la página añade a la lectura:
+
+- **Respuesta en cada ficha.** Quien vuelca una anotación a las fuentes la cierra como atendida (con el commit), descartada (con el motivo) o pregunta; la respuesta se ve bajo la nota y, si es una pregunta, aparece un cuadro para replicar. Filtros «con respuesta» y «preguntas».
+- **Qué cambió.** Cada bloque lleva una huella; tras reconstruir, los bloques cambiados se marcan al margen y muestran la diferencia palabra por palabra con la versión anterior. Los bloques cambiados desde la última lectura también se marcan, y una ficha avisa si su bloque cambió desde que se anotó.
+- **Capas editoriales.** Frases largas, muletillas, términos retirados, repeticiones cercanas y citas narrativas, calculadas al construir y activables desde el menú «Capas», con el recuento por sección.
+- **Lectores con identidad.** Cada anotación guarda el id de quien la hizo (capacidad `user` de claude.ai); con varios lectores, las fichas llevan el nombre y el panel filtra por lector.
+- **Progreso y concentración.** Casilla «Leída» por sección, barra de avance por parte en el índice, modo concentración sin índice ni panel, y atajos: 1 a 4 subrayan, N subraya con nota, C copia la selección, J/K cambian de sección, L marca leída, F concentración, ? ayuda.
+- **Menores.** Búsqueda también en las notas; `#etiquetas` en las notas con filtro; deshacer un borrado durante ocho segundos; respaldo diario de todas las anotaciones en la colección `respaldos`; lectura en voz alta de la sección con el párrafo iluminado; figuras ampliables.
 
 Publicada como página privada en claude.ai con la capacidad `db`, la página guarda cada anotación en una base compartida que Claude lee directamente en la sesión siguiente. Sin esa base, guarda en el navegador y lo dice. Ver [docs/PUBLICAR.md](docs/PUBLICAR.md).
 
@@ -51,7 +60,7 @@ python -m http.server --directory salida 8000      # http://localhost:8000/
 lector-anotaciones exportar anotaciones.json --agrupar archivo --solo-abiertas --salida tareas.md
 ```
 
-`--marca-pagina-1` es el texto con que empieza la página impresa 1 en el PDF (por ejemplo el encabezado corrido seguido del título del prefacio); con él la herramienta calcula cuántas páginas preliminares hay que restar. Sin PDF, los bloques quedan sin página. El directorio [`ejemplo/`](ejemplo/) tiene un libro inventado con todo el dialecto para probar de punta a punta.
+`--anterior` compara con una salida previa (por defecto, la propia salida si ya existe) para marcar los bloques que cambiaron; `--sin-capas`, `--frase-larga`, `--muletillas` y `--terminos-retirados` gobiernan las capas editoriales. `--marca-pagina-1` es el texto con que empieza la página impresa 1 en el PDF (por ejemplo el encabezado corrido seguido del título del prefacio); con él la herramienta calcula cuántas páginas preliminares hay que restar. Sin PDF, los bloques quedan sin página. El directorio [`ejemplo/`](ejemplo/) tiene un libro inventado con todo el dialecto para probar de punta a punta.
 
 ### Dialecto Markdown admitido
 

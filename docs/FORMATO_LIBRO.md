@@ -4,7 +4,7 @@ Es el archivo que `lector-anotaciones construir` produce y que `web/index.html` 
 
 ```json
 {
-  "formato": 1,
+  "formato": 2,
   "generador": "lector-anotaciones 0.1.0",
   "id": "libro-de-ejemplo",
   "titulo": "Libro de ejemplo",
@@ -15,6 +15,10 @@ Es el archivo que `lector-anotaciones construir` produce y que `web/index.html` 
   "paginas_fisicas": 12,
   "desfase_paginas": 2,
   "inicio": "cap-01",
+  "claves_anteriores": [],
+  "anterior_generado": "2026-10-14",
+  "cambios": 3,
+  "capas": { "fl": "frases largas (más de 50 palabras)", "mu": "muletillas", "tr": "términos retirados", "rep": "repeticiones cercanas", "cn": "citas narrativas" },
   "secciones": [
     {
       "id": "cap-01",
@@ -23,7 +27,7 @@ Es el archivo que `lector-anotaciones construir` produce y que `web/index.html` 
       "src": "00_preliminares.md:21",
       "pagina": 3,
       "bloques": [
-        { "id": "cap-01-b1", "t": "p", "html": "Un hecho es lo que se observó…", "src": "00_preliminares.md:23", "pagina": 3 },
+        { "id": "cap-01-b1", "t": "p", "html": "Un hecho es lo que se observó…", "src": "00_preliminares.md:23", "pagina": 3, "h": "3f2a9c1d0b7e", "anterior": "Un hecho es lo que se vio…", "m": { "mu": [[12, 19]] } },
         { "id": "cap-01-b2", "t": "h3", "html": "Tres maneras de mezclar", "src": "00_preliminares.md:25", "pagina": 3 },
         { "id": "cap-01-b3", "t": "ul", "html": ["Dar por hecho…", "…"], "src": "00_preliminares.md:27", "pagina": 3 }
       ]
@@ -36,7 +40,7 @@ Es el archivo que `lector-anotaciones construir` produce y que `web/index.html` 
 
 | Campo | Significado |
 |---|---|
-| `formato` | Versión del formato (hoy `1`). La página rechaza un libro sin secciones; un cambio incompatible subirá este número. |
+| `formato` | Versión del formato (hoy `2`: añade `h`, `anterior`, `m` y `capas`). La página rechaza un libro sin secciones; un cambio incompatible subirá este número. |
 | `id` | Slug del título. La página lo usa para separar el respaldo local (`localStorage`) de cada libro. |
 | `generado` | Fecha de construcción. Como las anotaciones citan ids de bloque, conviene registrar con qué `libro.json` se hicieron. |
 | `fuentes` | Nombres de los archivos leídos, en orden. |
@@ -44,6 +48,8 @@ Es el archivo que `lector-anotaciones construir` produce y que `web/index.html` 
 | `desfase_paginas` | Páginas físicas anteriores a la página impresa 1 (portada, legal, índice…). |
 | `inicio` | Sección que la página abre la primera vez: la primera de nivel 2, o la primera que haya. |
 | `claves_anteriores` | Claves de `localStorage` que usaron versiones anteriores de la página para este libro (`--claves-anteriores`). Al cargar sin base compartida, la página copia esas anotaciones a la clave actual sin pisar las existentes y retira la clave vieja. |
+| `anterior_generado`, `cambios` | Fecha de la salida con que se comparó (por defecto, la propia salida si ya existía; `--anterior` para otra, `--sin-anterior` para no comparar) y cuántos bloques cambiaron. |
+| `capas` | Las capas editoriales calculadas, clave → nombre que muestra el menú «Capas». Vacío con `--sin-capas`. |
 
 ## Secciones
 
@@ -74,9 +80,17 @@ Cada `#` o `##` de las fuentes abre una sección. Los ids siguen las convencione
 
 En todos los casos el HTML ya está escapado y sólo contiene `<strong>` y `<em>`. `src` es `archivo.md:línea` de la primera línea del bloque. `pagina` es la impresa (física menos desfase), o `null` cuando el bloque cae en las páginas preliminares o no hubo PDF.
 
+Tres campos más por bloque:
+
+| Campo | Significado |
+|---|---|
+| `h` | Huella (12 hex de SHA-1) del texto tal como lo muestra la página. Las anotaciones guardan la suya en `bh`; la página marca «cambió desde tu última lectura» comparando con la huella que vio el lector. |
+| `anterior` | Sólo en los bloques cuyo texto cambió respecto de la salida anterior: el texto viejo, para que la página muestre la diferencia palabra por palabra. Se conserva una sola generación hacia atrás. |
+| `m` | Capas editoriales con algo que señalar: `{"fl": [[ini, fin], …], "mu": …, "tr": …, "rep": …, "cn": …}`, en caracteres del texto mostrado. `fl` frases de más de N palabras (`--frase-larga`), `mu` muletillas (`--muletillas archivo`), `tr` términos retirados (`--terminos-retirados archivo`), `rep` una palabra larga repetida a menos de 120 caracteres, `cn` citas narrativas «Autor (año)». |
+
 ## Invariantes que comprueba `validar`
 
-- Ids de sección y de bloque únicos; cada bloque numerado `<sección>-b<n>` en orden.
+- Ids de sección y de bloque únicos; cada bloque numerado `<sección>-b<n>` en orden; cada bloque con `h`.
 - `src` con número de línea.
 - La página nunca retrocede a lo largo del libro (si lo hace, la búsqueda en el PDF se confundió: suele bastar con subir `--ventana` o revisar un párrafo duplicado).
 

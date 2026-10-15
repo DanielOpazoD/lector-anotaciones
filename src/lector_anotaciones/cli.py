@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .construir import construir, escribir, resumen, validar
+from .capas import ConfigCapas, leer_lista
+from .construir import cargar_anterior, construir, escribir, resumen, validar
 from .exportar import a_markdown, cargar, orden_de_secciones
 from .paginas import HerramientaFaltante
 
@@ -42,6 +43,19 @@ def _parser() -> argparse.ArgumentParser:
         help="claves de localStorage de versiones anteriores de la página; sus anotaciones se migran al cargar",
     )
     c.add_argument("--estricto", action="store_true", help="termina con error si la validación encuentra problemas")
+    c.add_argument(
+        "--anterior",
+        type=Path,
+        default=None,
+        help="libro.json previo con que comparar (por defecto, la propia salida si ya existe)",
+    )
+    c.add_argument("--sin-anterior", action="store_true", help="no marcar los bloques cambiados")
+    c.add_argument("--sin-capas", action="store_true", help="no calcular las capas editoriales")
+    c.add_argument("--frase-larga", type=int, default=50, help="umbral de palabras de la capa de frases largas")
+    c.add_argument(
+        "--muletillas", type=Path, help="archivo con una muletilla por línea (sustituye la lista por defecto)"
+    )
+    c.add_argument("--terminos-retirados", type=Path, help="archivo con un término retirado por línea")
 
     e = sub.add_parser("exportar", help="convierte las anotaciones (JSON) en un Markdown de trabajo")
     e.add_argument("anotaciones", type=Path, help="JSON copiado desde la página o volcado de la colección")
@@ -58,6 +72,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.orden == "construir":
         avisos: list[str] = []
         try:
+            anterior = None if args.sin_anterior else cargar_anterior(args.anterior or args.salida)
+            capas = None
+            if not args.sin_capas:
+                capas = ConfigCapas(frase_larga=args.frase_larga)
+                if args.muletillas:
+                    capas.muletillas = leer_lista(args.muletillas)
+                if args.terminos_retirados:
+                    capas.terminos_retirados = leer_lista(args.terminos_retirados)
             libro = construir(
                 args.fuentes,
                 pdf=args.pdf,
@@ -68,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
                 marca_pagina_1=args.marca_pagina_1,
                 ventana=args.ventana,
                 claves_anteriores=args.claves_anteriores,
+                anterior=anterior,
+                capas=capas,
                 avisos=avisos,
             )
         except (FileNotFoundError, HerramientaFaltante, ValueError) as e:

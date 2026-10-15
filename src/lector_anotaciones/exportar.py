@@ -52,21 +52,34 @@ def _orden_archivo(a: dict) -> tuple:
     return (archivo, int(linea) if linea.isdigit() else 0, a.get("inicio") or 0)
 
 
+def _cola(a: dict) -> list[str]:
+    """Las líneas de respuesta, cierre y réplica que siguen a una anotación."""
+    lineas = []
+    if a.get("respuesta") or a.get("cierre"):
+        cierre = a.get("cierre")
+        detalle = f" ({cierre}{', ' + a['commit'] if a.get('commit') else ''})" if cierre else ""
+        lineas.append(f"  - Respuesta{detalle}: {(a.get('respuesta') or '').strip().replace(chr(10), ' ')}")
+    if a.get("replica"):
+        lineas.append(f"  - Réplica: {a['replica'].strip().replace(chr(10), ' ')}")
+    return lineas
+
+
 def _linea(a: dict) -> list[str]:
     caja = "[x]" if a.get("estado") == "resuelta" else "[ ]"
     pag = f"p. {a['pagina']}" if a.get("pagina") else "sin página"
     src = f"`{a['src']}`" if a.get("src") else ""
+    quien = f"lector {a['autor']}" if a.get("autor") else ""
     nota = (a.get("nota") or "").strip().replace("\n", " ")
     if a.get("tipo") == "subrayado":
         etiqueta = f"**{a.get('color', 'revisar')}**"
-        partes = [etiqueta, pag, src, f"«{(a.get('cita') or '').strip()}»"]
+        partes = [etiqueta, pag, src, f"«{(a.get('cita') or '').strip()}»", quien]
         lineas = [f"- {caja} " + " · ".join(p for p in partes if p)]
         if nota:
             lineas.append(f"  - Nota: {nota}")
-        return lineas
+        return [*lineas, *_cola(a)]
     etiqueta = f"**{TIPOS.get(a.get('tipo', ''), a.get('tipo', ''))}**"
-    partes = [etiqueta, pag if a.get("tipo") == "pagina" else "", src]
-    return [f"- {caja} " + " · ".join(p for p in partes if p) + f": {nota or '(sin texto)'}"]
+    partes = [etiqueta, pag if a.get("tipo") == "pagina" else "", src, quien]
+    return [f"- {caja} " + " · ".join(p for p in partes if p) + f": {nota or '(sin texto)'}", *_cola(a)]
 
 
 def orden_de_secciones(libro: dict) -> dict[str, int]:

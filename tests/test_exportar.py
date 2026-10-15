@@ -84,6 +84,24 @@ def test_a_markdown_por_seccion():
     assert md.index("p. 3") < md.index("p. 4"), "dentro de la sección, por página"
 
 
+def test_a_markdown_incluye_respuesta_cierre_replica_y_lector():
+    con = dict(
+        SUBRAYADO,
+        id="a7",
+        autor="u_abc",
+        respuesta="Quitado.",
+        cierre="atendida",
+        commit="abc1234",
+        replica="De acuerdo.",
+        estado="resuelta",
+    )
+    md = a_markdown([con, dict(GENERAL, id="a8", cierre="pregunta", respuesta="¿Dónde?")], ahora=AHORA)
+    assert "· lector u_abc" in md
+    assert "  - Respuesta (atendida, abc1234): Quitado." in md
+    assert "  - Réplica: De acuerdo." in md
+    assert "- [ ] **nota general**: Revisar el título.\n  - Respuesta (pregunta): ¿Dónde?" in md
+
+
 def test_a_markdown_ordena_como_el_libro_si_se_le_da_el_orden():
     orden = orden_de_secciones({"secciones": [{"id": "prefacio"}, {"id": "cap-01"}]})
     md = a_markdown(TODAS, orden_secciones=orden, ahora=AHORA)
