@@ -410,6 +410,30 @@ try {
   });
   check(copiaPalabra.split('\n')[1] === '«Cambió la frase»', `y conserva la palabra «Cambió» cuando es del manuscrito (${JSON.stringify(copiaPalabra.split('\n')[1])})`);
   await p2.evaluate(() => window.getSelection().removeAllRanges());
+  // copiar varios ítems de una lista y una fila de una tabla conserva los límites
+  await p2.evaluate(() => { location.hash = '#cap-01'; });
+  await p2.waitForSelector('#sec-cap-01:not([hidden]) ul.bloque');
+  const copiaLista = await p2.evaluate(async () => {
+    const lis = document.querySelectorAll('#sec-cap-01 ul.bloque li');
+    const r = document.createRange(); r.setStart(lis[0].firstChild, 0); r.setEnd(lis[1].firstChild, lis[1].firstChild.textContent.length);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.querySelector('#sel-copiar').click();
+    await new Promise((res) => setTimeout(res, 200));
+    return navigator.clipboard.readText();
+  });
+  check(copiaLista.split('\n').slice(1).join('\n') === '«Dar por hecho lo que alguien contó.\nDar por hecho lo que se infirió de una cifra.»', `los ítems copiados van en líneas distintas (${JSON.stringify(copiaLista.split('\n').slice(1).join('|'))})`);
+  const copiaTabla = await p2.evaluate(async () => {
+    const celdas = document.querySelectorAll('#sec-cap-01 .tabla tr:nth-child(2) td');
+    const r = document.createRange(); r.setStart(celdas[0].firstChild, 0); r.setEnd(celdas[2].firstChild, celdas[2].firstChild.textContent.length);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.querySelector('#sel-copiar').click();
+    await new Promise((res) => setTimeout(res, 200));
+    return navigator.clipboard.readText();
+  });
+  check(copiaTabla.split('\n')[1] === '«Hecho · ¿Qué vi? · Fiebre de 38,5 °C»', `las celdas copiadas llevan separador (${JSON.stringify(copiaTabla.split('\n')[1])})`);
+  await p2.evaluate(() => window.getSelection().removeAllRanges());
+  await p2.evaluate(() => { location.hash = '#cap-02'; });
+  await p2.waitForSelector('#sec-cap-02:not([hidden])');
   // deshacer un borrado
   await p2.click('.tab[data-tab="todas"]');
   await p2.click('.ficha .acciones button:has-text("Borrar")');

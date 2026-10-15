@@ -10,6 +10,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 - El enlace «Deshacer borrado» vive fuera del texto de estado, así que el eco de la base que confirma el borrado ya no se lo lleva antes de los ocho segundos.
 - Copiar una selección quita los marcadores del margen por estructura (clon de la selección sin `.pg` ni `.marca-cambio`), nunca borrando palabras del manuscrito.
 - Pulsar «Escuchar» en otra sección mientras suena una cambia la lectura en vez de sólo detenerla.
+- Copiar varios ítems de una lista o varias celdas de una tabla conserva sus límites (salto de línea por ítem o fila, separador entre celdas).
 
 ## [0.2.0] - 2026-10-15
 

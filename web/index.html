@@ -755,8 +755,12 @@ figure img { cursor: zoom-in; }
     // de una copia de la selección, para no tocar ninguna palabra del manuscrito.
     var frag = r.cloneContents();
     Array.prototype.slice.call(frag.querySelectorAll('.pg, .marca-cambio')).forEach(function (x) { x.remove(); });
+    // Las listas y tablas se construyen sin texto entre ítems ni celdas; al copiar se reponen los límites:
+    // un salto de línea por ítem o fila y un separador entre celdas.
+    Array.prototype.slice.call(frag.querySelectorAll('li, tr')).forEach(function (x) { x.appendChild(document.createTextNode('\n')); });
+    Array.prototype.slice.call(frag.querySelectorAll('td, th')).forEach(function (x) { if (x.nextElementSibling) x.appendChild(document.createTextNode(' · ')); });
     var bloques = Array.prototype.slice.call(frag.querySelectorAll('[data-pid]'));
-    var texto = (bloques.length ? bloques.map(function (b) { return b.textContent; }).join('\n') : frag.textContent || '').replace(/[ \t]*\n[ \t]*/g, '\n').trim();
+    var texto = (bloques.length ? bloques.map(function (b) { return b.textContent; }).join('\n') : frag.textContent || '').replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{2,}/g, '\n').trim();
     copiar('[' + ref + ']\n«' + texto + '»', boton);
   }
   function exportarJSON() { return JSON.stringify({ libro: LIBRO.titulo, generado: LIBRO.generado, exportado: ahora(), anotaciones: Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; }) }, null, 2); }
