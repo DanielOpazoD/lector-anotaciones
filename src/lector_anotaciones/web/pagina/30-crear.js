@@ -29,7 +29,7 @@ function notaPagina(pg, sid) {
     enfocar(ex.id);
     return;
   }
-  var a = base('pagina', sid || secActual);
+  var a = base('pagina', sid || V.secActual);
   a.pagina = pg;
   guardar(a);
   enfocar(a.id, true);
@@ -41,13 +41,13 @@ function notaSeccion() {
       return anots[k];
     })
     .filter(function (a) {
-      return a.tipo === 'capitulo' && a.sid === secActual;
+      return a.tipo === 'capitulo' && a.sid === V.secActual;
     })[0];
   if (ex) {
     enfocar(ex.id);
     return;
   }
-  var a = base('capitulo', secActual);
+  var a = base('capitulo', V.secActual);
   guardar(a);
   enfocar(a.id, true);
 }
@@ -135,7 +135,7 @@ function crearSubrayado(color, conNota) {
       fin = Math.min(fin, txt.length);
     }
     if (fin <= ini) continue;
-    var a = base('subrayado', secActual);
+    var a = base('subrayado', V.secActual);
     a.pid = p.getAttribute('data-pid');
     a.src = p.getAttribute('data-src');
     a.pagina = parseInt(p.getAttribute('data-pg') || '0', 10) || null;

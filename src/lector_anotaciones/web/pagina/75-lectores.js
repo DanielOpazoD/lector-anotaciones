@@ -48,7 +48,7 @@ function pintarEtiquetas(f, a) {
   tags.forEach(function (t) {
     var b = el('button', { type: 'button', text: '#' + t, title: 'Filtrar por #' + t });
     b.addEventListener('click', function () {
-      filtroEtiqueta = t;
+      VISTA.cambiar({ filtroEtiqueta: t });
       renderPanel();
     });
     et.appendChild(b);
@@ -74,7 +74,7 @@ function renderSelectores() {
   sa.hidden = ids.length < 2;
   if (!sa.hidden) {
     resolverPerfiles(ids);
-    var actual = filtroAutor;
+    var actual = V.filtroAutor;
     sa.innerHTML = '';
     sa.appendChild(el('option', { value: '', text: 'todos los lectores' }));
     ids.forEach(function (i) {
@@ -86,19 +86,19 @@ function renderSelectores() {
       );
     });
     sa.value = ids.indexOf(actual) >= 0 ? actual : '';
-    filtroAutor = sa.value;
-  } else filtroAutor = '';
+    VISTA.cambiar({ filtroAutor: sa.value });
+  } else VISTA.cambiar({ filtroAutor: '' });
   var se = $('#f-etiqueta'),
     ts = Object.keys(tags).sort();
   se.hidden = !ts.length;
   if (!se.hidden) {
-    var act = filtroEtiqueta;
+    var act = V.filtroEtiqueta;
     se.innerHTML = '';
     se.appendChild(el('option', { value: '', text: 'todas las etiquetas' }));
     ts.forEach(function (t) {
       se.appendChild(el('option', { value: t, text: '#' + t }));
     });
     se.value = ts.indexOf(act) >= 0 ? act : '';
-    filtroEtiqueta = se.value;
-  } else filtroEtiqueta = '';
+    VISTA.cambiar({ filtroEtiqueta: se.value });
+  } else VISTA.cambiar({ filtroEtiqueta: '' });
 }

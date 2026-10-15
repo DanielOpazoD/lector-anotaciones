@@ -6,10 +6,6 @@ var LIBRO = null,
 var db = null,
   col = null,
   modo = 'cargando';
-var secActual = null,
-  tab = 'capitulo',
-  filtro = 'todas',
-  fichaFoco = null;
 var LOCAL_KEY = 'lector-anotaciones'; // se completa con el id del libro al cargarlo
 var BLOQUES = {}; // id de bloque -> bloque de libro.json
 var USER = null,
@@ -18,9 +14,7 @@ var USER = null,
   PERFILES_PEDIDOS = {};
 var CAPAS_ON = {},
   VISTO = {},
-  LEIDAS = {},
-  filtroAutor = '',
-  filtroEtiqueta = '';
+  LEIDAS = {};
 var ultimoBorrado = null,
   lectura = null;
 var SOLO_LECTURA = false,
@@ -35,6 +29,11 @@ var N = window.LANucleo; // lógica pura (nucleo/*.js), probada con node --test
 // anotaciones (id → anotación), el mismo objeto.
 var SINC = N.crearSincronia();
 var anots = SINC.anots;
+// El estado de la vista (nucleo/58-vista.js): sección, pestaña, filtros, ficha activa, revisadas, margen. `V` es el
+// objeto vivo, que se lee directamente; se cambia sólo con `VISTA.cambiar({...})`, que aplica las reglas (al salir de
+// «Por revisar» se vacía lo revisado) y avisa a quien escucha.
+var VISTA = N.crearVista();
+var V = VISTA.estado;
 var $ = function (s, r) {
   return (r || document).querySelector(s);
 };

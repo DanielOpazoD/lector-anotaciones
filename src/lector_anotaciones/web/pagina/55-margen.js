@@ -4,14 +4,14 @@
 // mismo que el artículo (una sola transformación por cuadro), y el orden de las fichas en el documento —el del
 // teclado y el de los lectores de pantalla— sigue siendo el del libro.
 var MARGEN_KEY = 'lector-anotaciones.margen';
-var margenPref = lsGet(MARGEN_KEY) !== '0';
+VISTA.cambiar({ margen: lsGet(MARGEN_KEY) !== '0' });
 var margenCuadro = 0,
   margenTemporizador = 0;
 function margenActivo() {
-  return margenPref && !mqMovil.matches && tab === 'capitulo' && !$('#app').classList.contains('foco');
+  return V.margen && !mqMovil.matches && V.tab === 'capitulo' && !$('#app').classList.contains('foco');
 }
 function articuloActual() {
-  var art = $('#sec-' + secActual);
+  var art = $('#sec-' + V.secActual);
   return art && !art.hidden ? art : null;
 }
 // El elemento del texto junto al que va la ficha: la marca del subrayado (o su bloque, si la cita se movió o se
@@ -50,7 +50,7 @@ function colocarMargen() {
       // la activa tampoco queda por encima de lo que se ve ahora de la lista; si es más alta que la lista, puede subir lo
       // que le sobra, para que con el texto desplazado se vea su final (las acciones, a las que se llega con Tab)
       var h = f.offsetHeight;
-      if (id === fichaFoco && y !== null) y = Math.max(y, rb.top - ref + 8 - Math.max(0, h + 16 - rb.height));
+      if (id === V.fichaFoco && y !== null) y = Math.max(y, rb.top - ref + 8 - Math.max(0, h + 16 - rb.height));
       return { id: id, y: y, h: h };
     });
   // las que no tienen dónde anclarse van al final, y nunca sobre el piso
@@ -61,7 +61,7 @@ function colocarMargen() {
     items.length
   )
     items[0].y = piso;
-  var lugar = N.apilar(items, fichaFoco, 8);
+  var lugar = N.apilar(items, V.fichaFoco, 8);
   fichas.forEach(function (f) {
     f.style.top = Math.round(lugar.tops[f.getAttribute('data-id')]) + 'px';
   });
@@ -138,7 +138,7 @@ var alSoltar = function () {
     setTimeout(function () {
       if ($('#lista .capa-margen')) {
         colocarMargen();
-        if (fichaFoco) asegurarVisibleMargen(fichaFoco);
+        if (V.fichaFoco) asegurarVisibleMargen(V.fichaFoco);
       }
     }, 0);
   }
@@ -194,7 +194,7 @@ $('#lista').addEventListener('scroll', function () {
   this.scrollTop = 0;
   var a = document.activeElement;
   if (a && this.contains(a) && a !== this) asegurarVisible(a, false);
-  else if (fichaFoco) asegurarVisibleMargen(fichaFoco);
+  else if (V.fichaFoco) asegurarVisibleMargen(V.fichaFoco);
 });
 // con el teclado, el control que recibe el foco (el cuadro de la respuesta, «Borrar»…) se ve aunque la ficha sea más
 // alta que la lista
@@ -232,10 +232,16 @@ window.addEventListener('resize', function () {
     if (margenActivo()) colocarMargenPronto();
   });
 });
-$('#b-margen').setAttribute('aria-pressed', margenPref ? 'true' : 'false');
-$('#b-margen').addEventListener('click', function () {
-  margenPref = !margenPref;
-  lsSet(MARGEN_KEY, margenPref ? '1' : '0');
-  this.setAttribute('aria-pressed', margenPref ? 'true' : 'false');
+// la preferencia se recuerda y el botón la anuncia; el panel se redibuja con o sin margen
+function marcarMargen() {
+  $('#b-margen').setAttribute('aria-pressed', V.margen ? 'true' : 'false');
+}
+marcarMargen();
+VISTA.alCambiar(['margen'], function () {
+  lsSet(MARGEN_KEY, V.margen ? '1' : '0');
+  marcarMargen();
   renderPanel();
+});
+$('#b-margen').addEventListener('click', function () {
+  VISTA.cambiar({ margen: !V.margen });
 });

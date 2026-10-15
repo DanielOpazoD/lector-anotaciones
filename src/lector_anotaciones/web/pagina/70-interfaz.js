@@ -64,44 +64,44 @@ $('#sel-copiar').addEventListener('click', function () {
 
 // ------------------------------------------------------------ pestañas y filtros del panel
 // Las pestañas siguen el patrón de WAI-ARIA: una sola en el orden de Tab, flechas para moverse entre ellas.
+VISTA.alCambiar(['tab'], function () {
+  marcarTab();
+});
 function marcarTab() {
   $$('.tab').forEach(function (t) {
-    var on = t.getAttribute('data-tab') === tab;
+    var on = t.getAttribute('data-tab') === V.tab;
     t.classList.toggle('activa', on);
     t.setAttribute('aria-selected', on ? 'true' : 'false');
     t.tabIndex = on ? 0 : -1;
   });
-  $('#lista').setAttribute('aria-labelledby', 'tab-' + tab);
+  $('#lista').setAttribute('aria-labelledby', 'tab-' + V.tab);
 }
 // El resumen junto a «Filtros» dice qué está escondiendo fichas aunque el desplegable esté cerrado.
 function marcarFiltro() {
   $$('.filtro').forEach(function (x) {
-    var on = x.getAttribute('data-f') === filtro;
+    var on = x.getAttribute('data-f') === V.filtro;
     x.classList.toggle('on', on);
     x.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
   var partes = [];
-  if (filtro !== 'todas') {
-    var b = $('.filtro[data-f="' + filtro + '"]');
-    partes.push(b ? b.textContent : filtro);
+  if (V.filtro !== 'todas') {
+    var b = $('.filtro[data-f="' + V.filtro + '"]');
+    partes.push(b ? b.textContent : V.filtro);
   }
-  if (filtroAutor) {
+  if (V.filtroAutor) {
     var o = $('#f-autor').selectedOptions;
     partes.push(o && o[0] ? o[0].textContent : 'un lector');
   }
-  if (filtroEtiqueta) partes.push('#' + filtroEtiqueta);
+  if (V.filtroEtiqueta) partes.push('#' + V.filtroEtiqueta);
   $('#filtro-resumen').textContent = partes.length ? '· ' + partes.join(', ') : '';
 }
 function quitarFiltros() {
-  filtro = 'todas';
-  filtroAutor = '';
-  filtroEtiqueta = '';
+  VISTA.quitarFiltros();
 }
 $$('.tab').forEach(function (t) {
   t.addEventListener('click', function () {
     cambiarTab(t.getAttribute('data-tab'));
-    marcarTab();
-    if (tab === 'buscar') buscar($('#buscar').value);
+    if (V.tab === 'buscar') buscar($('#buscar').value);
     else renderPanel();
   });
 });
@@ -127,10 +127,9 @@ $('.tabs').addEventListener('keydown', function (ev) {
 });
 $$('.filtro').forEach(function (f) {
   f.addEventListener('click', function () {
-    filtro = f.getAttribute('data-f');
-    if (tab === 'buscar') {
+    VISTA.cambiar({ filtro: f.getAttribute('data-f') });
+    if (V.tab === 'buscar') {
       cambiarTab('todas');
-      marcarTab();
     }
     renderPanel();
   });
@@ -151,12 +150,12 @@ $('#b-nota-gen').addEventListener('click', function () {
 });
 $('#b-nota-pg').addEventListener('click', function () {
   cerrarNueva();
-  notaPagina($('#pg-num').value, secActual);
+  notaPagina($('#pg-num').value, V.secActual);
 });
 $('#pg-num').addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter') {
     cerrarNueva();
-    notaPagina($('#pg-num').value, secActual);
+    notaPagina($('#pg-num').value, V.secActual);
   }
 });
 $('#anot-ant').addEventListener('click', function () {
@@ -237,8 +236,8 @@ function lateral(cual, abierto, origen) {
     }
   } else if (n.contains(activo) || !activo || activo === document.body) {
     var destino = enfocable(volverA) && !volverA.closest('.cajon') ? volverA : null;
-    if (!destino && cual === 'panel' && fichaFoco) {
-      var mf = $('mark.hl[data-aids~="' + fichaFoco + '"]');
+    if (!destino && cual === 'panel' && V.fichaFoco) {
+      var mf = $('mark.hl[data-aids~="' + V.fichaFoco + '"]');
       if (enfocable(mf)) destino = mf;
     }
     (destino || $('#b-' + cual)).focus({ preventScroll: true });
@@ -266,7 +265,7 @@ function alCambiarAncho() {
       });
   }
   sincronizarLaterales();
-  if (LIBRO && tab !== 'buscar') renderPanel(); // las notas al margen sólo van en pantalla ancha
+  if (LIBRO && V.tab !== 'buscar') renderPanel(); // las notas al margen sólo van en pantalla ancha
 }
 if (mqMovil.addEventListener) mqMovil.addEventListener('change', alCambiarAncho);
 else if (mqMovil.addListener) mqMovil.addListener(alCambiarAncho);
@@ -295,8 +294,8 @@ $('#b-mas').addEventListener('click', function () {
 // Deja de resaltar la ficha y su pasaje sin redibujar nada, para no mover el foco ni el desplazamiento; lo escrito en
 // la nota ya se guardó al perder el foco.
 function salirDeFicha() {
-  if (!fichaFoco) return;
-  fichaFoco = null;
+  if (!V.fichaFoco) return;
+  VISTA.cambiar({ fichaFoco: null });
   $$('.ficha.foco, mark.hl.foco').forEach(function (n) {
     n.classList.remove('foco');
     if (n.classList.contains('ficha')) ajustarTextareas(n);
@@ -377,11 +376,11 @@ $('#lectura').addEventListener('click', function (ev) {
 });
 
 $('#f-autor').addEventListener('change', function () {
-  filtroAutor = this.value;
+  VISTA.cambiar({ filtroAutor: this.value });
   renderPanel();
 });
 $('#f-etiqueta').addEventListener('change', function () {
-  filtroEtiqueta = this.value;
+  VISTA.cambiar({ filtroEtiqueta: this.value });
   renderPanel();
 });
 $('#b-foco').addEventListener('click', function () {
@@ -397,7 +396,7 @@ function alternarFoco() {
   $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración';
   $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false');
   // el panel vuelve a verse (o deja de verse): sus notas se miden de nuevo y el margen se activa o no
-  if (!on && LIBRO && tab !== 'buscar') renderPanel();
+  if (!on && LIBRO && V.tab !== 'buscar') renderPanel();
 }
 var COLOR_TECLA = { '1': 'revisar', '2': 'cortar', '3': 'duda', '4': 'conservar' };
 // Esc cierra de a una capa por vez, la más reciente primero: menú de la barra, «⋯», la selección y su barra, la
@@ -473,16 +472,16 @@ document.addEventListener('keydown', function (ev) {
   } else if (ev.key === ',') {
     ev.preventDefault();
     navegar(-1);
-  } else if (tab === 'revisar' && fichaFoco && anots[fichaFoco] && !SOLO_LECTURA && /^[arvARV]$/.test(ev.key)) {
+  } else if (V.tab === 'revisar' && V.fichaFoco && anots[V.fichaFoco] && !SOLO_LECTURA && /^[arvARV]$/.test(ev.key)) {
     ev.preventDefault();
     // una tecla mantenida no resuelve varias de seguido, y nada se resuelve sin verse (concentración, panel cerrado)
-    if (ev.repeat || !enfocable($('.ficha[data-id="' + fichaFoco + '"]'))) return;
+    if (ev.repeat || !enfocable($('.ficha[data-id="' + V.fichaFoco + '"]'))) return;
     var k = ev.key.toLowerCase();
-    if (k === 'v') verCambio(fichaFoco);
-    else if (porRevisar(anots[fichaFoco])) revisar(fichaFoco, k === 'a' ? 'atendida' : 'reabrir');
+    if (k === 'v') verCambio(V.fichaFoco);
+    else if (porRevisar(anots[V.fichaFoco])) revisar(V.fichaFoco, k === 'a' ? 'atendida' : 'reabrir');
   } else if (ev.key === 'j' || ev.key === 'J') mover(1);
   else if (ev.key === 'k' || ev.key === 'K') mover(-1);
-  else if (ev.key === 'l' || ev.key === 'L') alternarLeida(secActual);
+  else if (ev.key === 'l' || ev.key === 'L') alternarLeida(V.secActual);
   else if (ev.key === 'f' || ev.key === 'F') alternarFoco();
   else if (ev.key === '?') alternarAtajos();
 });
@@ -512,7 +511,7 @@ document.addEventListener('click', function (ev) {
   });
   var enFicha = origen && origen.closest && origen.closest('.ficha');
   if (
-    fichaFoco &&
+    V.fichaFoco &&
     !enFicha &&
     t &&
     t.closest &&
@@ -536,5 +535,5 @@ $('.saltar').addEventListener('click', function (ev) {
 });
 window.addEventListener('hashchange', function () {
   var h = (location.hash || '').replace('#', '');
-  if (SEC_BY_ID[h] && h !== secActual) irA(h);
+  if (SEC_BY_ID[h] && h !== V.secActual) irA(h);
 });

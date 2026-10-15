@@ -1,7 +1,6 @@
 // ------------------------------------------------------------ búsqueda
 function buscar(q) {
   cambiarTab('buscar');
-  marcarTab();
   if (mqMovil.matches) cerrarHerramientas();
   // los resultados son una lista que se desplaza, no fichas al margen
   var box = $('#lista');

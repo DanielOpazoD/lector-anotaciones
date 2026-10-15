@@ -105,7 +105,7 @@ function pintarPid(pid) {
             'hl c-' +
             top.color +
             (top.estado === 'resuelta' ? ' resuelta' : '') +
-            (fichaFoco === top.id ? ' foco' : ''),
+            (V.fichaFoco === top.id ? ' foco' : ''),
           'data-aids': cubren
             .map(function (a) {
               return a.id;

@@ -119,7 +119,7 @@ function renderBloque(b) {
 }
 function irA(sid, pid) {
   if (!SEC_BY_ID[sid]) return;
-  secActual = sid;
+  VISTA.cambiar({ secActual: sid });
   $$('article.seccion').forEach(function (a) {
     a.hidden = a.id !== 'sec-' + sid;
   });
@@ -153,7 +153,7 @@ function irA(sid, pid) {
     } catch (e) {}
     detenerLectura();
   }
-  if (tab === 'capitulo') renderPanel();
+  if (V.tab === 'capitulo') renderPanel();
   registrarVisto(sid);
   var i = SECS.findIndex(function (s) {
     return s.id === sid;
@@ -163,7 +163,7 @@ function irA(sid, pid) {
 }
 function mover(d) {
   var i = SECS.findIndex(function (s) {
-    return s.id === secActual;
+    return s.id === V.secActual;
   });
   var j = i + d;
   if (SECS[j]) irA(SECS[j].id);

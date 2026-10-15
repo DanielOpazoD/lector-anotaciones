@@ -1,11 +1,9 @@
 // ------------------------------------------------------------ panel
 // Pestañas: «Sección» (las de la sección abierta; en escritorio, al margen de su pasaje), «Todas», «Por revisar» (las
 // respuestas que el autor todavía no revisó) y «Búsqueda».
-var REVISADAS = {}; // ids revisados en esta visita a «Por revisar»: siguen a la vista, marcados, hasta salir de la pestaña
 // Todo cambio de pestaña pasa por aquí: al salir de «Por revisar», las revisadas en esta visita dejan la bandeja.
 function cambiarTab(t) {
-  if (tab === 'revisar' && t !== 'revisar') REVISADAS = {};
-  tab = t;
+  VISTA.cambiar({ tab: t });
 }
 function porRevisar(a) {
   return N.porRevisar(a, ME);
@@ -20,53 +18,53 @@ function lista(todoElLibro) {
   var L = Object.keys(anots).map(function (k) {
     return anots[k];
   });
-  if (tab === 'revisar') {
+  if (V.tab === 'revisar') {
     L = L.filter(function (a) {
-      return porRevisar(a) || REVISADAS[a.id];
+      return porRevisar(a) || V.revisadas[a.id];
     });
     L.sort(function (x, y) {
       return ordenKey(x) < ordenKey(y) ? -1 : 1;
     });
     return L;
   }
-  if (tab === 'capitulo' && !todoElLibro) {
-    var s = SEC_BY_ID[secActual];
+  if (V.tab === 'capitulo' && !todoElLibro) {
+    var s = SEC_BY_ID[V.secActual];
     var pags = {};
     if (s)
       s.bloques.forEach(function (b) {
         if (b.pagina) pags[b.pagina] = 1;
       });
     L = L.filter(function (a) {
-      return a.sid === secActual || (a.tipo === 'pagina' && pags[a.pagina]);
+      return a.sid === V.secActual || (a.tipo === 'pagina' && pags[a.pagina]);
     });
   }
-  if (filtro === 'notas')
+  if (V.filtro === 'notas')
     L = L.filter(function (a) {
       return a.tipo !== 'subrayado';
     });
-  else if (filtro === 'abiertas')
+  else if (V.filtro === 'abiertas')
     L = L.filter(function (a) {
       return a.estado !== 'resuelta';
     });
-  else if (filtro === 'respondidas')
+  else if (V.filtro === 'respondidas')
     L = L.filter(function (a) {
       return !!(a.respuesta || a.cierre);
     });
-  else if (filtro === 'preguntas')
+  else if (V.filtro === 'preguntas')
     L = L.filter(function (a) {
       return a.cierre === 'pregunta';
     });
-  else if (filtro !== 'todas')
+  else if (V.filtro !== 'todas')
     L = L.filter(function (a) {
-      return a.tipo === 'subrayado' && a.color === filtro;
+      return a.tipo === 'subrayado' && a.color === V.filtro;
     });
-  if (filtroAutor)
+  if (V.filtroAutor)
     L = L.filter(function (a) {
-      return (a.autor || '') === filtroAutor;
+      return (a.autor || '') === V.filtroAutor;
     });
-  if (filtroEtiqueta)
+  if (V.filtroEtiqueta)
     L = L.filter(function (a) {
-      return etiquetasDe(a).indexOf(filtroEtiqueta) >= 0;
+      return etiquetasDe(a).indexOf(V.filtroEtiqueta) >= 0;
     });
   L.sort(function (x, y) {
     return ordenKey(x) < ordenKey(y) ? -1 : 1;
@@ -74,7 +72,7 @@ function lista(todoElLibro) {
   return L;
 }
 function listaNavegable() {
-  return tab === 'revisar' ? lista() : lista(true);
+  return V.tab === 'revisar' ? lista() : lista(true);
 }
 function ordenKey(a) {
   var si = SECS.findIndex(function (s) {
@@ -84,7 +82,7 @@ function ordenKey(a) {
   return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi) * 10 + (a.inicio || 0) / 100000;
 }
 function renderPanel() {
-  if (tab === 'buscar') return;
+  if (V.tab === 'buscar') return;
   // Si el autor está escribiendo una nota, el redibujo no debe quitarle el editor: se recuerda el
   // borrador, el foco y la selección, y se restauran sobre la ficha nueva.
   // Un botón se reconoce por su acción (y su color), no por su clase ni su texto, que cambian con el propio clic.
@@ -117,17 +115,17 @@ function renderPanel() {
     }).filter(Boolean)
   );
   $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
-  if (tab === 'revisar') box.appendChild(cabezaBandeja(L));
+  if (V.tab === 'revisar') box.appendChild(cabezaBandeja(L));
   if (!L.length) {
-    var filtrado = tab !== 'revisar' && (filtro !== 'todas' || !!filtroAutor || !!filtroEtiqueta);
+    var filtrado = V.tab !== 'revisar' && (V.filtro !== 'todas' || !!V.filtroAutor || !!V.filtroEtiqueta);
     var vacio = el('div', {
       'class': 'vacio',
       text:
-        tab === 'revisar'
+        V.tab === 'revisar'
           ? 'No hay respuestas por revisar. Cuando quien edita las fuentes responda una anotación tuya, aparecerá aquí.'
           : filtrado
             ? 'Ninguna anotación con estos filtros. '
-            : tab === 'capitulo'
+            : V.tab === 'capitulo'
               ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.'
               : 'Aún no hay anotaciones.',
     });
@@ -220,9 +218,9 @@ function cabezaBandeja(L) {
       'class': 'btn peq primario',
       type: 'button',
       text:
-        fichaFoco &&
+        V.fichaFoco &&
         L.some(function (a) {
-          return a.id === fichaFoco;
+          return a.id === V.fichaFoco;
         })
           ? 'Siguiente ›'
           : 'Empezar la revisión ›',
@@ -291,8 +289,8 @@ function ajustarTextareas(raiz) {
   });
 }
 function activar(id) {
-  if (fichaFoco === id) return;
-  fichaFoco = id;
+  if (V.fichaFoco === id) return;
+  VISTA.cambiar({ fichaFoco: id });
   $$('.ficha.foco').forEach(function (f) {
     f.classList.remove('foco');
     ajustarTextareas(f);
@@ -326,10 +324,10 @@ function ficha(a) {
       a.tipo +
       (a.color ? ' c-' + a.color : '') +
       (a.estado === 'resuelta' ? ' resuelta' : '') +
-      (fichaFoco === a.id ? ' foco' : '') +
+      (V.fichaFoco === a.id ? ' foco' : '') +
       (SINC.sinGuardar[a.id] ? ' sin-guardar' : '') +
       (pendiente ? ' por-revisar' : '') +
-      (!pendiente && REVISADAS[a.id] ? ' revisada' : ''),
+      (!pendiente && V.revisadas[a.id] ? ' revisada' : ''),
     'data-id': a.id,
     tabindex: '-1',
     role: 'article',
@@ -353,7 +351,7 @@ function ficha(a) {
       })
     );
   if (pendiente) cab.firstChild.appendChild(el('span', { 'class': 'nueva', text: 'nueva respuesta' }));
-  else if (REVISADAS[a.id]) cab.firstChild.appendChild(el('span', { 'class': 'nueva hecha', text: '✓ revisada' }));
+  else if (V.revisadas[a.id]) cab.firstChild.appendChild(el('span', { 'class': 'nueva hecha', text: '✓ revisada' }));
   var u = UBIC[a.id];
   if (
     (a.pid && !(u && u.estado === 'perdido')) ||
@@ -516,7 +514,7 @@ function ficha(a) {
       var parche = { replica: rp.value };
       if (rp.value.trim() && porRevisar(vivo)) {
         parche.revisado = N.marcaRevision(vivo, ahora());
-        if (tab === 'revisar') REVISADAS[a.id] = 1;
+        if (V.tab === 'revisar') VISTA.revisada(a.id);
       }
       guardarSilencioso(a.id, parche, rp.id);
       if (parche.revisado) renderCuentaRevisar();
@@ -719,8 +717,8 @@ function verCambio(id) {
 function revisar(id, accion) {
   var a = anots[id];
   if (!a || SOLO_LECTURA) return;
-  var enBandeja = tab === 'revisar';
-  if (enBandeja) REVISADAS[id] = 1;
+  var enBandeja = V.tab === 'revisar';
+  if (enBandeja) VISTA.revisada(id);
   if (accion === 'atendida') {
     // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
     // (en «Sección» o «Todas») se queda en la ficha
@@ -774,19 +772,22 @@ function navegar(d) {
     anunciar('No hay anotaciones que recorrer');
     return;
   }
-  var j = N.vecina(L, fichaFoco, d, { de: ordenKey, clave: anots[fichaFoco] ? ordenKey(anots[fichaFoco]) : null });
+  var j = N.vecina(L, V.fichaFoco, d, {
+    de: ordenKey,
+    clave: anots[V.fichaFoco] ? ordenKey(anots[V.fichaFoco]) : null,
+  });
   if (j < 0) {
     anunciar(d > 0 ? 'Es la última anotación' : 'Es la primera anotación');
     return;
   }
-  if (tab === 'revisar') irARevisar(L[j]);
+  if (V.tab === 'revisar') irARevisar(L[j]);
   else irAAnot(L[j], mqMovil.matches);
 }
 function actualizarNav() {
   var L = listaNavegable(),
     i = -1;
   for (var k = 0; k < L.length; k++)
-    if (L[k].id === fichaFoco) {
+    if (L[k].id === V.fichaFoco) {
       i = k;
       break;
     }
@@ -817,20 +818,19 @@ function irAAnot(a, mostrar) {
 // Enfoca la ficha de una anotación (y su pasaje). `editar` lleva el cursor a la nota; `mostrar` abre el panel en
 // pantalla estrecha aunque no se vaya a escribir (al tocar un subrayado).
 function enfocar(id, editar, mostrar) {
-  var previo = fichaFoco && fichaFoco !== id && anots[fichaFoco] ? pidEfectivo(anots[fichaFoco]) : null;
-  fichaFoco = id;
+  var previo = V.fichaFoco && V.fichaFoco !== id && anots[V.fichaFoco] ? pidEfectivo(anots[V.fichaFoco]) : null;
+  VISTA.cambiar({ fichaFoco: id });
   var a = anots[id];
   if (!a) return;
   if (previo) pintarPid(previo);
-  if (tab === 'buscar') cambiarTab('todas');
-  if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) cambiarTab('todas');
+  if (V.tab === 'buscar') cambiarTab('todas');
+  if (V.tab === 'capitulo' && a.sid !== V.secActual && !(a.tipo === 'pagina')) cambiarTab('todas');
   // fuera de la lista: si es por la sección (una nota de página sin su página en el texto), a «Todas» con los mismos
   // filtros; si es por un filtro o por la bandeja, a «Todas» sin filtros
   if (lista().indexOf(a) < 0) {
-    if (tab === 'revisar' || (tab === 'capitulo' && lista(true).indexOf(a) >= 0)) cambiarTab('todas');
+    if (V.tab === 'revisar' || (V.tab === 'capitulo' && lista(true).indexOf(a) >= 0)) cambiarTab('todas');
     if (lista().indexOf(a) < 0) quitarFiltros();
   }
-  marcarTab();
   renderPanel();
   var pe = pidEfectivo(a);
   if (pe) pintarPid(pe);
