@@ -11,12 +11,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 - **Fichas compactas.** En reposo la nota se lee como texto, sin marco ni botones, y la cita y la respuesta se recortan; al tocarla se activa con el cursor donde se tocó.
 - **Recorrer las anotaciones.** `.` y `,` (o ‹ ›, con «n de N») pasan a la siguiente o a la anterior en el orden del libro, con los filtros puestos, cambiando de sección.
 - «+ Nota» reúne las notas de sección, de página y generales.
-- La exportación y «Copiar» señalan una respuesta atendida o descartada que el autor reabrió: «Reabierta por el autor (fecha) tras la respuesta».
+- La exportación y «Copiar» señalan una respuesta atendida o descartada que el autor reabrió: «Reabierta por el autor tras la respuesta».
+
+### Cambiado
+
+- En un documento que la base ya tiene, la página escribe sólo los campos del lector (`update`), no el documento entero: una respuesta que quien edita escribió y todavía no llegó a la página no se pisa.
 
 ### Corregido
 
 - En un párrafo con dos o más subrayados, el clic en cualquiera abría la ficha del último.
 - Un clic que empieza en una ficha ya no la cierra si se suelta fuera de ella.
+
+### Revisión independiente antes de publicar
+
+- `revisado` guarda el `respondido` de la respuesta revisada, no la hora del navegador: con el reloj de quien responde adelantado, A ya no dejaba la respuesta en la bandeja, y con el reloj atrasado una respuesta nueva no se perdía.
+- Sin identidad conocida sólo cuentan las anotaciones sin autor (A ya no resuelve las de otra lectora), y la cuenta y el aviso al conectar esperan a saber quién se es.
+- A, R y V no actúan con la tecla mantenida ni con el panel oculto (concentración, panel cerrado).
+- «Ver el cambio» de una cita que ya no está elige el bloque donde estaba según su contexto, no el primero que la contenía.
+- `.` y `,` siguen desde donde estaba la anotación actual si un filtro la sacó de la lista, y llegar a una nota de página sin su página en el texto pasa a «Todas» sin quitar los filtros.
+- «✓ Atendida» fuera de la bandeja deja la ficha donde está; lo revisado sale de la bandeja también al dejarla por la búsqueda o por un subrayado.
+- Al margen: las fichas se recolocan cuando el texto cambia de tamaño, de letra o de fuente, o cuando crece la cabecera del panel; ninguna queda bajo la cabecera con el texto al principio; el artículo se alarga para alcanzar las fichas apiladas al final; con Tab, el control enfocado de una ficha más alta que la lista queda a la vista; las fichas no se reacomodan con el botón del puntero abajo (el cursor queda donde se tocó); la búsqueda desde «Sección» vuelve a ser una lista que se desplaza.
+- Las acciones de una ficha en reposo siguen en el orden de Tab (también hacia atrás) y para los lectores de pantalla; lo revisado se marca sin atenuar el texto; el botón «Anotaciones» del teléfono dice qué cuenta su número.
+- Notas de alto ajustado por lotes y cambio de ancho una vez por cuadro: con 300 fichas, redibujar baja de ~130–190 ms a ~80–160 ms y un redimensionado sin cambio de ancho de ~75–100 ms a nada.
 
 ## [0.3.0] - 2026-10-15
 

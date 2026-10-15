@@ -29,7 +29,7 @@ Una anotación es un documento JSON. La página las guarda una a una en la colec
   "commit": "9f1e2d3",
   "respondido": "2026-10-16T09:10:00.000Z",
   "replica": "",
-  "revisado": "2026-10-16T18:40:12.000Z"
+  "revisado": "2026-10-16T09:10:00.000Z"
 }
 ```
 
@@ -59,7 +59,7 @@ Una anotación es un documento JSON. La página las guarda una a una en la colec
 | `commit` | todos | Identificador del commit que aplicó el cambio, si lo hubo. |
 | `respondido` | todos | ISO 8601 de la respuesta. |
 | `replica` | todos | La respuesta del autor a una `pregunta`; la escribe en la ficha. |
-| `revisado` | todos | ISO 8601 de la última vez que el autor revisó la respuesta: lo escribe la página al marcarla atendida o reabrirla desde «Por revisar», o al contestar la pregunta. Una `respondido` posterior la devuelve a la bandeja. |
+| `revisado` | todos | Qué respuesta revisó el autor: la página copia aquí el `respondido` de la respuesta al marcarla atendida o reabrirla desde «Por revisar», o al contestar la pregunta (si la respuesta no traía `respondido`, la hora de la revisión). Un `respondido` distinto la devuelve a la bandeja; no se compara con el reloj del navegador. |
 | `sin_guardar` | todos | Sólo en lo que produce «Copiar todo (JSON)», nunca en la base: el código del rechazo (`unavailable`, `not_granted`, `sólo lectura`…) de una anotación que la base no tiene y la página conserva sólo en el navegador. «Copiar todo (Markdown)» y «Copiar» en la ficha llevan la misma señal como texto (`sin guardar en la base (código)`). |
 
 ## Los cuatro colores
@@ -90,9 +90,11 @@ Cada anotación es una conversación corta. Quien vuelque la anotación a las fu
 - `respuesta` con una línea de qué cambió o por qué no, `cierre` con `atendida` o `descartada`, `commit` si lo hay, `respondido` con la fecha, y `estado: "resuelta"`;
 - o `cierre: "pregunta"` y `respuesta` con la pregunta, dejando `estado: "abierta"`. La ficha muestra entonces un cuadro para la réplica; cuando el autor escribe en él, `replica` queda en el documento y la siguiente sesión puede leerla.
 
-Hay que escribir `respondido` con fecha y hora (ISO 8601) **cada vez** que se responde, también al responder de nuevo una anotación que el autor reabrió: es lo que la pone en la bandeja «Por revisar». Sin `respondido`, una respuesta sólo cuenta como nueva si el autor nunca la revisó.
+Hay que escribir `respondido` con fecha y hora (ISO 8601) **cada vez** que se responde, también al responder de nuevo una anotación que el autor reabrió: es lo que la pone en la bandeja «Por revisar» (cuenta que cambie, no que sea posterior a nada: los relojes de quien responde y del navegador no se comparan). Sin `respondido`, una respuesta sólo cuenta como nueva si el autor nunca la revisó.
 
-La página muestra la respuesta bajo la nota, con el cierre como etiqueta, y ofrece los filtros «con respuesta» y «preguntas». La pestaña «Por revisar» reúne las respuestas a anotaciones propias (o sin autor) llegadas después de la última revisión (`revisado`), en el orden del libro: **A** las da por atendidas (`estado: "resuelta"`), **R** las reabre (`estado: "abierta"`, con el cursor en la nota para decir qué falta) y **V** muestra el cambio del pasaje. Una respuesta `atendida` o `descartada` que el autor reabrió llega a la exportación y a «Copiar» con la línea «Reabierta por el autor (fecha) tras la respuesta». Nada de esto toca la nota del autor salvo lo que él mismo escriba.
+Quien responde escribe sólo sus campos (`respuesta`, `cierre`, `commit`, `respondido` y, si corresponde, `estado`) con una escritura que fusiona (`update` en la base; la acción «update» de `ArtifactData`), no el documento entero: así no pisa lo que el autor escribió entre tanto. La página hace lo mismo con los suyos.
+
+La página muestra la respuesta bajo la nota, con el cierre como etiqueta, y ofrece los filtros «con respuesta» y «preguntas». La pestaña «Por revisar» reúne las respuestas a anotaciones propias (o sin autor, si la página no sabe quién lee) que el autor todavía no revisó (`revisado`), en el orden del libro: **A** las da por atendidas (`estado: "resuelta"`), **R** las reabre (`estado: "abierta"`, con el cursor en la nota para decir qué falta) y **V** muestra el cambio del pasaje. Una respuesta `atendida` o `descartada` que el autor reabrió llega a la exportación y a «Copiar» con la línea «Reabierta por el autor tras la respuesta». Nada de esto toca la nota del autor salvo lo que él mismo escriba.
 
 ## Etiquetas
 
