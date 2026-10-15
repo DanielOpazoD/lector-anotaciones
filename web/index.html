@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lector de anotaciones</title>
+<link rel="icon" href="data:,">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400;1,7..72,600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Mesa de lectura: tres franjas (índice · texto · anotaciones); el texto a 66 caracteres, los números
+   de página en el margen como en el PDF, y las anotaciones como fichas al costado, nunca encima del texto. */
+:root {
+  --bg: #fbfaf7; --bg-2: #f1efe9; --fg: #22252a; --fg-2: #5b6068; --line: #d9d5cc;
+  --tinta: #3d5a6c; --acento: #8c2f2f; --marco: #ffffff;
+  --hl-revisar: #ffe08a; --hl-cortar: #ffb3b3; --hl-duda: #bfe0ff; --hl-conservar: #c9ecc4;
+  --hl-revisar-ink: #7a5a00; --hl-cortar-ink: #8c2f2f; --hl-duda-ink: #1f4e79; --hl-conservar-ink: #2e6b2a;
+  --serif: "Literata", "Georgia", "Times New Roman", serif;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171b; --bg-2: #1d2026; --fg: #e8e6e1; --fg-2: #a6a9b0; --line: #343941;
+    --tinta: #9fc0d4; --acento: #e08a8a; --marco: #1a1d22;
+    --hl-revisar: #5a4a10; --hl-cortar: #6a2a2a; --hl-duda: #1f3e5a; --hl-conservar: #244a24;
+    --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171b; --bg-2: #1d2026; --fg: #e8e6e1; --fg-2: #a6a9b0; --line: #343941;
+  --tinta: #9fc0d4; --acento: #e08a8a; --marco: #1a1d22;
+  --hl-revisar: #5a4a10; --hl-cortar: #6a2a2a; --hl-duda: #1f3e5a; --hl-conservar: #244a24;
+  --hl-revisar-ink: #ffd86b; --hl-cortar-ink: #ffb3b3; --hl-duda-ink: #9fd0ff; --hl-conservar-ink: #b5e8b0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+#app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+header.barra {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--bg-2); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+}
+header .titulo { font-family: var(--serif); font-weight: 600; font-size: 15px; letter-spacing: .01em; white-space: nowrap; }
+header .titulo small { font-family: var(--sans); font-weight: 400; color: var(--fg-2); margin-left: 8px; }
+header .espacio { flex: 1; }
+header input[type=search] { min-width: 0; width: min(260px, 50vw); padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--marco); }
+.btn { border: 1px solid var(--line); background: var(--marco); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; line-height: 1.2; }
+.btn:hover { border-color: var(--tinta); }
+.btn.primario { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+.btn.peq { padding: 3px 7px; font-size: 12px; }
+.chip { display: inline-block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--bg-2); color: var(--fg-2); }
+#estado { font-size: 12px; color: var(--fg-2); }
+#estado.aviso { color: var(--acento); }
+
+main.mesa { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; min-height: 0; }
+nav.indice { border-right: 1px solid var(--line); overflow: auto; padding: 12px 8px 24px max(12px, env(safe-area-inset-left, 0px)); font-size: 13px; }
+nav .grupo { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); padding-left: 8px; }
+nav a.sec { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: var(--radius); color: inherit; text-decoration: none; }
+nav a.sec:hover { background: var(--bg-2); }
+nav a.sec.activa { background: var(--tinta); color: #fff; }
+nav a.sec .n { font-variant-numeric: tabular-nums; color: inherit; opacity: .7; font-size: 12px; }
+nav a.sec .cuenta { font-size: 11px; background: var(--acento); color: #fff; border-radius: 999px; padding: 0 6px; align-self: center; }
+nav a.sec.activa .cuenta { background: #fff; color: var(--tinta); }
+
+section.lectura { overflow: auto; padding-block: 28px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+article.seccion { max-width: 66ch; margin: 0 auto; position: relative; font-family: var(--serif); font-size: 18px; line-height: 1.62; padding-left: 56px; }
+article h1.sec-titulo { font-size: 28px; line-height: 1.2; font-weight: 700; margin: 0 0 6px; text-wrap: balance; color: var(--tinta); }
+article .sec-meta { font-family: var(--sans); font-size: 12px; color: var(--fg-2); margin-bottom: 24px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+article .bloque { position: relative; margin: 0 0 1em; }
+article p.bloque { text-align: left; hyphens: auto; }
+article h2.bloque { font-size: 21px; font-weight: 600; margin: 1.6em 0 .5em; color: var(--tinta); text-wrap: balance; }
+article h3.bloque { font-family: var(--sans); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; font-weight: 600; margin: 1.6em 0 .6em; color: var(--acento); }
+article blockquote.bloque { margin: 1.2em 0; padding: 4px 0 4px 18px; border-left: 3px solid var(--acento); font-style: italic; }
+article ul.bloque, article ol.bloque { padding-left: 1.4em; }
+article li { margin: .25em 0; }
+article figure.bloque { margin: 1.4em 0; text-align: center; }
+article figure img { max-width: 100%; height: auto; border: 1px solid var(--line); background: #fff; }
+article figcaption { font-family: var(--sans); font-size: 13px; color: var(--fg-2); margin-top: 8px; text-align: left; }
+article .tabla { overflow-x: auto; margin: 1.2em 0; font-family: var(--sans); font-size: 14px; }
+article table { border-collapse: collapse; width: 100%; }
+article th, article td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+article th { background: var(--bg-2); }
+article .portada { text-align: center; padding: 40px 0; }
+article .portada .t1 { font-size: 30px; font-weight: 700; color: var(--tinta); }
+article .portada .t2 { font-size: 20px; margin-top: 8px; }
+article .portada .t3 { font-size: 16px; font-style: italic; color: var(--fg-2); margin-top: 6px; }
+article .portada .autor { margin-top: 36px; letter-spacing: .12em; text-transform: uppercase; font-family: var(--sans); font-size: 14px; }
+.pg { position: absolute; left: -56px; top: .35em; width: 46px; text-align: right; font-family: var(--sans); font-size: 11px; color: var(--fg-2); text-decoration: none; border: 0; background: none; padding: 0 4px; border-radius: 4px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pg:hover { color: var(--acento); background: var(--bg-2); }
+.pg.con-nota::after { content: "●"; color: var(--acento); margin-left: 3px; font-size: 8px; vertical-align: middle; }
+mark.hl { background: var(--hl-revisar); color: inherit; border-radius: 2px; padding: 0 1px; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+mark.hl.c-cortar { background: var(--hl-cortar); } mark.hl.c-duda { background: var(--hl-duda); } mark.hl.c-conservar { background: var(--hl-conservar); }
+mark.hl.resuelta { opacity: .55; text-decoration: underline dotted; }
+mark.hl.foco { outline: 2px solid var(--acento); }
+.bloque.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--hl-duda); } to { background: transparent; } }
+.nav-pie { max-width: 66ch; margin: 40px auto 0; padding-left: 56px; display: flex; justify-content: space-between; gap: 12px; font-family: var(--sans); }
+
+aside.panel { border-left: 1px solid var(--line); overflow: auto; background: var(--bg-2); display: flex; flex-direction: column; min-width: 0; }
+aside .panel-cab { padding: 10px 12px 8px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; position: sticky; top: 0; background: var(--bg-2); z-index: 2; }
+aside .tabs { display: flex; gap: 2px; width: 100%; }
+aside .tab { flex: 1; padding: 6px; border: 1px solid var(--line); background: var(--marco); font-size: 12px; border-radius: var(--radius); }
+aside .tab.activa { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+aside .filtros { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; }
+aside .filtro { border: 1px solid var(--line); background: var(--marco); border-radius: 999px; padding: 2px 9px; font-size: 11px; }
+aside .filtro.on { border-color: var(--fg); font-weight: 600; }
+aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; gap: 10px; }
+.ficha { background: var(--marco); border: 1px solid var(--line); border-left: 4px solid var(--hl-revisar-ink); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; }
+.ficha.c-cortar { border-left-color: var(--hl-cortar-ink); } .ficha.c-duda { border-left-color: var(--hl-duda-ink); } .ficha.c-conservar { border-left-color: var(--hl-conservar-ink); }
+.ficha.t-pagina, .ficha.t-capitulo, .ficha.t-general { border-left-color: var(--tinta); }
+.ficha.resuelta { opacity: .6; }
+.ficha.foco { box-shadow: 0 0 0 2px var(--acento); }
+.ficha .cab { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; color: var(--fg-2); font-size: 11px; margin-bottom: 4px; }
+.ficha .cab a { color: var(--tinta); text-decoration: none; cursor: pointer; }
+.ficha .cita { font-family: var(--serif); font-size: 14px; line-height: 1.4; margin: 2px 0 6px; border-left: 2px solid var(--line); padding-left: 8px; color: var(--fg); }
+.ficha textarea { width: 100%; min-height: 56px; resize: vertical; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; background: var(--bg); font-family: var(--sans); font-size: 13px; }
+.ficha .acciones { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
+.ficha .colores { display: inline-flex; gap: 3px; margin-right: auto; }
+.col-btn { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); padding: 0; }
+.col-btn.c-revisar { background: var(--hl-revisar); } .col-btn.c-cortar { background: var(--hl-cortar); } .col-btn.c-duda { background: var(--hl-duda); } .col-btn.c-conservar { background: var(--hl-conservar); }
+.col-btn.on { border: 2px solid var(--fg); }
+.vacio { color: var(--fg-2); font-size: 13px; padding: 20px 6px; text-align: center; }
+.confirmar { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; }
+
+#sel-tb { position: fixed; z-index: 20; display: none; gap: 4px; padding: 6px; background: var(--marco); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.18); align-items: center; }
+#sel-tb .col-btn { width: 24px; height: 24px; }
+#sel-tb .etq { font-size: 11px; color: var(--fg-2); margin: 0 4px; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 11px; color: var(--fg-2); width: 100%; }
+.leyenda span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.leyenda .l-revisar::before { background: var(--hl-revisar); } .leyenda .l-cortar::before { background: var(--hl-cortar); } .leyenda .l-duda::before { background: var(--hl-duda); } .leyenda .l-conservar::before { background: var(--hl-conservar); }
+.res { background: var(--marco); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; cursor: pointer; }
+.res:hover { border-color: var(--tinta); }
+.res .donde { font-size: 11px; color: var(--fg-2); }
+.res b { background: var(--hl-revisar); }
+
+#movil-barra { display: none; }
+@media (max-width: 1000px) {
+  main.mesa { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  nav.indice, aside.panel { position: fixed; top: 0; bottom: 0; width: min(92vw, 380px); z-index: 30; box-shadow: 0 0 30px rgba(0,0,0,.3); transform: translateX(-105%); transition: transform .2s; padding-top: max(12px, env(safe-area-inset-top, 0px)); }
+  aside.panel { right: 0; left: auto; transform: translateX(105%); border-left: 1px solid var(--line); }
+  nav.indice.abierta, aside.panel.abierta { transform: none; }
+  #movil-barra { display: flex; gap: 6px; }
+  header .titulo small { display: none; }
+  header input[type=search] { width: 100%; }
+  article.seccion { padding-left: 0; font-size: 17px; }
+  .pg { position: static; display: inline-block; width: auto; margin-right: 6px; }
+  .nav-pie { padding-left: 0; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="barra">
+    <div class="titulo">Lector <small id="sub">Cargando…</small></div>
+    <div id="movil-barra"><button class="btn peq" id="b-indice" type="button">Índice</button><button class="btn peq" id="b-panel" type="button">Anotaciones <span id="n-panel"></span></button></div>
+    <div class="espacio"></div>
+    <input type="search" id="buscar" placeholder="Buscar en el libro…" aria-label="Buscar en el libro">
+    <span id="estado">Cargando…</span>
+  </header>
+  <main class="mesa">
+    <nav class="indice" id="indice" aria-label="Índice"></nav>
+    <section class="lectura" id="lectura">
+      <div class="vacio">Cargando el libro…</div>
+    </section>
+    <aside class="panel" id="panel" aria-label="Anotaciones">
+      <div class="panel-cab">
+        <div class="tabs">
+          <button class="tab activa" type="button" data-tab="capitulo">Esta sección</button>
+          <button class="tab" type="button" data-tab="todas">Todas</button>
+          <button class="tab" type="button" data-tab="buscar">Búsqueda</button>
+        </div>
+        <button class="btn peq" id="b-nota-cap" type="button">+ Nota de la sección</button>
+        <span class="confirmar">p.&nbsp;<input type="number" id="pg-num" min="1" style="width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--marco)" aria-label="Número de página"> <button class="btn peq" id="b-nota-pg" type="button">+ Nota de página</button></span>
+        <button class="btn peq" id="b-nota-gen" type="button">+ Nota general</button>
+        <div class="filtros" id="filtros">
+          <button class="filtro on" type="button" data-f="todas">todas</button>
+          <button class="filtro" type="button" data-f="revisar">revisar</button>
+          <button class="filtro" type="button" data-f="cortar">cortar</button>
+          <button class="filtro" type="button" data-f="duda">duda</button>
+          <button class="filtro" type="button" data-f="conservar">conservar</button>
+          <button class="filtro" type="button" data-f="notas">notas de página/sección</button>
+          <button class="filtro" type="button" data-f="abiertas">sólo abiertas</button>
+        </div>
+        <div class="leyenda"><span class="l-revisar">revisar o reescribir</span><span class="l-cortar">cortar</span><span class="l-duda">duda o verificar</span><span class="l-conservar">conservar, me gusta</span></div>
+        <div style="display:flex;gap:4px;width:100%"><button class="btn peq" id="b-copiar" type="button">Copiar todo (JSON)</button><button class="btn peq" id="b-copiar-md" type="button">Copiar todo (Markdown)</button></div>
+      </div>
+      <div class="lista" id="lista"><div class="vacio">Aún no hay anotaciones. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.</div></div>
+    </aside>
+  </main>
+</div>
+<div id="sel-tb" role="toolbar" aria-label="Subrayar">
+  <span class="etq">Subrayar</span>
+  <button class="col-btn c-revisar" type="button" data-c="revisar" title="revisar o reescribir" aria-label="revisar"></button>
+  <button class="col-btn c-cortar" type="button" data-c="cortar" title="cortar" aria-label="cortar"></button>
+  <button class="col-btn c-duda" type="button" data-c="duda" title="duda o verificar" aria-label="duda"></button>
+  <button class="col-btn c-conservar" type="button" data-c="conservar" title="conservar" aria-label="conservar"></button>
+  <button class="btn peq" type="button" id="sel-nota">+ con nota</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var LIBRO = null, SECS = [], SEC_BY_ID = {}, BLOQUE_SEC = {}, ORIG = {};
+  var anots = {};           // id -> anotación
+  var db = null, col = null, modo = 'cargando';
+  var secActual = null, tab = 'capitulo', filtro = 'todas', fichaFoco = null;
+  var LOCAL_KEY = 'lector-anotaciones';  // se completa con el id del libro al cargarlo
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var el = function (tag, attrs, kids) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'text') e.textContent = attrs[k];
+      else if (k === 'html') e.innerHTML = attrs[k];
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), attrs[k]);
+      else e.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (c) { if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  };
+  var ahora = function () { return new Date().toISOString(); };
+  var uid = function () { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); };
+  var estado = function (t, aviso) { var e = $('#estado'); e.textContent = t; e.className = aviso ? 'aviso' : ''; };
+  var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  var lsSet = function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} };
+
+  // ------------------------------------------------------------ libro
+  function renderLibro() {
+    var ind = $('#indice'); ind.innerHTML = '';
+    var lect = $('#lectura'); lect.innerHTML = '';
+    var grupo = null;
+    SECS.forEach(function (s) {
+      SEC_BY_ID[s.id] = s;
+      if (s.nivel === 1) { grupo = el('div', { 'class': 'grupo', text: s.titulo.replace(/\.\s.*$/, '') }); ind.appendChild(grupo); }
+      var a = el('a', { 'class': 'sec', href: '#' + s.id, 'data-sid': s.id }, [
+        el('span', { text: s.nivel === 2 ? s.titulo : (s.nivel === 1 && /^PARTE/.test(s.titulo) ? s.titulo.replace(/^PARTE [IV]+\.\s*/, '') : s.titulo) }),
+        el('span', { 'class': 'n', text: s.pagina ? String(s.pagina) : '' })
+      ]);
+      a.addEventListener('click', function (ev) { ev.preventDefault(); irA(s.id); });
+      ind.appendChild(a);
+      var art = el('article', { 'class': 'seccion', id: 'sec-' + s.id, hidden: '' });
+      art.appendChild(el('h1', { 'class': 'sec-titulo', text: s.titulo }));
+      art.appendChild(el('div', { 'class': 'sec-meta' }, [
+        el('span', { 'class': 'chip', text: s.pagina ? 'desde la p. ' + s.pagina : 'sin paginación' }),
+        el('span', { text: s.bloques.length + ' bloques' }),
+        el('span', { id: 'meta-' + s.id })
+      ]));
+      var pagPrev = null;
+      s.bloques.forEach(function (b) {
+        BLOQUE_SEC[b.id] = s.id;
+        var node = renderBloque(b);
+        if (b.pagina && b.pagina !== pagPrev) {
+          var pg = el('button', { 'class': 'pg', type: 'button', 'data-pg': b.pagina, text: 'p. ' + b.pagina, title: 'Nota para la página ' + b.pagina });
+          pg.addEventListener('click', function () { notaPagina(b.pagina, s.id); });
+          node.insertBefore(pg, node.firstChild);
+          pagPrev = b.pagina;
+        }
+        art.appendChild(node);
+      });
+      lect.appendChild(art);
+    });
+    var pie = el('div', { 'class': 'nav-pie' }, [
+      el('button', { 'class': 'btn', type: 'button', id: 'ant', text: '← Anterior' }),
+      el('button', { 'class': 'btn', type: 'button', id: 'sig', text: 'Siguiente →' })
+    ]);
+    lect.appendChild(pie);
+    $('#ant').addEventListener('click', function () { mover(-1); });
+    $('#sig').addEventListener('click', function () { mover(1); });
+  }
+  function renderBloque(b) {
+    var n;
+    if (b.t === 'p') n = el('p', { 'class': 'bloque', html: b.html });
+    else if (b.t === 'h3') n = el('h2', { 'class': 'bloque', html: b.html });
+    else if (b.t === 'h4') n = el('h3', { 'class': 'bloque', html: b.html });
+    else if (b.t === 'quote') n = el('blockquote', { 'class': 'bloque', html: b.html });
+    else if (b.t === 'ul' || b.t === 'ol') { n = el(b.t, { 'class': 'bloque' }); b.html.forEach(function (it) { n.appendChild(el('li', { html: it })); }); }
+    else if (b.t === 'figure') { n = el('figure', { 'class': 'bloque' }, [el('img', { src: b.html.src, alt: '', loading: 'lazy' }), el('figcaption', { html: b.html.caption })]); }
+    else if (b.t === 'table') {
+      var t = el('table'); b.html.forEach(function (fila, i) { var tr = el('tr'); fila.forEach(function (c) { tr.appendChild(el(i ? 'td' : 'th', { html: c })); }); t.appendChild(tr); });
+      n = el('div', { 'class': 'bloque tabla' }, [t]);
+    }
+    else if (b.t === 'portada') { n = el('div', { 'class': 'bloque portada' }); var cls = ['t1', 't2', 't3', 'autor', 'anio']; b.html.forEach(function (l, i) { n.appendChild(el('div', { 'class': cls[i] || '', html: l })); }); }
+    else n = el('div', { 'class': 'bloque', html: String(b.html) });
+    n.setAttribute('data-pid', b.id);
+    n.setAttribute('data-src', b.src);
+    if (b.pagina) n.setAttribute('data-pg', b.pagina);
+    ORIG[b.id] = n.innerHTML;
+    return n;
+  }
+  function irA(sid, pid) {
+    if (!SEC_BY_ID[sid]) return;
+    secActual = sid;
+    $$('article.seccion').forEach(function (a) { a.hidden = a.id !== 'sec-' + sid; });
+    $$('nav a.sec').forEach(function (a) { a.classList.toggle('activa', a.getAttribute('data-sid') === sid); });
+    var act = $('nav a.sec.activa'); if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
+    try { history.replaceState(null, '', '#' + sid); } catch (e) {}
+    lsSet(LOCAL_KEY + ':ultima', sid);
+    var lect = $('#lectura');
+    if (pid) { var n = $('[data-pid="' + pid + '"]'); if (n) { n.scrollIntoView({ block: 'center' }); n.classList.add('flash'); setTimeout(function () { n.classList.remove('flash'); }, 1700); } }
+    else lect.scrollTop = 0;
+    $('#indice').classList.remove('abierta');
+    if (tab === 'capitulo') renderPanel();
+    var i = SECS.findIndex(function (s) { return s.id === sid; });
+    $('#ant').disabled = i <= 0; $('#sig').disabled = i >= SECS.length - 1;
+  }
+  function mover(d) { var i = SECS.findIndex(function (s) { return s.id === secActual; }); var j = i + d; if (SECS[j]) irA(SECS[j].id); }
+
+  // ------------------------------------------------------------ anotaciones: persistencia
+  function guardar(a) {
+    a.editado = ahora();
+    anots[a.id] = a;
+    pintar(a); renderPanel(); renderCuentas();
+    if (col) {
+      col.doc(a.id).set(a).then(function () { estado('Guardado ' + new Date().toLocaleTimeString()); })
+        .catch(function (e) { estado('No se pudo guardar (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
+    } else { guardarLocal(); }
+  }
+  function borrar(id) {
+    var a = anots[id]; if (!a) return;
+    delete anots[id];
+    if (a.pid) pintarPid(a.pid); renderPanel(); renderCuentas(); marcasPagina();
+    if (col) col.doc(id).delete().catch(function (e) { estado('No se pudo borrar (' + (e && e.code || 'error') + ')', true); });
+    else guardarLocal();
+  }
+  function guardarLocal() { lsSet(LOCAL_KEY, JSON.stringify(anots)); estado('Guardado sólo en este navegador', true); }
+  function cargarLocal() { try { var j = JSON.parse(lsGet(LOCAL_KEY) || '{}'); Object.keys(j).forEach(function (k) { anots[k] = j[k]; }); } catch (e) {} }
+
+  // ------------------------------------------------------------ anotaciones: creación
+  function base(tipo, sid) {
+    var s = SEC_BY_ID[sid] || {};
+    return { id: uid(), tipo: tipo, sid: sid || null, sidTitulo: s.titulo || null, nota: '', estado: 'abierta', creado: ahora(), editado: ahora() };
+  }
+  function notaPagina(pg, sid) {
+    pg = parseInt(pg, 10); if (!pg) return;
+    var ex = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return a.tipo === 'pagina' && a.pagina === pg; })[0];
+    if (ex) { enfocar(ex.id); return; }
+    var a = base('pagina', sid || secActual); a.pagina = pg;
+    guardar(a); enfocar(a.id, true);
+  }
+  function notaSeccion() {
+    var ex = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return a.tipo === 'capitulo' && a.sid === secActual; })[0];
+    if (ex) { enfocar(ex.id); return; }
+    var a = base('capitulo', secActual); guardar(a); enfocar(a.id, true);
+  }
+  function notaGeneral() { var a = base('general', secActual); guardar(a); enfocar(a.id, true); }
+
+  function offsetEn(para, node, off) {
+    var r = document.createRange(); r.setStart(para, 0); r.setEnd(node, off); return r.toString().length;
+  }
+  function crearSubrayado(color, conNota) {
+    var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    var range = sel.getRangeAt(0);
+    var pA = ancestroPid(range.startContainer), pB = ancestroPid(range.endContainer);
+    if (!pA || !pB) return;
+    var paras = $$('article.seccion:not([hidden]) [data-pid]');
+    var iA = paras.indexOf(pA), iB = paras.indexOf(pB); if (iA < 0 || iB < 0) return;
+    if (iA > iB) { var tmp = pA; pA = pB; pB = tmp; var ti = iA; iA = iB; iB = ti; }
+    var grupo = iA !== iB ? uid() : null, primero = null;
+    for (var i = iA; i <= iB; i++) {
+      var p = paras[i], txt = p.textContent, ini = 0, fin = txt.length;
+      if (i === iA) ini = offsetEn(p, range.startContainer, range.startOffset);
+      if (i === iB) fin = offsetEn(p, range.endContainer, range.endOffset);
+      if (p.firstChild && p.firstChild.classList && p.firstChild.classList.contains('pg')) { var lp = p.firstChild.textContent.length; if (i === iA) ini = Math.max(0, ini - lp); if (i === iB) fin = Math.max(0, fin - lp); txt = txt.slice(lp); fin = Math.min(fin, txt.length); }
+      if (fin <= ini) continue;
+      var a = base('subrayado', secActual);
+      a.pid = p.getAttribute('data-pid'); a.src = p.getAttribute('data-src'); a.pagina = parseInt(p.getAttribute('data-pg') || '0', 10) || null;
+      a.inicio = ini; a.fin = fin; a.cita = txt.slice(ini, fin); a.antes = txt.slice(Math.max(0, ini - 30), ini); a.despues = txt.slice(fin, fin + 30);
+      a.color = color; if (grupo) a.grupo = grupo;
+      guardar(a); if (!primero) primero = a.id;
+    }
+    sel.removeAllRanges(); ocultarTb();
+    if (primero) enfocar(primero, !!conNota);
+  }
+  function ancestroPid(n) { while (n && n.nodeType !== 1) n = n.parentNode; return n ? n.closest('[data-pid]') : null; }
+
+  // ------------------------------------------------------------ pintar subrayados
+  function textoDe(pid) { var n = $('[data-pid="' + pid + '"]'); return n ? n.textContent : ''; }
+  function pintar(a) { if (a.pid) pintarPid(a.pid); marcasPagina(); }
+  function pintarPid(pid) {
+    var n = $('[data-pid="' + pid + '"]'); if (!n) return;
+    var pg = n.querySelector('.pg'); var pgHtml = pg ? pg.outerHTML : '';
+    n.innerHTML = ORIG[pid];
+    if (pgHtml) { var w = el('div', { html: pgHtml }); var pgn = w.firstChild; pgn.addEventListener('click', function () { notaPagina(pgn.getAttribute('data-pg'), BLOQUE_SEC[pid]); }); n.insertBefore(pgn, n.firstChild); }
+    var lista = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return a.tipo === 'subrayado' && a.pid === pid; });
+    if (!lista.length) return;
+    // texto del bloque sin el marcador de página
+    var desplaz = pg ? pg.textContent.length : 0;
+    var lim = {}; lista.forEach(function (a) { lim[a.inicio] = 1; lim[a.fin] = 1; });
+    var cortes = Object.keys(lim).map(Number).sort(function (x, y) { return x - y; });
+    var walker = document.createTreeWalker(n, NodeFilter.SHOW_TEXT, null), nodos = [], t;
+    while ((t = walker.nextNode())) { if (pgn && pgn.contains(t)) continue; nodos.push(t); }
+    var pos = 0;
+    nodos.forEach(function (tn) {
+      var texto = tn.nodeValue, ini = pos, fin = pos + texto.length; pos = fin;
+      var puntos = [ini].concat(cortes.filter(function (c) { return c > ini && c < fin; })).concat([fin]);
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < puntos.length - 1; i++) {
+        var a0 = puntos[i], a1 = puntos[i + 1], seg = texto.slice(a0 - ini, a1 - ini);
+        var cubren = lista.filter(function (a) { return a.inicio <= a0 && a.fin >= a1; });
+        if (cubren.length) {
+          cubren.sort(function (x, y) { return (x.creado < y.creado) ? -1 : 1; });
+          var top = cubren[cubren.length - 1];
+          var m = el('mark', { 'class': 'hl c-' + top.color + (top.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === top.id ? ' foco' : ''), 'data-aids': cubren.map(function (a) { return a.id; }).join(' '), text: seg });
+          m.addEventListener('click', function (ev) { ev.stopPropagation(); enfocar(top.id); });
+          frag.appendChild(m);
+        } else frag.appendChild(document.createTextNode(seg));
+      }
+      tn.parentNode.replaceChild(frag, tn);
+    });
+  }
+  function pintarTodo() { var pids = {}; Object.keys(anots).forEach(function (k) { if (anots[k].pid) pids[anots[k].pid] = 1; }); Object.keys(ORIG).forEach(function (pid) { if (pids[pid] || $('[data-pid="' + pid + '"] mark.hl')) pintarPid(pid); }); marcasPagina(); }
+  function marcasPagina() {
+    var con = {}; Object.keys(anots).forEach(function (k) { var a = anots[k]; if (a.tipo === 'pagina' && a.pagina) con[a.pagina] = 1; });
+    $$('.pg').forEach(function (p) { p.classList.toggle('con-nota', !!con[p.getAttribute('data-pg')]); });
+  }
+
+  // ------------------------------------------------------------ panel
+  function lista() {
+    var L = Object.keys(anots).map(function (k) { return anots[k]; });
+    if (tab === 'capitulo') {
+      var s = SEC_BY_ID[secActual]; var pags = {}; if (s) s.bloques.forEach(function (b) { if (b.pagina) pags[b.pagina] = 1; });
+      L = L.filter(function (a) { return a.sid === secActual || (a.tipo === 'pagina' && pags[a.pagina]); });
+    }
+    if (filtro === 'notas') L = L.filter(function (a) { return a.tipo !== 'subrayado'; });
+    else if (filtro === 'abiertas') L = L.filter(function (a) { return a.estado !== 'resuelta'; });
+    else if (filtro !== 'todas') L = L.filter(function (a) { return a.tipo === 'subrayado' && a.color === filtro; });
+    L.sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
+    return L;
+  }
+  function ordenKey(a) { var si = SECS.findIndex(function (s) { return s.id === a.sid; }); var bi = a.pid ? parseInt(a.pid.split('-b').pop(), 10) : -1; return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi) * 10 + (a.inicio || 0) / 100000; }
+  function renderPanel() {
+    if (tab === 'buscar') return;
+    var box = $('#lista'); box.innerHTML = '';
+    var L = lista();
+    $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
+    if (!L.length) { box.appendChild(el('div', { 'class': 'vacio', text: tab === 'capitulo' ? 'Sin anotaciones en esta sección. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.' : 'Aún no hay anotaciones.' })); return; }
+    L.forEach(function (a) { box.appendChild(ficha(a)); });
+  }
+  function etiqueta(a) {
+    if (a.tipo === 'subrayado') return (a.sidTitulo || '').replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
+    if (a.tipo === 'pagina') return 'Nota de la página ' + a.pagina;
+    if (a.tipo === 'capitulo') return 'Nota de la sección: ' + (a.sidTitulo || '');
+    return 'Nota general';
+  }
+  function ficha(a) {
+    var f = el('div', { 'class': 'ficha t-' + a.tipo + (a.color ? ' c-' + a.color : '') + (a.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === a.id ? ' foco' : ''), 'data-id': a.id });
+    var cab = el('div', { 'class': 'cab' }, [el('span', { text: etiqueta(a) })]);
+    if (a.pid || (a.tipo === 'pagina' && a.pagina) || a.tipo === 'capitulo') {
+      var ir = el('a', { text: 'ir al texto', role: 'button', tabindex: '0' });
+      ir.addEventListener('click', function () { irAAnot(a); });
+      cab.appendChild(ir);
+    }
+    f.appendChild(cab);
+    if (a.tipo === 'subrayado') f.appendChild(el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
+    var ta = el('textarea', { placeholder: a.tipo === 'subrayado' ? 'Nota sobre este subrayado…' : 'Escribe la nota…', 'aria-label': 'Nota', id: 'nota-' + a.id });
+    ta.value = a.nota || '';
+    var timer = null;
+    ta.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { if (ta.value !== (anots[a.id] || {}).nota) { anots[a.id].nota = ta.value; guardarSilencioso(anots[a.id]); } }, 900); });
+    ta.addEventListener('blur', function () { clearTimeout(timer); if (anots[a.id] && ta.value !== anots[a.id].nota) { anots[a.id].nota = ta.value; guardarSilencioso(anots[a.id]); } });
+    f.appendChild(ta);
+    var acc = el('div', { 'class': 'acciones' });
+    if (a.tipo === 'subrayado') {
+      var cols = el('div', { 'class': 'colores' });
+      ['revisar', 'cortar', 'duda', 'conservar'].forEach(function (c) {
+        var b = el('button', { 'class': 'col-btn c-' + c + (a.color === c ? ' on' : ''), type: 'button', title: c, 'aria-label': c });
+        b.addEventListener('click', function () { a.color = c; guardar(a); });
+        cols.appendChild(b);
+      });
+      acc.appendChild(cols);
+    }
+    var res = el('button', { 'class': 'btn peq', type: 'button', text: a.estado === 'resuelta' ? 'Reabrir' : 'Resuelta' });
+    res.addEventListener('click', function () { a.estado = a.estado === 'resuelta' ? 'abierta' : 'resuelta'; guardar(a); });
+    acc.appendChild(res);
+    var del = el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar' });
+    del.addEventListener('click', function () {
+      var c = el('span', { 'class': 'confirmar' }, [el('span', { text: '¿Borrar?' }), el('button', { 'class': 'btn peq', type: 'button', text: 'Sí', onclick: function () { borrar(a.id); } }), el('button', { 'class': 'btn peq', type: 'button', text: 'No', onclick: function () { acc.replaceChild(del, c); } })]);
+      acc.replaceChild(c, del);
+    });
+    acc.appendChild(del);
+    f.appendChild(acc);
+    return f;
+  }
+  function guardarSilencioso(a) { a.editado = ahora(); if (col) col.doc(a.id).set(a).then(function () { estado('Guardado ' + new Date().toLocaleTimeString()); }).catch(function (e) { estado('No se pudo guardar (' + (e && e.code || 'error') + ')', true); }); else guardarLocal(); }
+  function irAAnot(a) {
+    if (a.pid) { irA(BLOQUE_SEC[a.pid] || a.sid, a.pid); }
+    else if (a.tipo === 'pagina') { var n = $('[data-pg="' + a.pagina + '"][data-pid]'); if (n) irA(BLOQUE_SEC[n.getAttribute('data-pid')], n.getAttribute('data-pid')); }
+    else if (a.sid) irA(a.sid);
+    enfocar(a.id);
+  }
+  function enfocar(id, editar) {
+    fichaFoco = id;
+    var a = anots[id]; if (!a) return;
+    if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) { tab = 'todas'; $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === tab); }); }
+    renderPanel(); if (a.pid) pintarPid(a.pid);
+    var f = $('.ficha[data-id="' + id + '"]'); if (f) { f.scrollIntoView({ block: 'nearest' }); if (editar) { var ta = $('textarea', f); if (ta) ta.focus(); } }
+    if (window.innerWidth <= 1000 && editar) $('#panel').classList.add('abierta');
+  }
+  function renderCuentas() {
+    var por = {}; Object.keys(anots).forEach(function (k) { var a = anots[k]; if (a.sid) por[a.sid] = (por[a.sid] || 0) + 1; });
+    $$('nav a.sec').forEach(function (a) { var sid = a.getAttribute('data-sid'); var c = a.querySelector('.cuenta'); if (por[sid]) { if (!c) { c = el('span', { 'class': 'cuenta' }); a.appendChild(c); } c.textContent = por[sid]; } else if (c) c.remove(); });
+    $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
+  }
+
+  // ------------------------------------------------------------ exportar
+  function exportarJSON() { return JSON.stringify({ libro: LIBRO.titulo, generado: LIBRO.generado, exportado: ahora(), anotaciones: Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; }) }, null, 2); }
+  function exportarMD() {
+    var L = Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
+    var out = ['# Anotaciones · ' + LIBRO.titulo, '', 'Exportado: ' + ahora(), ''];
+    var sec = null;
+    L.forEach(function (a) {
+      var st = a.sidTitulo || 'General';
+      if (st !== sec) { sec = st; out.push('', '## ' + st, ''); }
+      if (a.tipo === 'subrayado') out.push('- [' + a.color + (a.estado === 'resuelta' ? ', resuelta' : '') + '] p. ' + (a.pagina || '?') + ' · ' + a.src + ' · «' + a.cita + '»' + (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : ''));
+      else out.push('- [' + a.tipo + (a.pagina ? ' p. ' + a.pagina : '') + (a.estado === 'resuelta' ? ', resuelta' : '') + '] ' + (a.nota || '(sin texto)').replace(/\n/g, ' '));
+    });
+    return out.join('\n');
+  }
+  function copiar(txt, boton) {
+    var ok = function () { var t = boton.textContent; boton.textContent = 'Copiado'; setTimeout(function () { boton.textContent = t; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(function () { fallback(); }); else fallback();
+    function fallback() { var ta = el('textarea', { style: 'position:fixed;left:-9999px' }); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); ok(); } catch (e) { estado('Selecciona y copia manualmente el texto del cuadro', true); ta.style.left = '16px'; ta.style.bottom = '16px'; ta.style.width = '60vw'; ta.style.height = '30vh'; return; } ta.remove(); }
+  }
+
+  // ------------------------------------------------------------ búsqueda
+  function buscar(q) {
+    tab = 'buscar'; $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === 'buscar'); });
+    var box = $('#lista'); box.innerHTML = '';
+    q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
+    var norm = function (s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+    var nq = norm(q), n = 0;
+    SECS.forEach(function (s) {
+      s.bloques.forEach(function (b) {
+        var txt = $('[data-pid="' + b.id + '"]'); if (!txt) return;
+        var t = txt.textContent, nt = norm(t), i = nt.indexOf(nq); if (i < 0) return;
+        n++; if (n > 200) return;
+        var ini = Math.max(0, i - 60), fin = Math.min(t.length, i + nq.length + 80);
+        var r = el('div', { 'class': 'res' }, [el('div', { 'class': 'donde', text: s.titulo + (b.pagina ? ' · p. ' + b.pagina : '') })]);
+        var frag = el('div'); frag.appendChild(document.createTextNode((ini ? '…' : '') + t.slice(ini, i))); frag.appendChild(el('b', { text: t.slice(i, i + nq.length) })); frag.appendChild(document.createTextNode(t.slice(i + nq.length, fin) + (fin < t.length ? '…' : '')));
+        r.appendChild(frag);
+        r.addEventListener('click', function () { irA(s.id, b.id); if (window.innerWidth <= 1000) $('#panel').classList.remove('abierta'); });
+        box.appendChild(r);
+      });
+    });
+    box.insertBefore(el('div', { 'class': 'vacio', text: n ? n + (n > 200 ? ' coincidencias (se muestran 200)' : ' coincidencias') : 'Sin coincidencias.' }), box.firstChild);
+    if (window.innerWidth <= 1000) $('#panel').classList.add('abierta');
+  }
+
+  // ------------------------------------------------------------ barra de selección
+  var tb = $('#sel-tb');
+  function ocultarTb() { tb.style.display = 'none'; }
+  function mostrarTb() {
+    var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { ocultarTb(); return; }
+    var r = sel.getRangeAt(0); if (!ancestroPid(r.startContainer) || !ancestroPid(r.endContainer)) { ocultarTb(); return; }
+    var rect = r.getBoundingClientRect(); if (!rect.width && !rect.height) { ocultarTb(); return; }
+    tb.style.display = 'flex';
+    var w = tb.offsetWidth || 220, h = tb.offsetHeight || 40;
+    var left = Math.min(Math.max(8, rect.left + rect.width / 2 - w / 2), window.innerWidth - w - 8);
+    var top = rect.top - h - 8; if (top < 8) top = rect.bottom + 8;
+    tb.style.left = left + 'px'; tb.style.top = top + 'px';
+  }
+  document.addEventListener('selectionchange', function () { clearTimeout(window.__selT); window.__selT = setTimeout(mostrarTb, 180); });
+  $$('#sel-tb .col-btn').forEach(function (b) { b.addEventListener('mousedown', function (ev) { ev.preventDefault(); }); b.addEventListener('click', function () { crearSubrayado(b.getAttribute('data-c'), false); }); });
+  $('#sel-nota').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+  $('#sel-nota').addEventListener('click', function () { crearSubrayado('revisar', true); });
+
+  // ------------------------------------------------------------ controles
+  $$('.tab').forEach(function (t) { t.addEventListener('click', function () { tab = t.getAttribute('data-tab'); $$('.tab').forEach(function (x) { x.classList.toggle('activa', x === t); }); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel(); }); });
+  $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); $$('.filtro').forEach(function (x) { x.classList.toggle('on', x === f); }); if (tab === 'buscar') { tab = 'todas'; $$('.tab').forEach(function (x) { x.classList.toggle('activa', x.getAttribute('data-tab') === 'todas'); }); } renderPanel(); }); });
+  $('#b-nota-cap').addEventListener('click', notaSeccion);
+  $('#b-nota-gen').addEventListener('click', notaGeneral);
+  $('#b-nota-pg').addEventListener('click', function () { notaPagina($('#pg-num').value, secActual); });
+  $('#pg-num').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') notaPagina($('#pg-num').value, secActual); });
+  $('#b-copiar').addEventListener('click', function () { copiar(exportarJSON(), this); });
+  $('#b-copiar-md').addEventListener('click', function () { copiar(exportarMD(), this); });
+  $('#buscar').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') buscar(this.value); });
+  $('#b-indice').addEventListener('click', function () { $('#indice').classList.toggle('abierta'); $('#panel').classList.remove('abierta'); });
+  $('#b-panel').addEventListener('click', function () { $('#panel').classList.toggle('abierta'); $('#indice').classList.remove('abierta'); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.target && /INPUT|TEXTAREA/.test(ev.target.tagName)) return;
+    if (ev.key === 'ArrowRight' && ev.altKey) mover(1); else if (ev.key === 'ArrowLeft' && ev.altKey) mover(-1);
+    else if (ev.key === 'Escape') { ocultarTb(); $('#indice').classList.remove('abierta'); $('#panel').classList.remove('abierta'); }
+  });
+  document.addEventListener('click', function (ev) { if (!tb.contains(ev.target)) { var s = window.getSelection(); if (!s || s.isCollapsed) ocultarTb(); } });
+
+  // ------------------------------------------------------------ arranque
+  function arrancar() {
+    // Primero el libro; la base (o el respaldo local) se conecta cuando el libro ya está en pantalla,
+    // porque la clave del respaldo y el pintado de los destacados dependen de él.
+    var libroListo = fetch('libro.json').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (L) {
+      if (!L || !L.secciones || !L.secciones.length) throw new Error('libro.json sin secciones');
+      LIBRO = L; SECS = L.secciones;
+      LOCAL_KEY = 'lector-anotaciones:' + (L.id || 'libro');
+      document.title = 'Lector · ' + L.titulo;
+      renderLibro();
+      $('#sub').textContent = L.titulo + (L.generado ? ' · fuentes del ' + L.generado : '');
+      var h = (location.hash || '').replace('#', ''), ultima = lsGet(LOCAL_KEY + ':ultima');
+      irA(SEC_BY_ID[h] ? h : (SEC_BY_ID[ultima] ? ultima : (SEC_BY_ID[L.inicio] ? L.inicio : SECS[0].id)));
+      pintarTodo(); renderPanel(); renderCuentas();
+      estado('Conectando con la base de anotaciones…');
+    });
+    libroListo.catch(function (e) {
+      $('#lectura').innerHTML = '<div class="vacio">No se pudo cargar libro.json: ' + String(e && e.message || e) + '</div>';
+      estado('Sin libro', true);
+    });
+    var use = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
+    Promise.all([libroListo, use]).then(function (r) {
+      var d = r[1];
+      if (!d) {
+        modo = 'local'; cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
+        estado('Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.', true);
+        return;
+      }
+      db = d; col = db.collection('anotaciones'); modo = 'db';
+      col.onSnapshot(function (snap) {
+        snap.docChanges().forEach(function (ch) {
+          var d2 = ch.doc.data();
+          if (ch.type === 'removed') { delete anots[ch.doc.id]; }
+          else if (d2) { anots[ch.doc.id] = Object.assign({}, d2, { id: ch.doc.id }); }
+        });
+        pintarTodo(); renderPanel(); renderCuentas();
+        if (!snap.metadata.fromCache) estado('Conectado · ' + Object.keys(anots).length + ' anotaciones');
+      }, function (e) { estado('La base dejó de responder (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
+    }).catch(function () { /* el error del libro ya se mostró */ });
+  }
+  arrancar();
+})();
+</script>
+</body>
+</html>

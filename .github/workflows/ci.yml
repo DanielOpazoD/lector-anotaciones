@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: ruff + pytest (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+  ejemplo:
+    name: construir el ejemplo con PDF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils pandoc
+      - run: pip install -e .
+      - name: Maquetar el ejemplo en PDF (pandoc) y construir libro.json con páginas
+        run: |
+          mkdir -p ejemplo/salida
+          pandoc ejemplo/fuentes/*.md -o ejemplo/salida/libro.html --standalone --metadata title="Libro de ejemplo"
+          # La portada y la página legal del dialecto no son Markdown estándar: pandoc las deja como texto, lo que basta para la prueba.
+          lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
+          python -c "import json; L=json.load(open('ejemplo/salida/libro.json')); assert L['secciones'], 'sin secciones'; print(len(L['secciones']), 'secciones')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libro-ejemplo
+          path: ejemplo/salida/libro.json
+
+  web:
+    name: página (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -e .
+      - run: lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/web/smoke.mjs

@@ -1,0 +1,110 @@
+import json
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+from lector_anotaciones import construir as mod
+from lector_anotaciones.cli import main
+from lector_anotaciones.construir import construir, escribir, resumen, validar
+from lector_anotaciones.util import norm
+
+
+def test_construir_sin_pdf(ejemplo_fuentes: Path):
+    libro = construir([ejemplo_fuentes], titulo="Libro de ejemplo", autor="Alguien")
+    assert libro["formato"] == 1
+    assert libro["id"] == "libro-de-ejemplo"
+    assert libro["generado"] == date.today().isoformat()
+    assert libro["paginas_fisicas"] is None and libro["desfase_paginas"] == 0
+    assert libro["fuentes"] == sorted(p.name for p in ejemplo_fuentes.glob("*.md"))
+    assert libro["inicio"] == next(s["id"] for s in libro["secciones"] if s["nivel"] == 2)
+    assert validar(libro) == []
+    assert all("texto" not in b for s in libro["secciones"] for b in s["bloques"])
+    assert all(b["pagina"] is None for s in libro["secciones"] for b in s["bloques"])
+
+
+def test_titulo_por_defecto_es_la_primera_seccion(tmp_path: Path):
+    (tmp_path / "a.md").write_text("# Mi libro\n\nTexto.\n", encoding="utf-8")
+    libro = construir([tmp_path])
+    assert libro["titulo"] == "Mi libro" and libro["id"] == "mi-libro"
+    assert libro["inicio"] == "mi-libro", "sin secciones de nivel 2, se abre en la primera"
+
+
+def test_construir_con_pdf_simulado(monkeypatch, tmp_path: Path):
+    fuente = tmp_path / "libro.md"
+    fuente.write_text(
+        "# Prefacio\n\nUn prefacio con una frase suficientemente larga para ubicarla.\n\n"
+        "## Capítulo 1. Uno\n\nPrimer párrafo del capítulo, también suficientemente largo.\n",
+        encoding="utf-8",
+    )
+    textos = [
+        "portada",
+        norm("ENCABEZADO Prefacio Un prefacio con una frase suficientemente larga"),
+        norm("ENCABEZADO Capítulo 1 Primer párrafo del capítulo, también suficientemente largo"),
+    ]
+    monkeypatch.setattr(mod, "texto_paginas_pdf", lambda pdf: textos)
+    avisos: list[str] = []
+    libro = construir([fuente], pdf=Path("x.pdf"), marca_pagina_1="Encabezado prefacio", avisos=avisos)
+    assert avisos == []
+    assert libro["paginas_fisicas"] == 3 and libro["desfase_paginas"] == 1
+    assert libro["secciones"][0]["bloques"][0]["pagina"] == 1
+    assert libro["secciones"][1]["bloques"][0]["pagina"] == 2
+    assert validar(libro) == []
+
+    avisos = []
+    libro = construir([fuente], pdf=Path("x.pdf"), marca_pagina_1="no aparece", avisos=avisos)
+    assert avisos and "desfase 0" in avisos[0]
+    assert libro["desfase_paginas"] == 0
+    assert libro["secciones"][0]["bloques"][0]["pagina"] == 2
+
+
+def test_validar_detecta_problemas(ejemplo_fuentes: Path):
+    libro = construir([ejemplo_fuentes])
+    secs = libro["secciones"]
+    secs[1]["id"] = secs[0]["id"]
+    secs[2]["bloques"][0]["id"] = "otro-b9"
+    secs[2]["bloques"][0]["pagina"] = 5
+    secs[2]["bloques"][1]["pagina"] = 3
+    del secs[2]["bloques"][1]["src"]
+    problemas = validar(libro)
+    assert any("sección repetido" in p for p in problemas)
+    assert any("fuera de patrón" in p for p in problemas)
+    assert any("retrocede" in p for p in problemas)
+    assert any("sin «src»" in p for p in problemas)
+    assert validar({"secciones": []}) == ["el libro no tiene secciones"]
+
+
+def test_escribir_y_resumen(ejemplo_fuentes: Path, tmp_path: Path):
+    libro = construir([ejemplo_fuentes])
+    salida = tmp_path / "salida" / "libro.json"
+    assert escribir(libro, salida) > 0, "crea el directorio de salida si no existe"
+    leido = json.loads(salida.read_text(encoding="utf-8"))
+    assert leido["titulo"] == libro["titulo"]
+    assert "secciones" in resumen(libro) and "sin página" in resumen(libro)
+
+
+def test_cli_construir(ejemplo_fuentes: Path, tmp_path: Path, capsys):
+    salida = tmp_path / "libro.json"
+    codigo = main(["construir", str(ejemplo_fuentes), "--salida", str(salida), "--titulo", "Ejemplo", "--estricto"])
+    assert codigo == 0
+    assert salida.exists()
+    assert capsys.readouterr().out.startswith(f"ok {salida}:")
+
+
+def test_cli_construir_fuente_inexistente(tmp_path: Path, capsys):
+    assert main(["construir", str(tmp_path / "nada.md"), "--salida", str(tmp_path / "x.json")]) == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_cli_construir_estricto_falla_con_problemas(monkeypatch, ejemplo_fuentes: Path, tmp_path: Path):
+    monkeypatch.setattr("lector_anotaciones.cli.validar", lambda libro: ["problema simulado"])
+    salida = tmp_path / "libro.json"
+    assert main(["construir", str(ejemplo_fuentes), "--salida", str(salida), "--estricto"]) == 1
+    assert main(["construir", str(ejemplo_fuentes), "--salida", str(salida)]) == 0
+
+
+def test_cli_version(capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["--version"])
+    assert e.value.code == 0
+    assert capsys.readouterr().out.startswith("lector-anotaciones ")
