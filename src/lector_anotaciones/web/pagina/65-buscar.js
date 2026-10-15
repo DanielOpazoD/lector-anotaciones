@@ -3,7 +3,7 @@
     tab = 'buscar'; $$('.tab').forEach(function (t) { t.classList.toggle('activa', t.getAttribute('data-tab') === 'buscar'); });
     var box = $('#lista'); box.innerHTML = '';
     q = (q || '').trim(); if (q.length < 2) { box.appendChild(el('div', { 'class': 'vacio', text: 'Escribe al menos dos letras.' })); return; }
-    var norm = function (s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+    var norm = N.normalizar;
     var nq = norm(q), n = 0;
     var enAnots = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return norm((a.nota || '') + ' ' + (a.cita || '') + ' ' + (a.respuesta || '') + ' ' + (a.replica || '')).indexOf(nq) >= 0; });
     enAnots.sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });

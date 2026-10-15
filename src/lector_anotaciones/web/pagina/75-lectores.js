@@ -19,11 +19,7 @@
     var ta = f.querySelector('textarea'); if (ta && ta.nextSibling) f.insertBefore(et, ta.nextSibling); else f.appendChild(et);
     renderSelectores();
   }
-  function etiquetasDe(a) {
-    var out = [], re = /#([\p{L}\d_-]{2,})/gu, m, txt = (a.nota || '') + ' ' + (a.replica || '');
-    while ((m = re.exec(txt))) { var t = m[1].toLowerCase(); if (out.indexOf(t) < 0) out.push(t); }
-    return out;
-  }
+  var etiquetasDe = N.etiquetasDe;
   function renderSelectores() {
     var autores = {}, tags = {};
     Object.keys(anots).forEach(function (k) { var a = anots[k]; if (a.autor) autores[a.autor] = 1; etiquetasDe(a).forEach(function (t) { tags[t] = 1; }); });

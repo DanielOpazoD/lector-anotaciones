@@ -105,12 +105,8 @@
     else { guardarLocal(); limpiarCampos(id); }
     ofrecerDeshacer(a, camposPrevios);
   }
-  var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado'];  // lo que el lector edita en la página; el resto lo escribe quien edita las fuentes
   var CAMPOS_BORRADOR = {};  // id -> campos que el lector cambió en esta sesión y la base todavía no tiene (se guarda junto a la copia local)
-  function marcarCampos(id, antes, despues) {
-    var c = CAMPOS_BORRADOR[id] || (CAMPOS_BORRADOR[id] = {});
-    CAMPOS_LECTOR.forEach(function (k) { if (antes[k] !== despues[k]) c[k] = true; });
-  }
+  function marcarCampos(id, antes, despues) { N.marcarCampos(CAMPOS_BORRADOR[id] || (CAMPOS_BORRADOR[id] = {}), antes, despues); }
   function escribirCampos(ids) {
     // Actualiza en la lista guardada sólo esas anotaciones; las demás entradas (borradores de otra sesión aún no
     // cargados, o de otra cuenta) se conservan tal como estaban.
@@ -119,15 +115,7 @@
     if (Object.keys(guardados).length) lsSet(LOCAL_KEY + ':campos', JSON.stringify(guardados));
     else try { localStorage.removeItem(LOCAL_KEY + ':campos'); } catch (e) {}
   }
-  function fundirBorrador(deBase, borrador, campos) {
-    // Un borrador que no subió aporta sólo los campos que el lector cambió (si no se sabe cuáles, los que edita en
-    // la página y difieren); respuesta, cierre y demás los manda la base, para que recuperar el borrador no borre lo
-    // que otra sesión escribió entre tanto.
-    var r = Object.assign({}, deBase), lista = campos && Object.keys(campos).length ? Object.keys(campos) : ['nota', 'replica'];
-    lista.forEach(function (c) { if (borrador[c] !== undefined && borrador[c] !== deBase[c]) r[c] = borrador[c]; });
-    r.editado = borrador.editado || r.editado;
-    return r;
-  }
+  var fundirBorrador = N.fundirBorrador;
   function leerLocal() { try { return JSON.parse(lsGet(LOCAL_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function escribirLocal(datos) {
     if (Object.keys(datos).length) return lsSet(LOCAL_KEY, JSON.stringify(datos));
