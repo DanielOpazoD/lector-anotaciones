@@ -85,8 +85,8 @@ Tres campos más por bloque:
 | Campo | Significado |
 |---|---|
 | `h` | Huella (12 hex de SHA-1) del texto tal como lo muestra la página. Las anotaciones guardan la suya en `bh`; la página marca «cambió desde tu última lectura» comparando con la huella que vio el lector. |
-| `anterior` | Sólo en los bloques cuyo texto cambió respecto de la salida anterior: el texto viejo, para que la página muestre la diferencia palabra por palabra. Se conserva una sola generación hacia atrás. |
-| `m` | Capas editoriales con algo que señalar: `{"fl": [[ini, fin], …], "mu": …, "tr": …, "rep": …, "cn": …}`, en caracteres del texto mostrado. `fl` frases de más de N palabras (`--frase-larga`), `mu` muletillas (`--muletillas archivo`), `tr` términos retirados (`--terminos-retirados archivo`), `rep` una palabra larga repetida a menos de 120 caracteres, `cn` citas narrativas «Autor (año)». |
+| `anterior` | Sólo en los bloques cuyo texto cambió respecto de la salida anterior: el texto viejo, para que la página muestre la diferencia palabra por palabra. Se conserva una sola generación hacia atrás. Como los ids son posicionales, los bloques viejos y nuevos de cada sección se emparejan por semejanza de texto (al menos la mitad en común); un bloque nuevo sin pareja es una inserción y no lo lleva. |
+| `m` | Capas editoriales con algo que señalar: `{"fl": [[ini, fin], …], "mu": …, "tr": …, "rep": …, "cn": …}`, en caracteres del texto mostrado. `fl` frases de más de N palabras (`--frase-larga`), `mu` muletillas (`--muletillas archivo`), `tr` términos retirados (`--terminos-retirados archivo`), `rep` una palabra larga repetida a menos de 120 caracteres, `cn` citas narrativas «Autor (año)». En listas, tablas y portada se calculan ítem por ítem (o celda por celda), de modo que el final de un ítem y el comienzo del siguiente no cuentan como una sola palabra ni una sola oración; las coordenadas siguen siendo las del texto pegado del bloque. |
 
 ## Invariantes que comprueba `validar`
 

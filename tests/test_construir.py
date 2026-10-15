@@ -205,3 +205,102 @@ def test_anterior_no_se_confunde_al_insertar_o_borrar_un_parrafo(tmp_path: Path)
     fuente.write_text("# Uno\n\nA primero.\n\nB segundo corregido.\n\nC tercero.\n", encoding="utf-8")
     v3 = construir([fuente], anterior=v2)
     assert v3["cambios"] == 0 and all("anterior" not in b for b in v3["secciones"][0]["bloques"])
+
+
+def _versiones(tmp_path: Path, v1: list[str], v2: list[str]) -> list[str | None]:
+    """Construye v1, luego v2 con v1 como anterior, y devuelve el `anterior` de cada bloque de v2."""
+    fuente = tmp_path / "a.md"
+    fuente.write_text("# Uno\n\n" + "\n\n".join(v1) + "\n", encoding="utf-8")
+    libro1 = construir([fuente])
+    fuente.write_text("# Uno\n\n" + "\n\n".join(v2) + "\n", encoding="utf-8")
+    libro2 = construir([fuente], anterior=libro1)
+    assert validar(libro2) == []
+    anteriores = [b.get("anterior") for b in libro2["secciones"][0]["bloques"]]
+    assert libro2["cambios"] == sum(1 for a in anteriores if a is not None)
+    return anteriores
+
+
+def test_anterior_con_insercion_pegada_a_la_modificacion(tmp_path: Path):
+    # sin bloque intacto entre el párrafo nuevo y el retocado: el texto viejo debe ir al retocado, no al nuevo
+    anteriores = _versiones(
+        tmp_path,
+        ["A primero.", "B segundo.", "C tercero."],
+        ["A primero.", "N nuevo.", "B segundo corregido.", "C tercero."],
+    )
+    assert anteriores == [None, None, "B segundo.", None]
+
+
+def test_anterior_con_borrado_pegado_a_la_modificacion(tmp_path: Path):
+    anteriores = _versiones(
+        tmp_path,
+        ["A primero.", "B segundo.", "C tercero.", "D cuarto."],
+        ["A primero.", "C tercero corregido.", "D cuarto."],
+    )
+    assert anteriores == [None, "C tercero.", None], "el retocado se empareja con su propio texto, no con el borrado"
+
+
+def test_anterior_con_bloques_repetidos(tmp_path: Path):
+    # separadores idénticos alrededor del párrafo que cambia: difflib prefiere alinear los repetidos
+    sep = "Separador ∗ ∗ ∗"
+    anteriores = _versiones(
+        tmp_path, [sep, sep, sep, "Párrafo alfa que cambia."], [sep, sep, "Párrafo alfa que cambió.", sep]
+    )
+    assert anteriores == [None, None, "Párrafo alfa que cambia.", None]
+
+
+def test_anterior_no_empareja_lo_que_no_se_parece(tmp_path: Path):
+    anteriores = _versiones(tmp_path, ["A primero.", "B segundo."], ["A primero.", "Otro párrafo sin relación."])
+    assert anteriores == [None, None], "una sustitución completa es un borrado más una inserción"
+
+
+def test_capas_de_listas_y_tablas_se_calculan_por_item(tmp_path: Path):
+    from lector_anotaciones.capas import ConfigCapas
+    from lector_anotaciones.construir import texto_render
+
+    items = "\n".join(f"- Ítem número {i} con cinco palabras." for i in range(1, 13))
+    tabla = "| Celda uno | Por eso |\n|---|---|\n| Dos | tres |"
+    fuente = tmp_path / "a.md"
+    fuente.write_text(
+        f"# Uno\n\n{items}\n\n{tabla}\n\n- Primero\n- Por eso incertidumbre, incertidumbre\n", encoding="utf-8"
+    )
+    lista, tabla_b, muletilla = construir([fuente], capas=ConfigCapas(frase_larga=20))["secciones"][0]["bloques"]
+    assert "m" not in lista, "doce ítems cortos no son una frase larga"
+    texto = texto_render(tabla_b)
+    assert [texto[a:b] for a, b in tabla_b["m"]["mu"]] == ["Por eso"], "las coordenadas son las del texto pegado"
+    texto = texto_render(muletilla)
+    assert [texto[a:b] for a, b in muletilla["m"]["mu"]] == ["Por eso"]
+    assert [texto[a:b] for a, b in muletilla["m"]["rep"]] == ["incertidumbre", "incertidumbre"]
+
+
+def test_cargar_anterior_tolera_bom_y_avisa_si_no_se_puede_leer(tmp_path: Path):
+    from lector_anotaciones.construir import cargar_anterior
+
+    fuente = tmp_path / "a.md"
+    salida = tmp_path / "libro.json"
+    fuente.write_text("# Uno\n\nTexto primero.\n", encoding="utf-8")
+    escribir(construir([fuente]), salida)
+    salida.write_bytes(b"\xef\xbb\xbf" + salida.read_bytes())
+    avisos: list[str] = []
+    assert cargar_anterior(salida, avisos)["secciones"] and avisos == []
+    salida.write_text("{ roto", encoding="utf-8")
+    assert cargar_anterior(salida, avisos) is None and "no se pudo leer" in avisos[0]
+    salida.write_text("[]", encoding="utf-8")
+    assert cargar_anterior(salida, avisos) is None and "forma de un libro.json" in avisos[1]
+    assert cargar_anterior(tmp_path / "no-existe.json", avisos) is None and len(avisos) == 2
+
+
+def test_cli_anterior_con_bom_marca_cambios_y_roto_avisa(tmp_path: Path, capsys):
+    fuente = tmp_path / "a.md"
+    salida = tmp_path / "libro.json"
+    fuente.write_text("# Uno\n\nTexto primero.\n", encoding="utf-8")
+    assert main(["construir", str(fuente), "--salida", str(salida)]) == 0
+    salida.write_bytes(b"\xef\xbb\xbf" + salida.read_bytes())  # como lo deja PowerShell con -Encoding utf8
+    fuente.write_text("# Uno\n\nTexto segundo.\n", encoding="utf-8")
+    assert main(["construir", str(fuente), "--salida", str(salida)]) == 0
+    libro = json.loads(salida.read_text(encoding="utf-8"))
+    assert libro["cambios"] == 1 and libro["secciones"][0]["bloques"][0]["anterior"] == "Texto primero."
+    assert capsys.readouterr().err == ""
+    salida.write_text("{ roto", encoding="utf-8")
+    assert main(["construir", str(fuente), "--salida", str(salida)]) == 0
+    assert "aviso: no se pudo leer la salida anterior" in capsys.readouterr().err
+    assert json.loads(salida.read_text(encoding="utf-8"))["cambios"] == 0

@@ -44,3 +44,19 @@ def test_los_rangos_salen_en_unidades_utf16():
     assert texto.index("por eso") == 19 and [a, b] == [20, 27]
     sin = "Un X emoji antes y por eso la capa no se corre."
     assert calcular_capas(sin)["mu"] == [[19, 26]]
+
+
+def test_capas_por_partes_desplaza_los_rangos_en_unidades_utf16():
+    from lector_anotaciones.capas import capas_por_partes
+
+    partes = ["Ítem 😀 primero.", "Por eso el segundo.", "incertidumbre e incertidumbre"]
+    capas = capas_por_partes(partes, ConfigCapas())
+    # el emoji de la primera parte ocupa dos unidades: «Por eso» empieza en 16, no en los 15 puntos de código de Python
+    assert len(partes[0]) == 15 and capas["mu"] == [[16, 23]]
+    pegado = "".join(partes)
+    assert [pegado[a - 1 : b - 1] for a, b in capas["rep"]] == ["incertidumbre", "incertidumbre"]
+    assert capas_por_partes(["Una frase corta."] * 30, ConfigCapas(frase_larga=20)) == {}, (
+        "treinta partes cortas no son una frase larga"
+    )
+    assert capas_por_partes(["Por eso lo digo."]) == calcular_capas("Por eso lo digo.")
+    assert capas_por_partes([]) == {}

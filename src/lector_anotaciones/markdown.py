@@ -153,10 +153,13 @@ def _parse_lineas(lines: list[str], nombre: str, st: _Estado) -> None:
             continue
         if _ITEM_NUMERADO.match(linea):
             items = []
-            while i < len(lines) and _ITEM_NUMERADO.match(lines[i]):
-                items.append(inline(_ITEM_NUMERADO.sub("", lines[i]).strip()))
+            textos = []
+            while i < len(lines) and (m := _ITEM_NUMERADO.match(lines[i])):
+                items.append(inline(lines[i][m.end() :].strip()))
+                # el texto de búsqueda conserva la numeración original, que es lo que imprime el PDF
+                textos.append(m.group(0) + html.unescape(texto_plano(items[-1])))
                 i += 1
-            st.bloque("ol", items, src, " ".join(html.unescape(texto_plano(x)) for x in items))
+            st.bloque("ol", items, src, " ".join(textos))
             continue
         if linea.startswith("|"):
             filas = []

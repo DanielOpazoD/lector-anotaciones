@@ -1,6 +1,24 @@
+import shutil
+from pathlib import Path
+
+import pytest
+
+from lector_anotaciones.construir import construir
 from lector_anotaciones.markdown import parse_texto
-from lector_anotaciones.paginas import asignar_paginas, calcular_desfase, normalizar_pagina, sin_paginas
+from lector_anotaciones.paginas import (
+    asignar_paginas,
+    calcular_desfase,
+    normalizar_pagina,
+    sin_paginas,
+    texto_paginas_pdf,
+)
 from lector_anotaciones.util import norm
+from tests.conftest import FIXTURES
+from tests.pdf_minimo import pdf_de_fuentes
+
+con_poppler = pytest.mark.skipif(
+    not (shutil.which("pdfinfo") and shutil.which("pdftotext")), reason="falta poppler-utils (pdfinfo, pdftotext)"
+)
 
 LIBRO = """[PORTADA]
 Título
@@ -82,3 +100,67 @@ def test_sin_paginas():
     sin_paginas(secciones)
     assert all(b["pagina"] is None for s in secciones for b in s["bloques"])
     assert all(s["pagina"] is None for s in secciones)
+
+
+LISTA_NUMERADA = """# Capítulo 1. Uno
+
+Un párrafo introductorio bastante largo que está en la página uno del PDF.
+
+1. Lavarse las manos
+2. Secarlas bien
+3. Aplicar gel
+
+Otro párrafo largo que sigue en la página dos del PDF, después de la lista.
+"""
+
+
+def test_lista_numerada_de_items_cortos_encuentra_la_pagina_en_que_empieza():
+    secciones = parse_texto(LISTA_NUMERADA)
+    textos = [
+        normalizar_pagina("Un párrafo introductorio bastante largo que está en la página uno del PDF."),
+        normalizar_pagina(
+            "1. Lavarse las manos\n2. Secarlas bien\n3. Aplicar gel\n\nOtro párrafo largo que sigue en la página dos"
+        ),
+    ]
+    asignar_paginas(secciones, textos)
+    lista = secciones[0]["bloques"][1]
+    assert lista["t"] == "ol" and lista["texto"] == "1. Lavarse las manos 2. Secarlas bien 3. Aplicar gel"
+    assert [b["pagina"] for b in secciones[0]["bloques"]] == [1, 2, 2], (
+        "la lista no hereda la página del párrafo anterior"
+    )
+
+
+def test_el_pdf_de_fixture_se_regenera_igual(fixture_md: Path):
+    # tests/fixtures/libro_min.pdf sale de `python -m tests.pdf_minimo tests/fixtures/libro_min.md --salida tests/fixtures/libro_min.pdf`
+    assert pdf_de_fuentes([fixture_md]) == (FIXTURES / "libro_min.pdf").read_bytes()
+
+
+@con_poppler
+def test_texto_paginas_pdf_lee_el_fixture_y_construir_asigna_paginas(fixture_md: Path):
+    pdf = FIXTURES / "libro_min.pdf"
+    textos = texto_paginas_pdf(pdf)
+    assert len(textos) == 8, "portada, legal, prefacio, parte I, dos capítulos 1, interludio y apéndice"
+    assert textos[2].startswith(norm("Prefacio Este es el primer párrafo del prefacio"))
+    libro = construir([fixture_md], pdf=pdf, marca_pagina_1="Prefacio")
+    assert libro["paginas_fisicas"] == 8 and libro["desfase_paginas"] == 2
+    paginas = {b["id"]: b["pagina"] for s in libro["secciones"] for b in s["bloques"]}
+    assert paginas["portada-b1"] is None and paginas["pagina-legal-b1"] is None, "antes del desfase"
+    assert paginas["prefacio-b1"] == 1 and paginas["cap-01-b2"] == 3 and paginas["ap-a-b1"] == 6, "física menos desfase"
+
+
+@con_poppler
+def test_lista_numerada_al_inicio_de_pagina_en_un_pdf_real(tmp_path: Path):
+    # con seis renglones por página, el título y un párrafo de tres renglones llenan la primera página, la lista la segunda
+    parrafo = (
+        "Un párrafo introductorio bastante largo que está en la página uno del PDF y que sigue, con más "
+        "palabras de las necesarias, hasta ocupar tres renglones enteros de la página, para que la lista "
+        "numerada empiece en la página siguiente."
+    )
+    fuente = tmp_path / "a.md"
+    fuente.write_text(LISTA_NUMERADA.replace(LISTA_NUMERADA.split("\n")[2], parrafo), encoding="utf-8")
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(pdf_de_fuentes([fuente], lineas_por_pagina=6))
+    textos = texto_paginas_pdf(pdf)
+    assert textos[1].startswith("1lavarselasmanos2secarlasbien3aplicargel"), "pdftotext conserva la numeración"
+    libro = construir([fuente], pdf=pdf)
+    assert [b["pagina"] for b in libro["secciones"][0]["bloques"]] == [1, 2, 3]

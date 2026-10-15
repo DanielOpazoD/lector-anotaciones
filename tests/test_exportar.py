@@ -143,3 +143,38 @@ def test_orden_por_bloque_y_las_generales_van_a_general():
     md = a_markdown([segundo, primero, general], ahora=AHORA)
     assert md.index("«del bloque dos»") < md.index("«del bloque diez»"), "por número de bloque, no por desplazamiento"
     assert "## General\n\n- [ ] **nota general**: General con sección" in md
+
+
+def test_cargar_tolera_el_bom(tmp_path: Path):
+    ruta = tmp_path / "anotaciones.json"
+    ruta.write_bytes(b"\xef\xbb\xbf" + json.dumps(TODAS).encode("utf-8"))
+    assert cargar(ruta) == TODAS
+
+
+def test_cli_exportar_con_libro_con_bom(tmp_path: Path, capsys):
+    ruta = tmp_path / "anotaciones.json"
+    ruta.write_text(json.dumps(TODAS), encoding="utf-8")
+    libro = tmp_path / "libro.json"
+    libro.write_bytes(b"\xef\xbb\xbf" + json.dumps({"titulo": "Del libro", "secciones": [{"id": "cap-01"}]}).encode())
+    assert main(["exportar", str(ruta), "--libro", str(libro)]) == 0
+    assert capsys.readouterr().out.startswith("# Anotaciones · Del libro")
+
+
+def test_orden_dentro_de_la_seccion_es_el_del_libro_no_el_de_la_pagina():
+    # páginas nula (hecha sin PDF) y obsoleta (PDF remaquetado) mezcladas con vigentes: manda el bloque, como en la página
+    base = dict(SUBRAYADO, inicio=0)
+    anots = [
+        dict(base, id="x9", pid="cap-01-b9", cita="b9", pagina=None),
+        dict(base, id="x2", pid="cap-01-b2", cita="b2", pagina=12),
+        dict(base, id="x5", pid="cap-01-b5", cita="b5", pagina=40),
+        dict(base, id="x6", pid="cap-01-b6", cita="b6", pagina=13),
+        dict(NOTA_PAGINA, id="p2", pagina=14, nota="página catorce"),
+        dict(NOTA_PAGINA, id="p1", pagina=11, nota="página once"),
+        dict(NOTA_SECCION, id="s1", sid="cap-01", sidTitulo="Capítulo 1. Uno", nota="de la sección"),
+    ]
+    md = a_markdown(anots, ahora=AHORA)
+    citas = [linea.split("«")[1].split("»")[0] for linea in md.split("\n") if "«" in linea]
+    assert citas == ["b2", "b5", "b6", "b9"]
+    assert md.index("de la sección") < md.index("página once") < md.index("página catorce") < md.index("«b2»"), (
+        "las notas sin bloque van antes, y las de página ordenadas por página"
+    )

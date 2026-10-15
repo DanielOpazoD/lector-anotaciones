@@ -90,7 +90,7 @@ pytest
 npm install && npx playwright install chromium && npm run test:web   # pruebas de la página
 ```
 
-La integración continua corre ruff y pytest en Python 3.11–3.13, construye el ejemplo y pasa la prueba de humo de la página en Chromium. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
+La integración continua corre ruff y pytest en Python 3.11–3.13 (con `poppler-utils`, para leer un PDF de verdad), construye el ejemplo con un PDF mínimo generado en el propio trabajo y pasa la prueba de humo de la página en Chromium. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Decisiones de diseño
 

@@ -107,6 +107,11 @@ def citas_narrativas(texto: str) -> list[list[int]]:
     return [[m.start(), m.end()] for m in _CITA_NARRATIVA.finditer(texto)]
 
 
+def largo_utf16(texto: str) -> int:
+    """Lo que mide `texto` en unidades UTF-16 (`String.length` en la página)."""
+    return sum(2 if ord(c) >= 0x10000 else 1 for c in texto)
+
+
 def a_utf16(texto: str, rangos: list[list[int]]) -> list[list[int]]:
     """Convierte índices de puntos de código (Python) a unidades UTF-16 (lo que mide `String.length` en la página).
 
@@ -132,6 +137,23 @@ def calcular_capas(texto: str, config: ConfigCapas | None = None) -> dict[str, l
         "cn": citas_narrativas(texto),
     }
     return {k: a_utf16(texto, v) for k, v in capas.items() if v}
+
+
+def capas_por_partes(partes: list[str], config: ConfigCapas | None = None) -> dict[str, list[list[int]]]:
+    """Las capas de un bloque compuesto de varios trozos (los ítems de una lista, las celdas de una tabla).
+
+    Cada parte se analiza por separado, para que el final de un ítem y el comienzo del siguiente no
+    formen una sola palabra ni una sola oración; pero las coordenadas siguen siendo las del texto pegado
+    del bloque (su `textContent`): cada rango se desplaza por el largo acumulado, en unidades UTF-16, de
+    las partes anteriores. Con una sola parte equivale a `calcular_capas`.
+    """
+    capas: dict[str, list[list[int]]] = {}
+    desplazamiento = 0
+    for parte in partes:
+        for clave, rangos in calcular_capas(parte, config).items():
+            capas.setdefault(clave, []).extend([a + desplazamiento, b + desplazamiento] for a, b in rangos)
+        desplazamiento += largo_utf16(parte)
+    return capas
 
 
 def leer_lista(ruta) -> list[str]:
