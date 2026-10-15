@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.4] - 2026-10-15
+
+### Corregido
+
+- Con base compartida, la página nunca volvía a leer lo que había quedado en el navegador (anotado sin conexión en otra sesión, o cuya subida falló): esas anotaciones quedaban invisibles e inexportables. Ahora, tras la primera foto de la base, se recuperan, se muestran y se vuelven a subir; la copia local sólo se retira cuando todas subieron, lo que la base ya tiene manda sobre la copia local, y una copia local de una anotación ajena no se resucita.
+- Tras una subida fallida, la copia local guarda sólo lo que no logró subir, no toda la memoria.
+- En sólo lectura no se intenta subir nada y la copia local no se toca.
+
 ## [0.2.3] - 2026-10-15
 
 ### Corregido

@@ -437,8 +437,11 @@ figure img { cursor: zoom-in; }
     else guardarLocal();
     ofrecerDeshacer(a);
   }
-  function guardarLocal() {
-    if (lsSet(LOCAL_KEY, JSON.stringify(anots))) estado('Guardado sólo en este navegador', true);
+  function guardarLocal(ids) {
+    // Sin lista guarda todo lo que hay en memoria (modo local); con lista, sólo esas anotaciones (lo que no logró subir).
+    var datos = anots;
+    if (ids) { datos = {}; ids.forEach(function (id) { if (anots[id]) datos[id] = anots[id]; }); }
+    if (lsSet(LOCAL_KEY, JSON.stringify(datos))) estado('Guardado sólo en este navegador', true);
     else estado('No se pudo guardar en este navegador (almacenamiento lleno o bloqueado): copia tus anotaciones con el botón antes de cerrar', true);
   }
   function cargarLocal() {
@@ -458,9 +461,11 @@ figure img { cursor: zoom-in; }
         // la clave vieja sólo se retira cuando la copia nueva quedó escrita de verdad; si no, sigue siendo la única copia
         if (guardadas) anteriores.forEach(function (k) { if (k !== LOCAL_KEY) try { localStorage.removeItem(k); } catch (e) {} });
       }
-      Object.keys(j).forEach(function (k) { anots[k] = j[k]; });
-      return { migradas: migradas, guardadas: guardadas };
-    } catch (e) { return { migradas: 0, guardadas: true }; }
+      // Lo que ya está en memoria (recién anotado, o traído de la base) manda sobre la copia local.
+      var nuevas = [];
+      Object.keys(j).forEach(function (k) { if (!anots[k]) { anots[k] = j[k]; nuevas.push(k); } });
+      return { migradas: migradas, guardadas: guardadas, nuevas: nuevas, leidas: Object.keys(j).length };
+    } catch (e) { return { migradas: 0, guardadas: true, nuevas: [], leidas: 0 }; }
   }
 
   // ------------------------------------------------------------ anotaciones: creación
@@ -1171,19 +1176,30 @@ figure img { cursor: zoom-in; }
       var d = r[1];
       USER = r[2] || null;
       var listoUsuario = USER ? Promise.all([USER.id(), USER.can('data.write')]).then(function (u) { ME = u[0] || null; if (u[1] === false) activarSoloLectura(); }).catch(function () {}) : Promise.resolve();
-      listoUsuario.then(function () {
-        if (!col) return;
-        // Lo anotado mientras la base conectaba se guardó sólo en el navegador: ahora va a la base, con su autor.
-        // Si alguna subida falla, la anotación sigue en memoria y en el navegador (es su única copia) y se avisa;
-        // la copia local sólo se retira cuando todas subieron.
-        var subidas = pendientesBase.splice(0).map(function (id) { var a = anots[id]; if (!a || SOLO_LECTURA) return Promise.resolve(true); if (!a.autor && ME) a.autor = ME; return col.doc(id).set(a).then(function () { return true; }).catch(function () { return false; }); });
-        if (subidas.length) Promise.all(subidas).then(function (ok) {
-          var fallidas = ok.filter(function (x) { return !x; }).length;
-          if (!fallidas) { try { localStorage.removeItem(LOCAL_KEY); } catch (e) {} respaldar(); }
-          else { guardarLocal(); estado(fallidas + (fallidas === 1 ? ' anotación hecha antes de conectar no pudo subir a la base; se conserva en este navegador. Usa «Copiar todo» para enviarla.' : ' anotaciones hechas antes de conectar no pudieron subir a la base; se conservan en este navegador. Usa «Copiar todo» para enviarlas.'), true); }
+      listoUsuario.then(function () { renderPanel(); });
+      function subirPendientes() {
+        // Lo anotado mientras la base conectaba, o lo que quedó en el navegador de otra sesión, va a la base con su autor.
+        // Si alguna subida falla, la anotación sigue en memoria y en el navegador (es su única copia), se avisa y se
+        // vuelve a intentar en la próxima carga; la copia local sólo se retira cuando todas subieron.
+        listoUsuario.then(function () {
+          if (!col || SOLO_LECTURA) return;
+          var ajenas = 0;
+          var ids = pendientesBase.splice(0).filter(function (id) {
+            var a = anots[id]; if (!a) return false;
+            // una copia local de una anotación ajena no es nuestra para subirla: sobre ella manda la base
+            if (a.autor && ME && a.autor !== ME) { quitarDeMemoria(id); ajenas++; return false; }
+            if (!a.autor && ME) a.autor = ME;
+            return true;
+          });
+          if (ajenas) { renderPanel(); renderCuentas(); }
+          if (!ids.length) return;
+          Promise.all(ids.map(function (id) { return col.doc(id).set(anots[id]).then(function () { return true; }).catch(function () { return false; }); })).then(function (ok) {
+            var fallidas = ids.filter(function (id, i) { return !ok[i]; });
+            if (!fallidas.length) { try { localStorage.removeItem(LOCAL_KEY); } catch (e) {} respaldar(); }
+            else { guardarLocal(fallidas); estado(fallidas.length + (fallidas.length === 1 ? ' anotación no pudo subir a la base; se conserva en este navegador y volverá a intentarlo al recargar. Usa «Copiar todo» para enviarla.' : ' anotaciones no pudieron subir a la base; se conservan en este navegador y volverán a intentarlo al recargar. Usa «Copiar todo» para enviarlas.'), true); }
+          });
         });
-        renderPanel();
-      });
+      }
       if (!d) {
         modo = 'local'; var mig = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
         var aviso = 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
@@ -1193,6 +1209,7 @@ figure img { cursor: zoom-in; }
         return;
       }
       db = d; col = db.collection('anotaciones'); modo = 'db';
+      var primeraFoto = true;
       col.onSnapshot(function (snap) {
         var cambio = false;
         snap.docChanges().forEach(function (ch) {
@@ -1200,6 +1217,16 @@ figure img { cursor: zoom-in; }
           if (ch.type === 'removed') { if (anots[ch.doc.id]) { delete anots[ch.doc.id]; cambio = true; } }
           else if (d2) { var nuevo = Object.assign({}, d2, { id: ch.doc.id }); if (!igual(anots[ch.doc.id], nuevo)) { anots[ch.doc.id] = nuevo; cambio = true; } }
         });
+        if (primeraFoto) {
+          primeraFoto = false;
+          // Lo que quedó sólo en el navegador en otra sesión (anotado sin conexión, o cuya subida falló) vuelve a la
+          // memoria y a la cola de subida; lo que la base ya tiene manda y no se vuelve a subir.
+          var rec = cargarLocal();
+          rec.nuevas.forEach(function (id) { if (pendientesBase.indexOf(id) < 0) pendientesBase.push(id); });
+          if (rec.nuevas.length) cambio = true;
+          if (rec.leidas && !pendientesBase.length) { try { localStorage.removeItem(LOCAL_KEY); } catch (e) {} }
+          subirPendientes();
+        }
         if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
         if (!snap.metadata.fromCache) estado('Conectado · ' + Object.keys(anots).length + ' anotaciones');
       }, function (e) { estado('La base dejó de responder (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });

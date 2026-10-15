@@ -47,7 +47,7 @@ Es el archivo que `lector-anotaciones construir` produce y que `web/index.html` 
 | `paginas_fisicas` | Páginas del PDF, o `null` si se construyó sin PDF. |
 | `desfase_paginas` | Páginas físicas anteriores a la página impresa 1 (portada, legal, índice…). |
 | `inicio` | Sección que la página abre la primera vez: la primera de nivel 2, o la primera que haya. |
-| `claves_anteriores` | Claves de `localStorage` que usaron versiones anteriores de la página para este libro (`--claves-anteriores`). Al cargar sin base compartida, la página copia esas anotaciones a la clave actual sin pisar las existentes y retira la clave vieja. |
+| `claves_anteriores` | Claves de `localStorage` que usaron versiones anteriores de la página para este libro (`--claves-anteriores`). Al cargar, la página copia esas anotaciones a la clave actual sin pisar las existentes y retira la clave vieja; con base compartida, además las sube. |
 | `anterior_generado`, `cambios` | Fecha de la salida con que se comparó (por defecto, la propia salida si ya existía; `--anterior` para otra, `--sin-anterior` para no comparar) y cuántos bloques cambiaron. |
 | `capas` | Las capas editoriales calculadas, clave → nombre que muestra el menú «Capas». Vacío con `--sin-capas`. |
 

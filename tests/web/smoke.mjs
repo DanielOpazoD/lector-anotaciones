@@ -606,6 +606,34 @@ try {
   const conservada = await pt2.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado') }));
   check(conservada.marca && conservada.local && !conservada.enBase, 'una pendiente que no pudo subir sigue en memoria y en el navegador, y la barra lo dice');
   await ctxTarde2.close();
+  // lo que quedó en el navegador en otra sesión (sin conexión, o con subida fallida) se recupera al conectar:
+  // sube lo que la base no tiene; en lo que la base ya tenía, manda la base
+  const ctxRecarga = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxRecarga.addInitScript(() => { window.__semilla = { vieja: { id: 'vieja', tipo: 'general', nota: 'Versión de la base', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', editado: '2026-10-03T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxRecarga.addInitScript(conBase);
+  await ctxRecarga.addInitScript((clave) => {
+    localStorage.setItem(clave, JSON.stringify({
+      huerfana: { id: 'huerfana', tipo: 'general', nota: 'Quedó sólo en el navegador', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', editado: '2026-10-02T00:00:00.000Z' },
+      vieja: { id: 'vieja', tipo: 'general', nota: 'Copia local atrasada', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', editado: '2026-10-02T00:00:00.000Z', autor: 'u_me' },
+      ajena: { id: 'ajena', tipo: 'general', nota: 'De otra lectora, ya borrada en la base', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', editado: '2026-10-02T00:00:00.000Z', autor: 'u_otro' },
+    }));
+  }, guardado.clave);
+  const pr = await ctxRecarga.newPage();
+  await pr.goto(base);
+  await pr.waitForFunction(() => window.__docs && window.__docs.huerfana && window.__docs.huerfana.autor === 'u_me', null, { timeout: 10000 });
+  check(true, 'una anotación que quedó en el navegador en otra sesión sube a la base al conectar, con su autor');
+  await pr.waitForFunction((clave) => localStorage.getItem(clave) === null, guardado.clave, { timeout: 10000 });
+  await pr.click('.tab[data-tab="todas"]');
+  const recuperada = await pr.evaluate(() => ({
+    ficha: !!document.querySelector('.ficha[data-id="huerfana"]'),
+    vieja: (document.querySelector('.ficha[data-id="vieja"] textarea') || {}).value || '',
+    viejaEnBase: window.__docs.vieja.nota,
+    ajena: !!document.querySelector('.ficha[data-id="ajena"]') || !!window.__docs.ajena,
+  }));
+  check(recuperada.ficha, 'y aparece en el panel; la copia del navegador se retira una vez subida');
+  check(recuperada.vieja === 'Versión de la base' && recuperada.viejaEnBase === 'Versión de la base', 'una copia local atrasada de algo que la base ya tiene no pisa la versión de la base');
+  check(!recuperada.ajena, 'una copia local de una anotación ajena no se resucita ni se sube');
+  await ctxRecarga.close();
 
   // ---------------------------------------------------------------- sólo lectura de verdad
   const ctxSL = await browser.newContext({ viewport: { width: 1280, height: 900 } });
