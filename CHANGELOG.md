@@ -2,6 +2,22 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.4.0] - 2026-10-15
+
+### Añadido
+
+- **Bandeja «Por revisar».** Una pestaña con las respuestas de quien edita llegadas después de la última revisión del autor (campo nuevo `revisado`), con cuenta en la pestaña y en el botón del panel, y aviso al abrir. Se resuelven con el teclado: A atendida (resuelta y revisada, y a la siguiente), R reabrir (con el cursor en la nota o en la réplica), V ver el cambio; contestar una pregunta también la revisa. Llegar a una respuesta cuyo pasaje cambió lleva a él con el antes y el después abiertos. Lo revisado sigue a la vista hasta salir de la pestaña.
+- **Notas al margen (escritorio).** En la pestaña «Sección», cada ficha a la altura de su pasaje, sin encimarse (la activa manda y empuja a las demás), y acompañando al texto al desplazarlo; la activa queda siempre a la vista. «Al margen» lo apaga y se recuerda.
+- **Fichas compactas.** En reposo la nota se lee como texto, sin marco ni botones, y la cita y la respuesta se recortan; al tocarla se activa con el cursor donde se tocó.
+- **Recorrer las anotaciones.** `.` y `,` (o ‹ ›, con «n de N») pasan a la siguiente o a la anterior en el orden del libro, con los filtros puestos, cambiando de sección.
+- «+ Nota» reúne las notas de sección, de página y generales.
+- La exportación y «Copiar» señalan una respuesta atendida o descartada que el autor reabrió: «Reabierta por el autor (fecha) tras la respuesta».
+
+### Corregido
+
+- En un párrafo con dos o más subrayados, el clic en cualquiera abría la ficha del último.
+- Un clic que empieza en una ficha ya no la cierra si se suelta fuera de ella.
+
 ## [0.3.0] - 2026-10-15
 
 ### Añadido

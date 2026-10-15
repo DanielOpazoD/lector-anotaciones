@@ -19,10 +19,12 @@ fuentes/*.md  ──construir──▶  libro.json  ──▶  web/index.html  �
 Lo que la página añade a la lectura:
 
 - **Respuesta en cada ficha.** Quien vuelca una anotación a las fuentes la cierra como atendida (con el commit), descartada (con el motivo) o pregunta; la respuesta se ve bajo la nota y, si es una pregunta, aparece un cuadro para replicar. Filtros «con respuesta» y «preguntas».
+- **Bandeja «Por revisar».** Las respuestas nuevas desde la última visita, con su cuenta en la pestaña, en el orden del libro: A las da por atendidas y pasa a la siguiente, R las reabre con el cursor en la nota, V muestra el antes y el después del pasaje; contestar una pregunta también la revisa. Lo revisado queda a la vista, marcado, hasta salir de la pestaña.
+- **Notas al margen.** En pantalla ancha, las fichas de la sección van junto a su pasaje, a su altura y sin encimarse, y acompañan al texto al desplazarlo, como los comentarios de un procesador de texto; «Al margen» vuelve a la lista. Cada ficha es compacta (la nota se lee como texto y se edita al tocarla), y `.` y `,` (o ‹ ›) recorren las anotaciones en orden, de una sección a otra.
 - **Qué cambió.** Cada bloque lleva una huella; tras reconstruir, los bloques cambiados se marcan al margen y muestran la diferencia palabra por palabra con la versión anterior. Los bloques cambiados desde la última lectura también se marcan, y una ficha avisa si su bloque cambió desde que se anotó.
 - **Capas editoriales.** Frases largas, muletillas, términos retirados, repeticiones cercanas y citas narrativas, calculadas al construir y activables desde el menú «Capas», con el recuento por sección.
 - **Lectores con identidad.** Cada anotación guarda el id de quien la hizo (capacidad `user` de claude.ai); con varios lectores, las fichas llevan el nombre y el panel filtra por lector.
-- **Progreso y concentración.** Casilla «Leída» por sección, barra de avance por parte en el índice, modo concentración sin índice ni panel, y atajos: 1 a 4 subrayan, N subraya con nota, C copia la selección, J/K cambian de sección, L marca leída, F concentración, ? ayuda.
+- **Progreso y concentración.** Casilla «Leída» por sección, barra de avance por parte en el índice, modo concentración sin índice ni panel, y atajos: 1 a 4 subrayan, N subraya con nota, C copia la selección, `.`/`,` anotación siguiente o anterior, J/K cambian de sección, L marca leída, F concentración, ? ayuda.
 - **Biblioteca.** Además del libro que trae la página, importa otros (Markdown o texto, HTML, EPUB, Word `.docx` o un `libro.json`) y los guarda en la biblioteca compartida de la página o sólo en el navegador; reemplazar un libro por una versión nueva conserva y reubica sus anotaciones; cada libro se descarga como Markdown o `libro.json`. Una página publicada sin `libro.json` es una biblioteca vacía lista para importar.
 - **Anotar sin estorbos.** Un clic fuera de la ficha (en el texto) sale de ella; Esc o Ctrl+Enter en una nota la guarda y devuelve el foco al pasaje. En el teléfono, el panel es una hoja que sube desde abajo y deja ver el pasaje anotado; índice y panel se cierran tocando fuera o con «×»; la barra de subrayado va abajo con botones grandes.
 - **Accesible.** Navegable con teclado (pestañas con flechas, «Saltar al texto», diálogos modales que devuelven el foco), anunciado a lectores de pantalla (estado, pestañas, filtros y colores con su estado; la categoría escrita en cada ficha, no sólo su color), áreas táctiles de 40 px, compatible con alto contraste del sistema y movimiento reducido. «Aa» ajusta el tamaño del texto, el tema (claro, oscuro o el del sistema) y la letra (con o sin serifa).
@@ -83,7 +85,8 @@ src/lector_anotaciones/   paquete Python
     plantilla.html        el documento, con las marcas {{ESTILOS}}, {{NUCLEO}} y {{PAGINA}}
     estilos.css
     nucleo/*.js           lógica pura, sin DOM: texto, diferencias, ubicar subrayados, borradores,
-                          Markdown, armar y sanear libros, ZIP e importadores (probada con node --test)
+                          qué queda por revisar, apilar fichas al margen, Markdown, armar y sanear
+                          libros, ZIP e importadores (probada con node --test)
     pagina/*.js           la interfaz, en fragmentos que se concatenan por orden de nombre
 web/index.html            la página empaquetada (generada; la CI comprueba que esté al día)
 tests/                    pytest (paquete, paridad Python/JS), tests/js (núcleo), tests/web (Playwright),
