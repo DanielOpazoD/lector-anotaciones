@@ -84,5 +84,10 @@ jobs:
         run: node --test 'tests/js/**/*.test.js'
       - run: lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
       - run: npx playwright install --with-deps chromium
-      - run: node tests/web/smoke.mjs
-      - run: node tests/web/biblioteca.mjs
+      # tests/web/*.spec.mjs en paralelo; ante un fallo, el informe con capturas queda como artefacto
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-navegador
+          path: test-results/

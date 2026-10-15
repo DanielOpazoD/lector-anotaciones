@@ -3,26 +3,23 @@
 // página sin libro propio; la biblioteca compartida en una base simulada (troceo y lectura de vuelta); y un libro.json
 // malicioso que no debe ejecutar nada.
 //
-// Uso: node tests/web/biblioteca.mjs   (antes: construir el ejemplo, ver tests/web/smoke.mjs)
-// Variables: LIBRO_JSON, CHROMIUM.
+// Uso: npx playwright test biblioteca (antes: construir el ejemplo, ver tests/web/ayudas.mjs)
+// Variables: LIBRO_JSON, CHROMIUM, LISTAR=1.
 
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium } from 'playwright';
+import { test, expect } from '@playwright/test';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LIBRO = process.env.LIBRO_JSON || path.join(RAIZ, 'ejemplo', 'salida', 'libro.json');
 const MUESTRAS = path.join(RAIZ, 'tests', 'fixtures');
 const FIGS = process.env.FIGS_DIR || path.join(RAIZ, 'ejemplo', 'figs');
-if (!fs.existsSync(LIBRO)) {
-  console.error(`No existe ${LIBRO}. Construye el ejemplo primero.`);
-  process.exit(2);
-}
 
 function servir() {
+  if (!fs.existsSync(LIBRO)) throw new Error(`No existe ${LIBRO}. Construye el ejemplo primero.`);
   return new Promise((resolve) => {
     const srv = http.createServer((req, res) => {
       const ruta = new URL(req.url, 'http://x').pathname;
@@ -52,13 +49,10 @@ function servir() {
   });
 }
 
-let fallas = 0;
+// Una comprobación que no detiene la prueba (ver check en ayudas.mjs).
 function check(cond, msg) {
-  if (cond) console.log(`ok   ${msg}`);
-  else {
-    fallas++;
-    console.log(`FALLA ${msg}`);
-  }
+  if (process.env.LISTAR) console.log(`${cond ? 'ok   ' : 'FALLA'} ${msg}`);
+  expect.soft(!!cond, msg).toBe(true);
 }
 async function esperar(page, fn, arg = null, plazo = 6000) {
   try {
@@ -210,12 +204,18 @@ async function seleccionarTexto(page, texto) {
 }
 const fixture = (n) => path.join(MUESTRAS, n);
 
-const srv = await servir();
-const base = `http://127.0.0.1:${srv.address().port}/`;
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
-const tmp = fs.mkdtempSync(path.join(RAIZ, 'tests', 'web', '.tmp-'));
-try {
-  // ---------------------------------------------------------------- sin base: importar EPUB, anotarlo, volver al libro de la página
+let srv, base, tmp;
+test.beforeAll(async () => {
+  srv = await servir();
+  base = `http://127.0.0.1:${srv.address().port}/`;
+  tmp = fs.mkdtempSync(path.join(RAIZ, 'tests', 'web', '.tmp-'));
+});
+test.afterAll(() => {
+  fs.rmSync(tmp, { recursive: true, force: true });
+  srv.close();
+});
+
+test('Sin base: importar EPUB, anotarlo, volver al libro de la página', async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   await ctx.addInitScript(sinBase);
   const page = await ctx.newPage();
@@ -476,8 +476,9 @@ try {
   );
   check(errores.length === 0, `sin errores de consola${errores.length ? ': ' + errores.join(' | ') : ''}`);
   await ctx.close();
+});
 
-  // ---------------------------------------------------------------- el libro elegido ya no está: aviso que no se pisa
+test('El libro elegido ya no está: aviso que no se pisa', async ({ browser }) => {
   const ctxA = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxA.addInitScript(sinBase);
   await ctxA.addInitScript(() => {
@@ -500,8 +501,9 @@ try {
     `si el libro elegido ya no está, se abre el de la página con un aviso que no se pisa y la elección se olvida (${aviso.texto.slice(0, 70)})`
   );
   await ctxA.close();
+});
 
-  // ---------------------------------------------------------------- una página sin libro propio
+test('Una página sin libro propio', async ({ browser }) => {
   const ctxV = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxV.addInitScript(sinBase);
   const pv = await ctxV.newPage();
@@ -520,8 +522,9 @@ try {
     'e importar un libro lo abre'
   );
   await ctxV.close();
+});
 
-  // ---------------------------------------------------------------- biblioteca compartida (base simulada)
+test('Biblioteca compartida (base simulada)', async ({ browser }) => {
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxB.addInitScript(conBase);
   const pb = await ctxB.newPage();
@@ -663,10 +666,4 @@ try {
   await pb.evaluate(() => sessionStorage.removeItem('__fallaLista'));
   check(erroresB.length === 0, `sin errores de consola con base${erroresB.length ? ': ' + erroresB.join(' | ') : ''}`);
   await ctxB.close();
-} finally {
-  fs.rmSync(tmp, { recursive: true, force: true });
-  await browser.close();
-  srv.close();
-}
-console.log(fallas ? `\n${fallas} comprobaciones fallaron` : '\nTodo en orden');
-process.exit(fallas ? 1 : 0);
+});

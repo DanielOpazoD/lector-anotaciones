@@ -22,7 +22,7 @@ Lo que se hace, en qué orden, y cómo se sabe que quedó hecho. Se actualiza al
 | | Etapa | Estado |
 |---|---|---|
 | E1 | Formato (Prettier) y CSS por capas (`@layer`) | hecho: estilos calculados iguales en 14 estados salvo dos casos revisados |
-| E6 | Pruebas de navegador en archivos `.spec` de `@playwright/test`, en paralelo | pendiente |
+| E6 | Pruebas de navegador en archivos `.spec` de `@playwright/test`, en paralelo | hecho: 27 pruebas, las mismas 290 comprobaciones, ~40 s en vez de ~105 s |
 | E2 | Sincronizador en el núcleo: decisiones de guardado puras, con base simulada en `node --test` | pendiente |
 | E3 | Almacén de estado de la vista con suscripciones y redibujo agrupado por cuadro | pendiente |
 | E4 | Fichas por id: el panel reutiliza las fichas que no cambiaron | pendiente |

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test:js": "node --test 'tests/js/**/*.test.js'",
-    "test:web": "node tests/web/smoke.mjs && node tests/web/biblioteca.mjs",
+    "test:web": "playwright test",
     "formato": "prettier --check 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js'",
     "formatear": "prettier --write 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js'",
     "estilos": "node tests/web/herramientas/comparar-estilos.mjs"
