@@ -7,7 +7,9 @@
       var L = r.libro;
       if (!L || !L.secciones || !L.secciones.length) throw new Error('el libro no tiene secciones');
       FUENTE = r.fuente; LIBRO = L; SECS = L.secciones;
-      LOCAL_KEY = 'lector-anotaciones:' + (L.id || 'libro');
+      // el libro de la página conserva su clave de siempre ('lector-anotaciones:' + (L.id || 'libro')); uno importado
+      // lleva su lugar en la clave (claveLocalDe)
+      LOCAL_KEY = claveLocalDe(FUENTE.tipo, FUENTE.tipo === 'pagina' ? L.id : FUENTE.id);
       document.title = 'Lector · ' + L.titulo;
       VISTO = lsJSON(LOCAL_KEY + ':visto'); LEIDAS = lsJSON(LOCAL_KEY + ':leidas'); CAPAS_ON = lsJSON(LOCAL_KEY + ':capas');
       renderLibro(); renderCapasMenu(); renderProgreso();
@@ -16,7 +18,10 @@
       var h = (location.hash || '').replace('#', ''), ultima = lsGet(LOCAL_KEY + ':ultima');
       irA(SEC_BY_ID[h] ? h : (SEC_BY_ID[ultima] ? ultima : (SEC_BY_ID[L.inicio] ? L.inicio : SECS[0].id)));
       pintarTodo(); renderPanel(); renderCuentas();
-      if (r.aviso) estado(r.aviso, true); else estado('Conectando con la base de anotaciones…');
+      // un aviso del arranque (el libro elegido no se pudo abrir) queda a la vista hasta que se cierre: la barra de estado
+      // lo pisaría con «Conectado…»
+      if (r.aviso) { $('span', $('#aviso-libro')).textContent = r.aviso; $('#aviso-libro').hidden = false; anunciar(r.aviso); }
+      estado('Conectando con la base de anotaciones…');
     });
     libroListo.catch(function (e) {
       if (e && e.sinLibro) { mostrarSinLibro(); return; }

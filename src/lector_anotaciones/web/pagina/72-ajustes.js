@@ -1,7 +1,8 @@
   // ------------------------------------------------------------ ajustes de lectura
   // Tamaño del texto, tema y tipografía. Son de este navegador y valen para todos los libros. El tema elegido va en su
   // propio atributo (data-tema-lector) para no pisar el data-theme que pueda poner la página anfitriona.
-  var AJUSTES_KEY = 'lector-anotaciones:ajustes', ESCALAS = [0.85, 0.92, 1, 1.1, 1.2, 1.32, 1.45];
+  // fuera del espacio de claves de los libros («lector-anotaciones:<id>»): un libro con id «ajustes» no lo pisa
+  var AJUSTES_KEY = 'lector-anotaciones.ajustes', ESCALAS = [0.85, 0.92, 1, 1.1, 1.2, 1.32, 1.45];
   var ajustes = (function () { try { return JSON.parse(lsGet(AJUSTES_KEY) || '{}') || {}; } catch (e) { return {}; } })();
   function aplicarAjustes() {
     var raiz = document.documentElement, i = ESCALAS.indexOf(ajustes.escala);

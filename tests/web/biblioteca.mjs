@@ -47,14 +47,22 @@ const conBase = () => {
   const snap = (n, cambios) => ({ metadata: { fromCache: false }, docChanges: () => cambios.map((c) => ({ type: c.type, doc: { id: c.id, data: () => coleccion(n)[c.id] } })) });
   const emitir = (n, cambios) => (oyentes[n] || []).forEach((cb) => cb(snap(n, cambios)));
   window.__escrituras = [];
+  // sessionStorage.__fallos = { "<regex sobre colección/doc>": { code, veces, demora } }: esas escrituras fallan
+  const fallo = (ruta) => {
+    const fs = JSON.parse(sessionStorage.getItem('__fallos') || '{}');
+    for (const k of Object.keys(fs)) {
+      if (fs[k].veces > 0 && new RegExp(k).test(ruta)) { fs[k].veces--; sessionStorage.setItem('__fallos', JSON.stringify(fs)); return fs[k]; }
+    }
+    return null;
+  };
   const db = {
     collection: (n) => ({
       doc: (id) => ({
         get: () => Promise.resolve(snapDoc(n, id)),
-        set: (data) => { window.__escrituras.push(n + '/' + id); const ex = !!coleccion(n)[id]; coleccion(n)[id] = JSON.parse(JSON.stringify(data)); persistir(); setTimeout(() => emitir(n, [{ type: ex ? 'modified' : 'added', id }]), 20); return Promise.resolve(); },
+        set: (data) => { const f = fallo(n + '/' + id); if (f) return new Promise((_, rej) => setTimeout(() => rej({ code: f.code, message: 'simulado' }), f.demora || 0)); window.__escrituras.push(n + '/' + id); const ex = !!coleccion(n)[id]; coleccion(n)[id] = JSON.parse(JSON.stringify(data)); persistir(); setTimeout(() => emitir(n, [{ type: ex ? 'modified' : 'added', id }]), 20); return Promise.resolve(); },
         delete: () => { delete coleccion(n)[id]; persistir(); setTimeout(() => emitir(n, [{ type: 'removed', id }]), 20); return Promise.resolve(); },
       }),
-      get: () => Promise.resolve({ docs: Object.keys(coleccion(n)).map((id) => snapDoc(n, id)) }),
+      get: () => (sessionStorage.getItem('__fallaLista') && n === 'libros' ? Promise.reject({ code: 'unavailable', message: 'simulado' }) : Promise.resolve({ docs: Object.keys(coleccion(n)).map((id) => snapDoc(n, id)) })),
       onSnapshot: (cb) => { (oyentes[n] = oyentes[n] || []).push(cb); cb(snap(n, Object.keys(coleccion(n)).map((id) => ({ type: 'added', id })))); return () => {}; },
     }),
   };
@@ -126,8 +134,10 @@ try {
   check(await seleccionarTexto(page, 'Un hecho es lo que se'), 'se puede seleccionar texto del libro importado');
   await page.keyboard.press('3');
   await page.waitForSelector('mark.hl.c-duda');
-  const claveEpub = await page.evaluate(() => Object.keys(localStorage).find((k) => k === 'lector-anotaciones:libro-de-muestra-epub'));
-  check(!!claveEpub && /Un hecho es lo que se/.test(await page.evaluate((k) => localStorage.getItem(k), claveEpub)), 'su anotación se guarda con la clave de ese libro');
+  const claveEpub = await page.evaluate(() => Object.keys(localStorage).find((k) => k === 'lector-anotaciones:local:libro-de-muestra-epub'));
+  check(!!claveEpub && /Un hecho es lo que se/.test(await page.evaluate((k) => localStorage.getItem(k), claveEpub)), 'su anotación se guarda con la clave de ese libro, que lleva su lugar (local:)');
+  const eleccion = await page.evaluate(() => Object.keys(localStorage).filter((k) => /abierto/.test(k)));
+  check(eleccion.length === 1 && /^lector-anotaciones\.abierto:\//.test(eleccion[0]), `la elección del libro abierto vive fuera de las claves de los libros (${eleccion.join(', ')})`);
   await page.reload();
   await page.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   check(/Libro de muestra EPUB/.test(await page.$eval('#sub', (s) => s.textContent)) && (await page.$$('mark.hl.c-duda')).length === 1, 'al recargar sigue abierto el libro importado, con su anotación');
@@ -188,6 +198,15 @@ try {
   await page.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   const xss = await page.evaluate(() => ({ xss: window.__xss, img: document.querySelectorAll('article img[onerror], article [onclick]').length, fuerte: !!Array.from(document.querySelectorAll('article strong')).find((s) => s.textContent === 'fuerte') }));
   check(xss.xss === undefined && xss.img === 0 && xss.fuerte, `un libro.json importado no ejecuta nada: se queda su texto y su negrita (${JSON.stringify(xss)})`);
+  const idMalo = path.join(tmp, 'id-malo.json');
+  const L2 = JSON.parse(fs.readFileSync(LIBRO, 'utf8'));
+  L2.secciones[1].id = 'x"]'; L2.secciones[1].bloques.forEach((b, i) => { b.id = 'x"]-b' + (i + 1); });
+  fs.writeFileSync(idMalo, JSON.stringify(L2));
+  await abrirBiblioteca(page);
+  await page.setInputFiles('#bib-archivo', [idMalo]);
+  await esperar(page, () => /No se pudo/.test(document.querySelector('#bib-estado').textContent));
+  check(/caracteres no admitidos/.test(await page.$eval('#bib-estado', (e) => e.textContent)), 'un libro.json con ids que romperían la página se rechaza al importarlo');
+  await page.keyboard.press('Escape');
   // borrar el libro abierto vuelve al de la página
   await abrirBiblioteca(page);
   await page.click('#bib-lista .bib-libro.abierto button:has-text("Borrar")');
@@ -198,6 +217,18 @@ try {
   check(/Libro de ejemplo/.test(await page.$eval('#sub', (s) => s.textContent)) && !trasBorrar.includes('Libro malicioso'), `borrar el libro abierto lo quita y vuelve al de la página (${trasBorrar.join(' · ')})`);
   check(errores.length === 0, `sin errores de consola${errores.length ? ': ' + errores.join(' | ') : ''}`);
   await ctx.close();
+
+  // ---------------------------------------------------------------- el libro elegido ya no está: aviso que no se pisa
+  const ctxA = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxA.addInitScript(sinBase);
+  await ctxA.addInitScript(() => { if (!sessionStorage.getItem('__hecho')) { sessionStorage.setItem('__hecho', '1'); localStorage.setItem('lector-anotaciones.abierto:/', 'local:no-existe'); } });
+  const pa = await ctxA.newPage();
+  await pa.goto(base);
+  await pa.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pa.waitForTimeout(1200);
+  const aviso = await pa.evaluate(() => ({ visible: !document.querySelector('#aviso-libro').hidden, texto: document.querySelector('#aviso-libro').textContent, eleccion: localStorage.getItem('lector-anotaciones.abierto:/') }));
+  check(aviso.visible && /ya no está/.test(aviso.texto) && aviso.eleccion === '', `si el libro elegido ya no está, se abre el de la página con un aviso que no se pisa y la elección se olvida (${aviso.texto.slice(0, 70)})`);
+  await ctxA.close();
 
   // ---------------------------------------------------------------- una página sin libro propio
   const ctxV = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -237,6 +268,46 @@ try {
   await pb.keyboard.press('1');
   await esperar(pb, () => Object.keys(window.__cols['libros/libro-largo/anotaciones'] || {}).length === 1);
   check((await pb.evaluate(() => Object.keys(window.__cols['libros/libro-largo/anotaciones'] || {}).length)) === 1 && (await pb.evaluate(() => Object.keys(window.__cols.anotaciones || {}).length)) === 0, 'las anotaciones del libro compartido van a su propia colección');
+  // un reemplazo que falla a mitad no mezcla versiones: el libro sigue siendo el anterior, entero
+  const fichaAntes = await pb.evaluate(() => JSON.parse(JSON.stringify(window.__cols.libros['libro-largo'])));
+  await pb.evaluate(() => sessionStorage.setItem('__fallos', JSON.stringify({ '^libros/libro-largo/partes/.*-3$': { code: 'quota_exceeded', veces: 1 } })));
+  fs.writeFileSync(largo, texto.replace(/Párrafo/g, 'Parágrafo'));
+  await abrirBiblioteca(pb);
+  await pb.setInputFiles('#bib-archivo', [largo]);
+  await pb.waitForSelector('#bib-previa:not([hidden])');
+  await pb.click('#bib-importar');
+  await esperar(pb, () => /No se pudo guardar/.test(document.querySelector('#bib-estado').textContent), null, 10000);
+  const trasFallo = await pb.evaluate((v) => ({ estado: document.querySelector('#bib-estado').textContent, ficha: window.__cols.libros['libro-largo'], partes: Object.keys(window.__cols['libros/libro-largo/partes']).filter((k) => k.indexOf(v + '-') === 0).length, sueltas: Object.keys(window.__cols['libros/libro-largo/partes']).filter((k) => k.indexOf(v + '-') !== 0).length }), fichaAntes.version);
+  check(/quota_exceeded/.test(trasFallo.estado) && trasFallo.ficha.version === fichaAntes.version && trasFallo.partes === fichaAntes.partes && trasFallo.sueltas === 0, `un reemplazo que falla deja la ficha y las partes de la versión anterior, sin partes nuevas sueltas (${JSON.stringify({ partes: trasFallo.partes, sueltas: trasFallo.sueltas })})`);
+  await pb.keyboard.press('Escape');
+  await pb.reload();
+  await pb.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const intacto = await pb.evaluate(() => ({ viejo: document.querySelectorAll('[data-pid]').length > 0 && /Párrafo 0 del capítulo/.test(document.querySelector('#lectura').textContent + Array.from(document.querySelectorAll('article')).map((a) => a.textContent).join('')), nuevo: Array.from(document.querySelectorAll('article')).some((a) => /Parágrafo/.test(a.textContent)) }));
+  check(intacto.viejo && !intacto.nuevo, 'y al reabrirlo se lee la versión anterior completa');
+  // una escritura en vuelo (lenta y rechazada) al cambiar de libro no se pierde
+  await pb.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await pb.evaluate(() => sessionStorage.setItem('__fallos', JSON.stringify({ '^libros/libro-largo/anotaciones/': { code: 'unavailable', veces: 2, demora: 1200 } })));
+  await pb.click('nav a.sec:has-text("Parte 5")');
+  await seleccionarTexto(pb, 'Párrafo 9 del capítulo 5');
+  await pb.keyboard.press('2');
+  await abrirBiblioteca(pb);
+  await Promise.all([pb.waitForEvent('load', { timeout: 15000 }), pb.click('#bib-lista .bib-libro:not(.abierto) button:has-text("Abrir")')]);
+  await pb.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const copia = await pb.evaluate(() => localStorage.getItem('lector-anotaciones:base:libro-largo') || '');
+  check(/Párrafo 9 del capítulo 5/.test(copia), 'una anotación cuya escritura seguía en vuelo al cambiar de libro queda en la copia del navegador');
+  await abrirBiblioteca(pb);
+  await Promise.all([pb.waitForEvent('load', { timeout: 15000 }), pb.click('#bib-lista .bib-libro:has-text("Libro largo") button:has-text("Abrir")')]);
+  await pb.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const subida = await esperar(pb, () => Object.values(window.__cols['libros/libro-largo/anotaciones'] || {}).some((a) => /Párrafo 9 del capítulo 5/.test(a.cita)), null, 6000);
+  check(subida, 'y al volver a ese libro sube a la base');
+  // si la lista compartida no se puede leer, no se ofrece guardar en ella
+  await pb.evaluate(() => sessionStorage.setItem('__fallaLista', '1'));
+  await abrirBiblioteca(pb);
+  await pb.setInputFiles('#bib-archivo', [fixture('ejemplo.epub')]);
+  await pb.waitForSelector('#bib-previa:not([hidden])');
+  const sinLista = await pb.evaluate(() => ({ intro: document.querySelector('#bib-intro').textContent, base: document.querySelector('input[name="bib-donde"][value="base"]').disabled }));
+  check(/No se pudo leer la biblioteca compartida/.test(sinLista.intro) && sinLista.base, 'si la lista compartida no se puede leer, la importación sólo se ofrece en este navegador');
+  await pb.evaluate(() => sessionStorage.removeItem('__fallaLista'));
   check(erroresB.length === 0, `sin errores de consola con base${erroresB.length ? ': ' + erroresB.join(' | ') : ''}`);
   await ctxB.close();
 } finally {

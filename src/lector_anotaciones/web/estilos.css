@@ -61,7 +61,9 @@ section.lectura:focus { outline: none; }
   .bloque.flash { outline: 2px solid var(--hl-duda-ink); outline-offset: 4px; }
 }
 
-#app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+#app { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; }
+header.barra { grid-row: 1; } #aviso-libro { grid-row: 2; } main.mesa { grid-row: 3; }  /* filas fijas: el aviso escondido deja la suya vacía */
+.aviso-libro { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 16px; background: var(--hl-revisar); color: var(--fg); font-size: 13px; border-bottom: 1px solid var(--line); }
 header.barra {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));

@@ -5,9 +5,11 @@
   // libros/<id>/anotaciones (o en el navegador, si el libro es sólo de este navegador). Cada carga de la página atiende
   // un libro: abrir otro recuerda la elección y recarga, para que nada de un libro (escrituras en curso, borradores, la
   // cola de pendientes) se cruce con el otro.
-  var ABIERTO_KEY = 'lector-anotaciones:libro-abierto';  // '' = el de la página; 'base:<id>' o 'local:<id>'
+  // La elección del libro abierto vive fuera del espacio de claves de los libros («lector-anotaciones:<id>…»), y por
+  // ruta de la página: varias páginas en un mismo sitio no se pisan la elección.
+  var ABIERTO_KEY = 'lector-anotaciones.abierto:' + location.pathname;  // '' = el de la página; 'base:<id>' o 'local:<id>'
   var FUENTE = { tipo: 'pagina', id: null };
-  var PARTE_MAX = 180 * 1024;
+  var PARTE_MAX = 180 * 1024, PARTES_MAX = 2000;
   var usoDb = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
   var usoUser = window.claude && window.claude.use ? window.claude.use('user') : Promise.resolve(null);
   var libroPagina = null;  // promesa con el libro.json de la página (o null si no trae)
@@ -18,20 +20,33 @@
     return libroPagina;
   }
   function claveAbierta(tipo, id) { return tipo === 'pagina' ? '' : tipo + ':' + id; }
-  // El libro que esta carga va a mostrar: el elegido la última vez, o el de la página.
+  // Si localStorage está bloqueado, la elección se guarda para la pestaña (sessionStorage); si tampoco, no se puede.
+  function leerEleccion() { var v = lsGet(ABIERTO_KEY); if (v === null) try { v = sessionStorage.getItem(ABIERTO_KEY); } catch (e) {} return v || ''; }
+  function guardarEleccion(v) {
+    if (lsSet(ABIERTO_KEY, v)) return true;
+    try { sessionStorage.setItem(ABIERTO_KEY, v); return sessionStorage.getItem(ABIERTO_KEY) === v; } catch (e) { return false; }
+  }
+  // Clave local (anotaciones, leídas, visto…) de cada libro. La del libro de la página no cambia; la de uno importado
+  // lleva su lugar, y como un id nunca tiene «:», no puede coincidir con la de otro libro ni con las de la página.
+  function claveLocalDe(tipo, id) { return tipo === 'pagina' ? 'lector-anotaciones:' + (id || 'libro') : 'lector-anotaciones:' + tipo + ':' + id; }
+  // El libro que esta carga va a mostrar: el elegido la última vez, o el de la página. Un libro importado se sanea y se
+  // valida antes de mostrarse; si ya no existe, se olvida la elección; si falló otra cosa (la base no respondió, o la
+  // página se abrió fuera de claude.ai), se conserva para la próxima carga.
   function obtenerLibro() {
-    var m = /^(base|local):(.+)$/.exec(lsGet(ABIERTO_KEY) || '');
+    var m = /^(base|local):([A-Za-z0-9_-]+)$/.exec(leerEleccion());
     var dePagina = function (aviso) { return leerLibroPagina().then(function (L) { return { libro: L, fuente: { tipo: 'pagina', id: null }, aviso: aviso }; }); };
     if (!m) return dePagina();
     var leer = m[1] === 'base' ? usoDb.then(function (d) { if (!d) throw new Error('sin base compartida en esta vista'); return compartida.leer(d, m[2]); }) : enNavegador.leer(m[2]);
     return leer.then(function (L) {
-      if (!L) throw new Error('ya no está en la biblioteca');
+      if (!L) { var e = new Error('ya no está en la biblioteca'); e.noEsta = true; throw e; }
       L.id = m[2]; L.claves_anteriores = [];  // las claves viejas de localStorage son del libro de la página
       N.sanearLibro(L);
+      var problemas = N.validarLibro(L);
+      if (problemas.length) { var e2 = new Error('el libro guardado no es válido: ' + problemas[0]); e2.noEsta = true; throw e2; }
       return { libro: L, fuente: { tipo: m[1], id: m[2] } };
     }).catch(function (e) {
-      lsSet(ABIERTO_KEY, '');
-      return dePagina('No se pudo abrir el libro elegido (' + ((e && e.message) || e) + '); se abrió el de la página.');
+      if (e && e.noEsta) guardarEleccion('');
+      return dePagina('No se pudo abrir el libro elegido (' + ((e && e.message) || e) + '); se abrió el de la página' + (e && e.noEsta ? '.' : ', y se volverá a intentar al recargar.'));
     });
   }
   // Colecciones del libro abierto en la base.
@@ -74,57 +89,90 @@
   }
   // Un rechazo pasajero se reintenta una vez, como en las anotaciones.
   function conReintento(fn) { return fn().catch(function (e) { if (!esTransitorio(e)) throw e; return new Promise(function (r) { setTimeout(r, 200 + Math.random() * 400); }).then(fn); }); }
+  function partesDe(m) { var n = m && m.partes; return typeof n === 'number' && n >= 1 && n <= PARTES_MAX && n === Math.floor(n) ? n : 0; }
+  function rutaParte(m, i) { return m.version ? m.version + '-' + i : String(i); }
+  // Cada versión de un libro compartido escribe sus partes con su propio prefijo (`<versión>-<n>`) y sólo al final la
+  // ficha que las nombra (versión, número de partes, largo y huella del texto). Así, una subida que falla a mitad (o que
+  // alguien lee mientras tanto) nunca mezcla dos versiones: la ficha sigue apuntando a la anterior, intacta, y al leer
+  // se comprueba que lo armado coincide con la ficha. Las partes de la versión anterior se borran después.
   var compartida = {
-    listar: function (d) { return d.collection('libros').get().then(function (s) { return s.docs.map(function (x) { return x.data(); }).filter(function (m) { return m && m.id && m.partes; }); }); },
+    listar: function (d) { return d.collection('libros').get().then(function (s) { return s.docs.map(function (x) { return x.data(); }).filter(function (m) { return m && typeof m.id === 'string' && /^[A-Za-z0-9_-]+$/.test(m.id) && partesDe(m); }); }); },
+    ficha: function (d, id) { return d.collection('libros').doc(id).get().then(function (s) { return s.exists ? s.data() : null; }); },
     leer: function (d, id) {
-      return d.collection('libros').doc(id).get().then(function (s) {
-        if (!s.exists) return null;
-        var m = s.data(), ps = [];
-        for (var i = 1; i <= m.partes; i++) ps.push(d.collection('libros/' + id + '/partes').doc(String(i)).get());
+      return compartida.ficha(d, id).then(function (m) {
+        if (!m) return null;
+        var n = partesDe(m), ps = [];
+        if (!n) throw new Error('la ficha del libro en la base está dañada');
+        for (var i = 1; i <= n; i++) ps.push(d.collection('libros/' + id + '/partes').doc(rutaParte(m, i)).get());
         return Promise.all(ps).then(function (xs) {
-          if (xs.some(function (x) { return !x.exists; })) throw new Error('faltan partes del libro en la base');
-          return JSON.parse(xs.map(function (x) { return x.data().datos; }).join(''));
+          if (xs.some(function (x) { return !x.exists; })) throw new Error('faltan partes del libro en la base (¿se está reemplazando? vuelve a abrirlo en un momento)');
+          var texto = xs.map(function (x) { return String(x.data().datos || ''); }).join('');
+          if ((m.largo && texto.length !== m.largo) || (m.huella && N.huella(texto) !== m.huella)) throw new Error('las partes del libro no coinciden con su ficha');
+          return JSON.parse(texto);
         });
       });
     },
-    // Primero las partes y al final la ficha que las cuenta: un libro a medio subir no aparece en la lista.
     guardar: function (d, meta, libro, avance) {
-      var partes = trocear(JSON.stringify(libro)), col = d.collection('libros/' + meta.id + '/partes'), previas = 0;
-      return d.collection('libros').doc(meta.id).get().then(function (s) { previas = s.exists ? (s.data().partes || 0) : 0; })
+      var texto = JSON.stringify(libro), partes = trocear(texto), col = d.collection('libros/' + meta.id + '/partes'), previa = null, escritas = [];
+      var version = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      return compartida.ficha(d, meta.id).then(function (m) { previa = m; })
         .then(function () {
           return partes.reduce(function (p, datos, i) {
-            return p.then(function () { avance(i + 1, partes.length); return conReintento(function () { return col.doc(String(i + 1)).set({ n: i + 1, datos: datos }); }); });
+            return p.then(function () {
+              avance(i + 1, partes.length);
+              var ruta = version + '-' + (i + 1);
+              return conReintento(function () { return enCurso(col.doc(ruta).set({ n: i + 1, datos: datos })); }).then(function () { escritas.push(ruta); });
+            });
           }, Promise.resolve());
         })
-        .then(function () { meta.partes = partes.length; return conReintento(function () { return d.collection('libros').doc(meta.id).set(meta); }); })
-        .then(function () { var b = []; for (var i = partes.length + 1; i <= previas; i++) b.push(col.doc(String(i)).delete().catch(function () {})); return Promise.all(b); });
+        .then(function () {
+          meta.version = version; meta.partes = partes.length; meta.largo = texto.length; meta.huella = N.huella(texto);
+          return conReintento(function () { return enCurso(d.collection('libros').doc(meta.id).set(meta)); });
+        })
+        .then(function () {
+          var n = partesDe(previa), b = [];
+          for (var i = 1; i <= n; i++) b.push(col.doc(rutaParte(previa, i)).delete().catch(function () {}));
+          return Promise.all(b);
+        }, function (e) {
+          // la subida no se completó: la ficha sigue en la versión anterior; se retiran las partes nuevas sueltas
+          escritas.forEach(function (r) { col.doc(r).delete().catch(function () {}); });
+          throw e;
+        });
     },
     // Se borran el libro y sus partes; sus anotaciones quedan en la base y vuelven si se importa de nuevo.
     borrar: function (d, id) {
-      return d.collection('libros').doc(id).get().then(function (s) {
-        var n = s.exists ? (s.data().partes || 0) : 0;
-        return d.collection('libros').doc(id).delete().then(function () { var b = []; for (var i = 1; i <= n; i++) b.push(d.collection('libros/' + id + '/partes').doc(String(i)).delete().catch(function () {})); return Promise.all(b); });
+      return compartida.ficha(d, id).then(function (m) {
+        return d.collection('libros').doc(id).delete().then(function () {
+          var n = partesDe(m), b = [];
+          for (var i = 1; i <= n; i++) b.push(d.collection('libros/' + id + '/partes').doc(rutaParte(m, i)).delete().catch(function () {}));
+          return Promise.all(b);
+        });
       });
     }
   };
 
   // --- abrir otro libro: recordar la elección y recargar cuando no quede nada por escribir
+  // Lo que todavía no confirmó la base (una escritura lenta, o a la espera de su reintento) pasa a la copia del navegador
+  // antes de recargar; al volver a este libro, la página la recupera y la vuelve a subir.
   function abrirLibro(tipo, id) {
-    lsSet(ABIERTO_KEY, claveAbierta(tipo, id));
+    if (!guardarEleccion(claveAbierta(tipo, id))) { estadoBib('Este navegador no deja guardar la elección (almacenamiento bloqueado): no se puede cambiar de libro.', true); return false; }
     estadoBib('Abriendo…');
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();  // guarda la nota en edición
     var inicio = Date.now();
     (function esperar() {
-      if (ESCRIBIENDO > 0 && Date.now() - inicio < 4000) { setTimeout(esperar, 100); return; }
+      var vuelo = Object.keys(EN_VUELO).filter(function (k) { return !!anots[k]; });
+      if ((ESCRIBIENDO > 0 || vuelo.length) && Date.now() - inicio < 4000) { setTimeout(esperar, 100); return; }
+      if (vuelo.length) guardarLocal(vuelo);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
       location.reload();
     })();
+    return true;
   }
 
   // --- la ventana de la biblioteca
   var LISTA = [];      // [{ tipo, id, titulo, autor, detalle }]
   var PREVIA = null;   // { libro, avisos, origen } del archivo leído, a la espera de confirmar
-  var BASE_BIB = null, PUEDE_COMPARTIR = false;
+  var BASE_BIB = null, PUEDE_COMPARTIR = false, LISTA_FALLO = false;
   function estadoBib(t, aviso) { var e = $('#bib-estado'); e.textContent = t || ''; e.className = 'bib-estado' + (aviso ? ' aviso' : ''); }
   function abrirBiblioteca() {
     abrirDialogo($('#biblioteca'));
@@ -136,17 +184,19 @@
       BASE_BIB = r[0];
       if (!BASE_BIB) { PUEDE_COMPARTIR = false; return []; }
       var permiso = r[1] && r[1].can ? r[1].can('data.write').catch(function () { return null; }) : Promise.resolve(null);
+      // si la lista compartida no se puede leer, tampoco se ofrece guardar en ella: no se sabría si pisa el libro de otro
+      LISTA_FALLO = false;
       return permiso.then(function (p) { PUEDE_COMPARTIR = p !== false && !SOLO_LECTURA; return compartida.listar(BASE_BIB); })
-        .then(function (ms) { return ms.map(function (m) { return { tipo: 'base', id: m.id, titulo: m.titulo, autor: m.autor || '', detalle: 'compartido' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
+        .then(function (ms) { return ms.map(function (m) { return { tipo: 'base', id: m.id, titulo: String(m.titulo || m.id), autor: String(m.autor || ''), detalle: 'compartido' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { LISTA_FALLO = true; PUEDE_COMPARTIR = false; return []; });
     });
-    var nav = enNavegador.listar().then(function (ms) { return ms.map(function (m) { return { tipo: 'local', id: m.id, titulo: m.titulo, autor: m.autor || '', detalle: 'sólo en este navegador' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
+    var nav = enNavegador.listar().then(function (ms) { return ms.map(function (m) { return { tipo: 'local', id: m.id, titulo: String(m.titulo || m.id), autor: m.autor || '', detalle: 'sólo en este navegador' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
     return Promise.all([pagina, base, nav]).then(function (r) { LISTA = r[0].concat(r[1], r[2]); return LISTA; });
   }
   function renderBiblioteca() {
     var ul = $('#bib-lista');
     return cargarLista().then(function () {
       ul.innerHTML = '';
-      $('#bib-intro').textContent = BASE_BIB ? (PUEDE_COMPARTIR ? 'Los libros compartidos los ve todo el que abre esta página; los de este navegador, sólo tú.' : 'Puedes leer los libros compartidos; los que importes quedarán sólo en este navegador.') : 'Sin base compartida: los libros que importes quedan sólo en este navegador.';
+      $('#bib-intro').textContent = LISTA_FALLO ? 'No se pudo leer la biblioteca compartida; por ahora, lo que importes quedará sólo en este navegador. Vuelve a abrir la biblioteca para reintentar.' : BASE_BIB ? (PUEDE_COMPARTIR ? 'Los libros compartidos los ve todo el que abre esta página; los de este navegador, sólo tú.' : 'Puedes leer los libros compartidos; los que importes quedarán sólo en este navegador.') : 'Sin base compartida: los libros que importes quedan sólo en este navegador.';
       if (!LISTA.length) ul.appendChild(el('li', { 'class': 'vacio', text: 'Todavía no hay libros. Importa uno abajo.' }));
       LISTA.forEach(function (x) {
         var abierto = x.tipo === FUENTE.tipo && (x.tipo === 'pagina' || x.id === FUENTE.id) && !!LIBRO;
@@ -199,7 +249,7 @@
     estadoBib('Borrando…');
     var hecho = x.tipo === 'base' ? compartida.borrar(BASE_BIB, x.id) : enNavegador.borrar(x.id).then(function () {
       // las anotaciones de un libro sólo de este navegador viven en su clave local
-      ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) { try { localStorage.removeItem('lector-anotaciones:' + x.id + s); } catch (e) {} });
+      ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) { try { localStorage.removeItem(claveLocalDe('local', x.id) + s); } catch (e) {} });
     });
     hecho.then(function () {
       estadoBib('Libro borrado.');
@@ -261,13 +311,28 @@
     var meta = { id: d.id, titulo: L.titulo, autor: L.autor, subtitulo: L.subtitulo || '', generado: L.generado || null, importado: ahora(), origen: PREVIA.origen, archivos: L.fuentes || [], secciones: L.secciones.length, bloques: nb, por: ME || null };
     $('#bib-importar').disabled = true;
     estadoBib('Guardando…');
-    var guardado = d.donde === 'base' ? compartida.guardar(BASE_BIB, meta, L, function (i, n) { if (n > 1) estadoBib('Guardando en la biblioteca compartida… ' + i + ' de ' + n); }) : enNavegador.guardar(meta, L);
-    guardado.then(function () { PREVIA = null; abrirLibro(d.donde, d.id); }, function (e) {
+    // Justo antes de guardar en la biblioteca compartida se vuelve a mirar si alguien guardó entre tanto un libro con ese
+    // id: sólo se reemplaza lo que el lector eligió reemplazar.
+    var libre = d.donde === 'base' && !(d.choca && d.id === N.slug(d.titulo)) ? compartida.ficha(BASE_BIB, d.id) : Promise.resolve(null);
+    libre.then(function (otro) {
+      if (otro) {
+        LISTA.push({ tipo: 'base', id: d.id, titulo: String(otro.titulo || d.id), autor: String(otro.autor || ''), detalle: 'compartido' });
+        actualizarPrevia();
+        var e = new Error('mientras tanto alguien guardó un libro con ese título; elige reemplazarlo o guardarlo como otro');
+        e.choque = true; throw e;
+      }
+      return d.donde === 'base' ? compartida.guardar(BASE_BIB, meta, L, function (i, n) { if (n > 1) estadoBib('Guardando en la biblioteca compartida… ' + i + ' de ' + n); }) : enNavegador.guardar(meta, L);
+    }).then(function () {
+      PREVIA = null;
+      if (!abrirLibro(d.donde, d.id)) $('#bib-importar').disabled = false;
+    }, function (e) {
       $('#bib-importar').disabled = false;
+      if (e && e.choque) { estadoBib(e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.', true); return; }
       estadoBib('No se pudo guardar (' + ((e && (e.code || e.message)) || 'error') + ')' + (d.donde === 'base' ? '; prueba a guardarlo sólo en este navegador.' : '.'), true);
     });
   }
   $('#b-biblioteca').addEventListener('click', abrirBiblioteca);
+  $('#aviso-libro .cerrar').addEventListener('click', function () { $('#aviso-libro').hidden = true; $('#lectura').focus({ preventScroll: true }); });
   $('#biblioteca').addEventListener('click', function (ev) { if (ev.target === this || ev.target.closest('.dialogo-cab .cerrar')) cerrarDialogo(this); });
   $('#bib-elegir').addEventListener('click', function () { $('#bib-archivo').click(); });
   $('#bib-archivo').addEventListener('change', function () { prepararImportacion(this.files); this.value = ''; });

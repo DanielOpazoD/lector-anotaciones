@@ -85,6 +85,7 @@
     };
   }
   var ID_BLOQUE = /^(.+)-b(\d+)$/;
+  var ID_SEGURO = /^[A-Za-z0-9_-]+$/;  // los ids van en selectores, rutas de la base y claves: sin comillas ni barras
   // Las invariantes de las que dependen los subrayados (`validar` de construir.py), más la forma básica que la página
   // necesita para mostrar un libro que llega de fuera: devuelve la lista de problemas.
   function validarLibro(libro) {
@@ -92,6 +93,7 @@
     if (!libro || typeof libro !== 'object' || !Array.isArray(libro.secciones)) return ['no es un libro.json (falta la lista de secciones)'];
     libro.secciones.forEach(function (sec) {
       if (!sec || typeof sec.id !== 'string' || !Array.isArray(sec.bloques)) { problemas.push('sección sin id o sin bloques'); return; }
+      if (!ID_SEGURO.test(sec.id)) problemas.push('id de sección con caracteres no admitidos: ' + sec.id);
       if (vistos[sec.id]) problemas.push('id de sección repetido: ' + sec.id);
       vistos[sec.id] = true;
       sec.bloques.forEach(function (b, i) {
@@ -127,7 +129,9 @@
     }
     return out + escaparSignos(s.slice(i));
   }
-  var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|[^:]*)$/;
+  // ruta relativa a la página (sin esquema, sin barra inicial —que con dos sería otro sitio— y sin barras invertidas, que
+  // el navegador toma por barras) o una imagen incrustada
+  var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|(?![\/\\])[^:\\]*)$/;
   function sanearLibro(libro) {
     (libro.secciones || []).forEach(function (s) {
       s.titulo = String(s.titulo || '');

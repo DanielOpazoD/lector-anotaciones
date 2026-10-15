@@ -137,3 +137,26 @@ test('sanearHtml deja sólo texto, <strong> y <em>; sanearLibro filtra imágenes
   assert.deepEqual(b.map((x) => x.html.src), ['', '', 'data:image/png;base64,AAAA', undefined]);
   assert.equal(b[0].html.caption, 'c');
 });
+
+test('las figuras de un libro de afuera sólo admiten rutas relativas o data:image; los ids peligrosos no pasan', () => {
+  const fig = (src) => N.sanearLibro({ secciones: [{ id: 's', bloques: [{ id: 's-b1', t: 'figure', html: { src, caption: 'c' } }] }] }).secciones[0].bloques[0].html.src;
+  assert.equal(fig('figs/a.png'), 'figs/a.png');
+  assert.equal(fig('//evil.example/baliza.png'), '');
+  assert.equal(fig('/figs/a.png'), '');
+  assert.equal(fig('\\\\evil.example\\a.png'), '');
+  assert.equal(fig('figs\\a.png'), '');
+  assert.equal(fig('http://evil.example/a.png'), '');
+  assert.match(N.validarLibro({ secciones: [{ id: 'x"]', bloques: [] }] }).join(' '), /caracteres no admitidos/);
+});
+
+test('importar texto que no está en UTF-8: windows-1252 con aviso, o el charset que declare el HTML', async () => {
+  const cp1252 = (s) => Uint8Array.from(Array.from(s, (c) => ({ 'ñ': 0xf1, 'ó': 0xf3, 'Í': 0xcd, 'á': 0xe1 })[c] || c.charCodeAt(0)));
+  const r = await N.importarLibro([{ nombre: 'viejo.txt', bytes: cp1252('CAPÍTULO I\n\nEl niño soñó con acción.') }], {});
+  assert.equal(r.libro.secciones[0].titulo, 'CAPÍTULO I');
+  assert.equal(r.libro.secciones[0].bloques[0].html, 'El niño soñó con acción.');
+  assert.match(r.avisos.join(' '), /viejo\.txt no está en UTF-8: se leyó como windows-1252/);
+  const utf16 = new Uint8Array([0xff, 0xfe, ...Array.from('## A\n\nñandú', (c) => [c.charCodeAt(0) & 255, c.charCodeAt(0) >> 8]).flat()]);
+  const r16 = await N.importarLibro([{ nombre: 'u16.md', bytes: utf16 }], {});
+  assert.equal(r16.libro.secciones[0].bloques[0].html, 'ñandú');
+  assert.deepEqual(r16.avisos, []);
+});

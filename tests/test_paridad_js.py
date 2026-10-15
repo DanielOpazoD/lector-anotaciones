@@ -78,3 +78,21 @@ def test_casos_raros_del_dialecto(tmp_path):
     py = construir([md], titulo="Raro", capas=None)
     js = _armar_js([md], "Raro")
     assert _forma(js) == _forma(py)
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "## Capítulo 1. A\n\nUna frase\x85\n",  # NEL al final de la línea (cp1252 mal convertido)
+        "## Capítulo 1. A\n\nUno\n\x1c\nDos\n",  # una línea con sólo un separador cuenta como vacía
+        "## Capítulo 1. A\n\n- ﻿item\n",  # la marca de orden de bytes no es un espacio
+        "## Capítulo 1. A\n\n١. uno\n٢. dos\n",  # lista numerada con dígitos arábigo-índicos
+        "## Capítulo 1. A\n\n[FIGURA: a.png | Ley enda]\n",  # separador de línea Unicode dentro de la leyenda
+        "## Capítulo ٣. X\n\nTexto.\n",  # el número del capítulo en otra escritura
+    ],
+    ids=["nel", "separador", "bom", "digitos-lista", "figura-u2028", "digito-capitulo"],
+)
+def test_espacios_y_digitos_unicode_como_python(tmp_path, texto):
+    md = tmp_path / "c.md"
+    md.write_text(texto, encoding="utf-8")
+    assert _forma(_armar_js([md], "T")) == _forma(construir([md], titulo="T", capas=None))

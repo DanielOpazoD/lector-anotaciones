@@ -32,9 +32,11 @@
     // Escribe lo que hay en memoria para esa id. Un rechazo transitorio se reintenta una sola vez tras un retardo corto
     // y aleatorio; el segundo rechazo (o uno definitivo) lo decide `rechazoEscritura`. Si entre tanto la anotación se
     // borró o la página pasó a sólo lectura, no hay nada que escribir.
-    var a = anots[id]; if (!a) return;
-    var rechazo = function (e) { rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
+    var a = anots[id]; if (!a) { delete EN_VUELO[id]; return; }
+    EN_VUELO[id] = 1;
+    var rechazo = function (e) { delete EN_VUELO[id]; rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
     enCurso(col.doc(id).set(a)).then(function () {
+      delete EN_VUELO[id];
       limpiarCampos(id, a);
       // la copia local se suelta sólo si nada se editó después de esta escritura
       if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }

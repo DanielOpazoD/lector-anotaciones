@@ -11,10 +11,25 @@
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   var ROMANOS = { I: 1, II: 2, III: 3, IV: 4, V: 5 };
-  var ABRE_BLOQUE = /^(#{1,4} |- |\d+\. |\||> |\[FIGURA|\[\/?PORTADA\]|\[\/?LEGAL\])/;
-  var FIGURA = /^\[FIGURA:\s*(\S+)\s*\|\s*(.+)\]$/;
-  var SEPARADOR_TABLA = /^\|\s*:?-{2,}/;
-  var ITEM_NUMERADO = /^(\d+)\. /;
+  // Los espacios de str.isspace() de Python (incluye \x1c-\x1f y \x85; no incluye \ufeff), para que strip(), \s y \d
+  // signifiquen aquí lo mismo que en markdown.py.
+  var ESP = '\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
+  var BORDES = new RegExp('^[' + ESP + ']+|[' + ESP + ']+$', 'g');
+  function strip(s) { return s.replace(BORDES, ''); }
+  var ABRE_BLOQUE = /^(#{1,4} |- |\p{Nd}+\. |\||> |\[FIGURA|\[\/?PORTADA\]|\[\/?LEGAL\])/u;
+  var FIGURA = new RegExp('^\\[FIGURA:[' + ESP + ']*([^' + ESP + ']+)[' + ESP + ']*\\|[' + ESP + ']*([^\\n]+)\\]$');
+  var SEPARADOR_TABLA = new RegExp('^\\|[' + ESP + ']*:?-{2,}');
+  var ITEM_NUMERADO = /^(\p{Nd}+)\. /u;
+  // int() de Python con dígitos de cualquier escritura: cada bloque de dígitos Unicode va del 0 al 9 seguidos
+  function entero(digitos) {
+    var n = 0;
+    Array.from(digitos).forEach(function (ch) {
+      var cp = ch.codePointAt(0), z = cp;
+      while (z > 0 && /\p{Nd}/u.test(String.fromCodePoint(z - 1)) && cp - z < 60) z--;
+      n = n * 10 + ((cp - z) % 10);
+    });
+    return n;
+  }
   var NEGRITA = /\*\*([^*]+)\*\*/g;
   // \w de Python sobre texto: letras y números de cualquier escritura, y el guion bajo
   var CURSIVA = /(?<![\p{L}\p{N}_∗])\*([^*\n]+)\*(?![\p{L}\p{N}_])/gu;
@@ -23,7 +38,7 @@
   // Id estable y legible para una sección; se registra en `usados` para evitar duplicados.
   function seccionId(titulo, usados) {
     var m, base;
-    if ((m = /^Capítulo (\d+)\./.exec(titulo))) base = 'cap-' + dos(parseInt(m[1], 10));
+    if ((m = /^Capítulo (\p{Nd}+)\./u.exec(titulo))) base = 'cap-' + dos(entero(m[1]));
     else if ((m = /^Interludio (I{1,3})\./.exec(titulo))) base = 'interludio-' + ROMANOS[m[1]];
     else if ((m = /^PARTE (I{1,3}V?|IV)\./.exec(titulo)) && ROMANOS[m[1]]) base = 'parte-' + ROMANOS[m[1]];
     else if ((m = /^Apéndice ([A-Z])\./.exec(titulo))) base = 'ap-' + m[1].toLowerCase();
@@ -53,11 +68,10 @@
     };
     return st;
   }
-  function strip(s) { return s.trim(); }
   function leerMarcado(lines, i, cierre) {
     var buf = [];
     i += 1;
-    while (i < lines.length && lines[i].indexOf(cierre) !== 0) { if (lines[i].trim()) buf.push(lines[i].trim()); i++; }
+    while (i < lines.length && lines[i].indexOf(cierre) !== 0) { if (strip(lines[i])) buf.push(strip(lines[i])); i++; }
     if (i >= lines.length) throw new Error('falta el cierre ' + cierre);
     return [buf, i + 1];
   }
@@ -66,7 +80,7 @@
     var i = 0, m, r, buf, items, filas;
     while (i < lines.length) {
       var linea = lines[i], src = nombre + ':' + (i + 1);
-      if (!linea.trim()) { i++; continue; }
+      if (!strip(linea)) { i++; continue; }
       if (empieza(linea, '[PORTADA]')) {
         r = leerMarcado(lines, i, '[/PORTADA]'); i = r[1];
         st.nueva('Portada', 1, src);
@@ -84,7 +98,7 @@
       if (empieza(linea, '### ')) { st.bloque('h3', inline(strip(linea.slice(4))), src); i++; continue; }
       if (empieza(linea, '#### ')) { st.bloque('h4', inline(strip(linea.slice(5))), src); i++; continue; }
       if ((m = FIGURA.exec(linea))) {
-        st.bloque('figure', { src: st.figs + m[1], caption: inline(m[2].trim()) }, src);
+        st.bloque('figure', { src: st.figs + m[1], caption: inline(strip(m[2])) }, src);
         i++; continue;
       }
       if (empieza(linea, '- ')) {
@@ -102,7 +116,7 @@
       if (empieza(linea, '|')) {
         filas = [];
         while (i < lines.length && empieza(lines[i], '|')) {
-          if (!SEPARADOR_TABLA.test(lines[i])) filas.push(lines[i].trim().replace(/^\|+|\|+$/g, '').split('|').map(function (c) { return inline(c.trim()); }));
+          if (!SEPARADOR_TABLA.test(lines[i])) filas.push(strip(lines[i]).replace(/^\|+|\|+$/g, '').split('|').map(function (c) { return inline(strip(c)); }));
           i++;
         }
         st.bloque('table', filas, src);
@@ -115,9 +129,9 @@
         continue;
       }
       // párrafo: líneas consecutivas no vacías que no abren otro bloque
-      buf = [linea.trim()];
+      buf = [strip(linea)];
       i++;
-      while (i < lines.length && lines[i].trim() && !ABRE_BLOQUE.test(lines[i])) { buf.push(lines[i].trim()); i++; }
+      while (i < lines.length && strip(lines[i]) && !ABRE_BLOQUE.test(lines[i])) { buf.push(strip(lines[i])); i++; }
       st.bloque('p', inline(buf.join(' ')), src);
     }
   }

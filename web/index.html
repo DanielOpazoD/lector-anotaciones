@@ -71,7 +71,9 @@ section.lectura:focus { outline: none; }
   .bloque.flash { outline: 2px solid var(--hl-duda-ink); outline-offset: 4px; }
 }
 
-#app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+#app { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; }
+header.barra { grid-row: 1; } #aviso-libro { grid-row: 2; } main.mesa { grid-row: 3; }  /* filas fijas: el aviso escondido deja la suya vacía */
+.aviso-libro { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 16px; background: var(--hl-revisar); color: var(--fg); font-size: 13px; border-bottom: 1px solid var(--line); }
 header.barra {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -384,6 +386,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     </div>
     <span id="estado">Cargando…</span>
   </header>
+  <div id="aviso-libro" class="aviso-libro" role="alert" hidden><span></span><button class="btn peq cerrar" type="button" aria-label="Cerrar el aviso">×</button></div>
   <main class="mesa">
     <nav class="indice cajon" id="indice" aria-label="Índice">
       <div class="cajon-cab"><span class="cajon-t">Índice</span><button class="btn peq cerrar" type="button" data-cerrar="indice" aria-label="Cerrar el índice">×</button></div>
@@ -626,10 +629,25 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   var ROMANOS = { I: 1, II: 2, III: 3, IV: 4, V: 5 };
-  var ABRE_BLOQUE = /^(#{1,4} |- |\d+\. |\||> |\[FIGURA|\[\/?PORTADA\]|\[\/?LEGAL\])/;
-  var FIGURA = /^\[FIGURA:\s*(\S+)\s*\|\s*(.+)\]$/;
-  var SEPARADOR_TABLA = /^\|\s*:?-{2,}/;
-  var ITEM_NUMERADO = /^(\d+)\. /;
+  // Los espacios de str.isspace() de Python (incluye \x1c-\x1f y \x85; no incluye \ufeff), para que strip(), \s y \d
+  // signifiquen aquí lo mismo que en markdown.py.
+  var ESP = '\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
+  var BORDES = new RegExp('^[' + ESP + ']+|[' + ESP + ']+$', 'g');
+  function strip(s) { return s.replace(BORDES, ''); }
+  var ABRE_BLOQUE = /^(#{1,4} |- |\p{Nd}+\. |\||> |\[FIGURA|\[\/?PORTADA\]|\[\/?LEGAL\])/u;
+  var FIGURA = new RegExp('^\\[FIGURA:[' + ESP + ']*([^' + ESP + ']+)[' + ESP + ']*\\|[' + ESP + ']*([^\\n]+)\\]$');
+  var SEPARADOR_TABLA = new RegExp('^\\|[' + ESP + ']*:?-{2,}');
+  var ITEM_NUMERADO = /^(\p{Nd}+)\. /u;
+  // int() de Python con dígitos de cualquier escritura: cada bloque de dígitos Unicode va del 0 al 9 seguidos
+  function entero(digitos) {
+    var n = 0;
+    Array.from(digitos).forEach(function (ch) {
+      var cp = ch.codePointAt(0), z = cp;
+      while (z > 0 && /\p{Nd}/u.test(String.fromCodePoint(z - 1)) && cp - z < 60) z--;
+      n = n * 10 + ((cp - z) % 10);
+    });
+    return n;
+  }
   var NEGRITA = /\*\*([^*]+)\*\*/g;
   // \w de Python sobre texto: letras y números de cualquier escritura, y el guion bajo
   var CURSIVA = /(?<![\p{L}\p{N}_∗])\*([^*\n]+)\*(?![\p{L}\p{N}_])/gu;
@@ -638,7 +656,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   // Id estable y legible para una sección; se registra en `usados` para evitar duplicados.
   function seccionId(titulo, usados) {
     var m, base;
-    if ((m = /^Capítulo (\d+)\./.exec(titulo))) base = 'cap-' + dos(parseInt(m[1], 10));
+    if ((m = /^Capítulo (\p{Nd}+)\./u.exec(titulo))) base = 'cap-' + dos(entero(m[1]));
     else if ((m = /^Interludio (I{1,3})\./.exec(titulo))) base = 'interludio-' + ROMANOS[m[1]];
     else if ((m = /^PARTE (I{1,3}V?|IV)\./.exec(titulo)) && ROMANOS[m[1]]) base = 'parte-' + ROMANOS[m[1]];
     else if ((m = /^Apéndice ([A-Z])\./.exec(titulo))) base = 'ap-' + m[1].toLowerCase();
@@ -668,11 +686,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     };
     return st;
   }
-  function strip(s) { return s.trim(); }
   function leerMarcado(lines, i, cierre) {
     var buf = [];
     i += 1;
-    while (i < lines.length && lines[i].indexOf(cierre) !== 0) { if (lines[i].trim()) buf.push(lines[i].trim()); i++; }
+    while (i < lines.length && lines[i].indexOf(cierre) !== 0) { if (strip(lines[i])) buf.push(strip(lines[i])); i++; }
     if (i >= lines.length) throw new Error('falta el cierre ' + cierre);
     return [buf, i + 1];
   }
@@ -681,7 +698,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     var i = 0, m, r, buf, items, filas;
     while (i < lines.length) {
       var linea = lines[i], src = nombre + ':' + (i + 1);
-      if (!linea.trim()) { i++; continue; }
+      if (!strip(linea)) { i++; continue; }
       if (empieza(linea, '[PORTADA]')) {
         r = leerMarcado(lines, i, '[/PORTADA]'); i = r[1];
         st.nueva('Portada', 1, src);
@@ -699,7 +716,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       if (empieza(linea, '### ')) { st.bloque('h3', inline(strip(linea.slice(4))), src); i++; continue; }
       if (empieza(linea, '#### ')) { st.bloque('h4', inline(strip(linea.slice(5))), src); i++; continue; }
       if ((m = FIGURA.exec(linea))) {
-        st.bloque('figure', { src: st.figs + m[1], caption: inline(m[2].trim()) }, src);
+        st.bloque('figure', { src: st.figs + m[1], caption: inline(strip(m[2])) }, src);
         i++; continue;
       }
       if (empieza(linea, '- ')) {
@@ -717,7 +734,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       if (empieza(linea, '|')) {
         filas = [];
         while (i < lines.length && empieza(lines[i], '|')) {
-          if (!SEPARADOR_TABLA.test(lines[i])) filas.push(lines[i].trim().replace(/^\|+|\|+$/g, '').split('|').map(function (c) { return inline(c.trim()); }));
+          if (!SEPARADOR_TABLA.test(lines[i])) filas.push(strip(lines[i]).replace(/^\|+|\|+$/g, '').split('|').map(function (c) { return inline(strip(c)); }));
           i++;
         }
         st.bloque('table', filas, src);
@@ -730,9 +747,9 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
         continue;
       }
       // párrafo: líneas consecutivas no vacías que no abren otro bloque
-      buf = [linea.trim()];
+      buf = [strip(linea)];
       i++;
-      while (i < lines.length && lines[i].trim() && !ABRE_BLOQUE.test(lines[i])) { buf.push(lines[i].trim()); i++; }
+      while (i < lines.length && strip(lines[i]) && !ABRE_BLOQUE.test(lines[i])) { buf.push(strip(lines[i])); i++; }
       st.bloque('p', inline(buf.join(' ')), src);
     }
   }
@@ -835,6 +852,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     };
   }
   var ID_BLOQUE = /^(.+)-b(\d+)$/;
+  var ID_SEGURO = /^[A-Za-z0-9_-]+$/;  // los ids van en selectores, rutas de la base y claves: sin comillas ni barras
   // Las invariantes de las que dependen los subrayados (`validar` de construir.py), más la forma básica que la página
   // necesita para mostrar un libro que llega de fuera: devuelve la lista de problemas.
   function validarLibro(libro) {
@@ -842,6 +860,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     if (!libro || typeof libro !== 'object' || !Array.isArray(libro.secciones)) return ['no es un libro.json (falta la lista de secciones)'];
     libro.secciones.forEach(function (sec) {
       if (!sec || typeof sec.id !== 'string' || !Array.isArray(sec.bloques)) { problemas.push('sección sin id o sin bloques'); return; }
+      if (!ID_SEGURO.test(sec.id)) problemas.push('id de sección con caracteres no admitidos: ' + sec.id);
       if (vistos[sec.id]) problemas.push('id de sección repetido: ' + sec.id);
       vistos[sec.id] = true;
       sec.bloques.forEach(function (b, i) {
@@ -877,7 +896,9 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     }
     return out + escaparSignos(s.slice(i));
   }
-  var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|[^:]*)$/;
+  // ruta relativa a la página (sin esquema, sin barra inicial —que con dos sería otro sitio— y sin barras invertidas, que
+  // el navegador toma por barras) o una imagen incrustada
+  var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|(?![\/\\])[^:\\]*)$/;
   function sanearLibro(libro) {
     (libro.secciones || []).forEach(function (s) {
       s.titulo = String(s.titulo || '');
@@ -1003,6 +1024,22 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     for (i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return typeof btoa !== 'undefined' ? btoa(s) : Buffer.from(s, 'binary').toString('base64');
   }
+  // Texto de un archivo: UTF-8 (o UTF-16 con su marca); si no lo es, el juego de caracteres que declare un HTML o, en
+  // su defecto, windows-1252 (lo que guardan el Bloc de notas «ANSI» y Word como página web), con un aviso.
+  function decodificarTexto(bytes, nombre, avisos) {
+    var dec = function (cs, fatal) { return new TextDecoder(cs, fatal ? { fatal: true } : undefined).decode(bytes); };
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) return dec('utf-16le');
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) return dec('utf-16be');
+    try { return dec('utf-8', true); } catch (e) { /* no es UTF-8 */ }
+    var cab = '', i, cs = 'windows-1252';
+    for (i = 0; i < Math.min(bytes.length, 4096); i++) cab += String.fromCharCode(bytes[i]);
+    var m = /<meta[^>]+charset\s*=\s*["']?([\w:.-]+)/i.exec(cab) || /<\?xml[^>]+encoding\s*=\s*["']([\w:.-]+)/i.exec(cab);
+    if (m && !/^utf-?8$/i.test(m[1])) cs = m[1];
+    var texto;
+    try { texto = dec(cs); } catch (e) { cs = 'windows-1252'; texto = dec(cs); }
+    avisos.push(nombre + ' no está en UTF-8: se leyó como ' + cs + '.');
+    return texto;
+  }
   function textoLibre(n) { return espacios(n ? (n.textContent || '') : ''); }
   // Rutas dentro de un ZIP: relativa a la carpeta de `desde`, sin «..» ni fragmento.
   function resolver(desde, href) {
@@ -1018,9 +1055,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   function colaImagenes(leer, avisos) {
     var pendientes = [];
     return {
+      enTexto: 0,  // imágenes metidas entre el texto de un párrafo, que no se pueden mostrar como figura
       pedir: function (b, ruta) { b.html.src = ''; if (ruta) pendientes.push({ b: b, ruta: ruta }); },
       resolver: function () {
-        var total = 0, omitidas = 0;
+        var yo = this, total = 0, omitidas = 0;
         return pendientes.reduce(function (p, x) {
           return p.then(function () {
             var tipo = TIPOS_IMAGEN[extension(x.ruta)];
@@ -1032,6 +1070,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
             }, function () { omitidas++; });
           });
         }, Promise.resolve()).then(function () {
+          if (yo.enTexto) avisos.push(yo.enTexto + (yo.enTexto === 1 ? ' imagen dentro del texto de un párrafo se omitió.' : ' imágenes dentro del texto de un párrafo se omitieron.'));
           if (omitidas) avisos.push(omitidas + (omitidas === 1 ? ' figura quedó' : ' figuras quedaron') + ' sólo con su leyenda (imagen ausente, de formato no admitido o demasiado grande).');
         });
       }
@@ -1058,9 +1097,18 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     var dentro = hijos(n).map(enLinea).join('');
     if (t === 'strong' || t === 'b') return envolver('strong', dentro);
     if (t === 'em' || t === 'i' || t === 'cite' || t === 'dfn' || t === 'var') return envolver('em', dentro);
-    return dentro;
+    // un bloque dentro de una celda, un ítem o un título (párrafos, listas anidadas, HTML sin saltos de línea) no
+    // pega su texto al vecino
+    return EN_LINEA.test(t) ? dentro : ' ' + dentro + ' ';
   }
   function htmlEnLinea(n) { return espacios(hijos(n).map(enLinea).join('')); }
+  function textoEnLinea(n) { return espacios(N.textoDeHtml(htmlEnLinea(n))); }
+  // las filas de una tabla, sin las de las tablas anidadas en sus celdas (que ya van en el texto de la celda)
+  function filasHtml(tabla) {
+    var filas = [];
+    hijos(tabla).forEach(function (x) { if (x.nodeType !== 1) return; var t = local(x); if (t === 'tr') filas.push(x); else if (t === 'thead' || t === 'tbody' || t === 'tfoot') hijos(x).forEach(function (y) { if (y.nodeType === 1 && local(y) === 'tr') filas.push(y); }); });
+    return filas;
+  }
   function nivelTitulo(n) { var m = /^h([1-6])$/.exec(local(n)); return m && textoLibre(n) ? parseInt(m[1], 10) : 0; }
   function nivelesHtml(doc, usados) {
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(function (h, i) { var ns = doc.getElementsByTagName(h); for (var k = 0; k < ns.length; k++) if (textoLibre(ns[k])) { usados[i + 1] = 1; break; } });
@@ -1084,18 +1132,25 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
         var t = local(n);
         if (OMITIR.test(t)) return;
         if (t === 'img') { soltar(); figura(n, ''); return; }
-        if (EN_LINEA.test(t)) { pendiente += enLinea(n); return; }
+        if (EN_LINEA.test(t)) {
+          // una imagen dentro de un enlace o un span: sola, es una figura; entre texto, se omite y se avisa
+          var dentroImgs = n.getElementsByTagName ? n.getElementsByTagName('img') : [];
+          if (dentroImgs.length && !textoLibre(n)) { soltar(); for (var q = 0; q < dentroImgs.length; q++) figura(dentroImgs[q], ''); return; }
+          ctx.imagenes.enTexto += dentroImgs.length;
+          pendiente += enLinea(n); return;
+        }
         soltar();
         var nv = nivelTitulo(n);
         if (nv) {
           var dest = ctx.niveles[nv] || { t: 'h4' };
-          if (dest.sec) st.nueva(textoLibre(n), dest.sec, src());
+          if (dest.sec) st.nueva(textoEnLinea(n), dest.sec, src());
           else st.bloque(dest.t, htmlEnLinea(n), src());
           return;
         }
         if (t === 'p' || t === 'dt' || t === 'dd' || t === 'caption' || t === 'address') {
           var imgs = n.getElementsByTagName('img');
           if (imgs.length && !textoLibre(n)) { for (var k = 0; k < imgs.length; k++) figura(imgs[k], ''); return; }
+          ctx.imagenes.enTexto += imgs.length;
           parrafo(htmlEnLinea(n)); return;
         }
         if (t === 'pre') { parrafo(N.escaparHtml(n.textContent || '')); return; }
@@ -1110,7 +1165,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
           return;
         }
         if (t === 'table') {
-          var filas = [], trs = n.getElementsByTagName('tr');
+          var filas = [], trs = filasHtml(n);
           for (var r = 0; r < trs.length; r++) {
             var celdas = hijos(trs[r]).filter(function (x) { return x.nodeType === 1 && (local(x) === 'td' || local(x) === 'th'); }).map(htmlEnLinea);
             if (celdas.length) filas.push(celdas);
@@ -1138,7 +1193,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   function cuerpoDe(doc) { return doc.getElementsByTagName('body')[0] || doc.documentElement; }
 
   function importarHtml(archivos, opciones) {
-    var avisos = [], st = N.estadoLibro(''), usados = {}, docs = archivos.map(function (a) { var d = documentoHtml(N.decodificarUtf8(a.bytes), opciones.parsear, extension(a.nombre) === 'xhtml'); nivelesHtml(d, usados); return { nombre: a.nombre, doc: d }; });
+    var avisos = [], st = N.estadoLibro(''), usados = {}, docs = archivos.map(function (a) { var d = documentoHtml(decodificarTexto(a.bytes, a.nombre, avisos), opciones.parsear, extension(a.nombre) === 'xhtml'); nivelesHtml(d, usados); return { nombre: a.nombre, doc: d }; });
     var niveles = mapaNiveles(usados), imagenes = colaImagenes(function () { return Promise.reject(new Error('sin imágenes')); }, avisos);
     docs.forEach(function (x) { bloquesHtml(cuerpoDe(x.doc), { st: st, niveles: niveles, nombre: x.nombre, imagenes: imagenes, rutaImagen: function () { return null; } }); });
     var primero = docs[0] && docs[0].doc, t = primero && primero.getElementsByTagName('title')[0];
@@ -1300,7 +1355,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
         orden++;
         if (local(p) === 'tbl') {
           cerrar(); ultimaFigura = null;
-          var filas = todosNS(p, 'tr').map(function (tr) { return hijos(tr).filter(function (c) { return c.nodeType === 1 && local(c) === 'tc'; }).map(function (tc) { return espacios(todosNS(tc, 'p').map(enLineaW).join(' ')); }); }).filter(function (f) { return f.length; });
+          var filas = directos(p, 'tr').map(function (tr) { return hijos(tr).filter(function (c) { return c.nodeType === 1 && local(c) === 'tc'; }).map(function (tc) { return espacios(todosNS(tc, 'p').map(enLineaW).join(' ')); }); }).filter(function (f) { return f.length; });
           if (filas.length) st.bloque('table', filas, src());
           return;
         }
@@ -1319,6 +1374,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
           return;
         }
         if (!texto) return;
+        imagenes.enTexto += blips.length;
         if (/^(title|t[ií]tulo)$/.test(est.nombre)) { cerrar(); if (!meta.titulo) meta.titulo = texto; ultimaFigura = null; return; }
         if (/^(subtitle|subt[ií]tulo)$/.test(est.nombre)) { cerrar(); if (!meta.subtitulo) meta.subtitulo = texto; return; }
         // la leyenda que sigue a una imagen es su pie, no un párrafo aparte
@@ -1334,8 +1390,9 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
           if (dest.sec) st.nueva(texto, dest.sec, src()); else st.bloque(dest.t, h, src());
           return;
         }
-        var numPr = wHijo(ppr, 'numPr');
-        if (numPr || est.num) {
+        var numPr = wHijo(ppr, 'numPr'), numIdP = numPr ? wAttr(wHijo(numPr, 'numId'), 'val') : null;
+        // numId 0 en el párrafo es la forma de Word de quitarle la numeración que hereda del estilo
+        if ((numPr && numIdP !== '0') || (!numPr && est.num)) {
           var numId = wAttr(wHijo(numPr, 'numId'), 'val'), ilvl = wAttr(wHijo(numPr, 'ilvl'), 'val') || '0', fmt = (formatos[numId] || {})[ilvl] || 'bullet';
           var t = fmt === 'bullet' || fmt === 'none' ? 'ul' : 'ol';
           if (cita) cerrar();
@@ -1397,7 +1454,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       }
       if (tipo === 'md') {
         var avisosMd = [], secciones = N.parsearMarkdown(archivos.map(function (a) {
-          var t = N.decodificarUtf8(a.bytes); return { nombre: a.nombre, texto: /\.te?xt$/i.test(a.nombre) ? txtAMarkdown(t) : t };
+          var t = decodificarTexto(a.bytes, a.nombre, avisosMd); return { nombre: a.nombre, texto: /\.te?xt$/i.test(a.nombre) ? txtAMarkdown(t) : t };
         }), '');
         var cola = colaImagenes(function (r) { return figuras[r] ? Promise.resolve(figuras[r]) : Promise.reject(new Error('falta')); }, avisosMd);
         secciones.forEach(function (s) { s.bloques.forEach(function (b) { if (b.t === 'figure') cola.pedir(b, b.html.src); }); });
@@ -1431,6 +1488,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   var CAPAS_ON = {}, VISTO = {}, LEIDAS = {}, filtroAutor = '', filtroEtiqueta = '';
   var ultimoBorrado = null, lectura = null;
   var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
+  var EN_VUELO = {};        // id -> 1 mientras la base no confirma (o rechaza del todo) su escritura, reintento incluido
   var ESCRIBIENDO = 0;      // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
   var SIN_GUARDAR = {};     // id -> código del último rechazo de una anotación que la base todavía no tiene
   var RESPALDO_MAX = 180 * 1024;  // bytes de cada documento de respaldo ya envuelto, con margen (la base admite 256 KiB)
@@ -1583,9 +1641,11 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     // Escribe lo que hay en memoria para esa id. Un rechazo transitorio se reintenta una sola vez tras un retardo corto
     // y aleatorio; el segundo rechazo (o uno definitivo) lo decide `rechazoEscritura`. Si entre tanto la anotación se
     // borró o la página pasó a sólo lectura, no hay nada que escribir.
-    var a = anots[id]; if (!a) return;
-    var rechazo = function (e) { rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
+    var a = anots[id]; if (!a) { delete EN_VUELO[id]; return; }
+    EN_VUELO[id] = 1;
+    var rechazo = function (e) { delete EN_VUELO[id]; rechazoEscritura(e, id, previa, 'guardar'); if (alRechazar) alRechazar(e); };
     enCurso(col.doc(id).set(a)).then(function () {
+      delete EN_VUELO[id];
       limpiarCampos(id, a);
       // la copia local se suelta sólo si nada se editó después de esta escritura
       if (SIN_GUARDAR[id]) { delete SIN_GUARDAR[id]; if (anots[id] === a) podarLocal([id]); renderPanel(); }
@@ -2459,7 +2519,8 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   // ------------------------------------------------------------ ajustes de lectura
   // Tamaño del texto, tema y tipografía. Son de este navegador y valen para todos los libros. El tema elegido va en su
   // propio atributo (data-tema-lector) para no pisar el data-theme que pueda poner la página anfitriona.
-  var AJUSTES_KEY = 'lector-anotaciones:ajustes', ESCALAS = [0.85, 0.92, 1, 1.1, 1.2, 1.32, 1.45];
+  // fuera del espacio de claves de los libros («lector-anotaciones:<id>»): un libro con id «ajustes» no lo pisa
+  var AJUSTES_KEY = 'lector-anotaciones.ajustes', ESCALAS = [0.85, 0.92, 1, 1.1, 1.2, 1.32, 1.45];
   var ajustes = (function () { try { return JSON.parse(lsGet(AJUSTES_KEY) || '{}') || {}; } catch (e) { return {}; } })();
   function aplicarAjustes() {
     var raiz = document.documentElement, i = ESCALAS.indexOf(ajustes.escala);
@@ -2691,9 +2752,11 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   // libros/<id>/anotaciones (o en el navegador, si el libro es sólo de este navegador). Cada carga de la página atiende
   // un libro: abrir otro recuerda la elección y recarga, para que nada de un libro (escrituras en curso, borradores, la
   // cola de pendientes) se cruce con el otro.
-  var ABIERTO_KEY = 'lector-anotaciones:libro-abierto';  // '' = el de la página; 'base:<id>' o 'local:<id>'
+  // La elección del libro abierto vive fuera del espacio de claves de los libros («lector-anotaciones:<id>…»), y por
+  // ruta de la página: varias páginas en un mismo sitio no se pisan la elección.
+  var ABIERTO_KEY = 'lector-anotaciones.abierto:' + location.pathname;  // '' = el de la página; 'base:<id>' o 'local:<id>'
   var FUENTE = { tipo: 'pagina', id: null };
-  var PARTE_MAX = 180 * 1024;
+  var PARTE_MAX = 180 * 1024, PARTES_MAX = 2000;
   var usoDb = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
   var usoUser = window.claude && window.claude.use ? window.claude.use('user') : Promise.resolve(null);
   var libroPagina = null;  // promesa con el libro.json de la página (o null si no trae)
@@ -2704,20 +2767,33 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     return libroPagina;
   }
   function claveAbierta(tipo, id) { return tipo === 'pagina' ? '' : tipo + ':' + id; }
-  // El libro que esta carga va a mostrar: el elegido la última vez, o el de la página.
+  // Si localStorage está bloqueado, la elección se guarda para la pestaña (sessionStorage); si tampoco, no se puede.
+  function leerEleccion() { var v = lsGet(ABIERTO_KEY); if (v === null) try { v = sessionStorage.getItem(ABIERTO_KEY); } catch (e) {} return v || ''; }
+  function guardarEleccion(v) {
+    if (lsSet(ABIERTO_KEY, v)) return true;
+    try { sessionStorage.setItem(ABIERTO_KEY, v); return sessionStorage.getItem(ABIERTO_KEY) === v; } catch (e) { return false; }
+  }
+  // Clave local (anotaciones, leídas, visto…) de cada libro. La del libro de la página no cambia; la de uno importado
+  // lleva su lugar, y como un id nunca tiene «:», no puede coincidir con la de otro libro ni con las de la página.
+  function claveLocalDe(tipo, id) { return tipo === 'pagina' ? 'lector-anotaciones:' + (id || 'libro') : 'lector-anotaciones:' + tipo + ':' + id; }
+  // El libro que esta carga va a mostrar: el elegido la última vez, o el de la página. Un libro importado se sanea y se
+  // valida antes de mostrarse; si ya no existe, se olvida la elección; si falló otra cosa (la base no respondió, o la
+  // página se abrió fuera de claude.ai), se conserva para la próxima carga.
   function obtenerLibro() {
-    var m = /^(base|local):(.+)$/.exec(lsGet(ABIERTO_KEY) || '');
+    var m = /^(base|local):([A-Za-z0-9_-]+)$/.exec(leerEleccion());
     var dePagina = function (aviso) { return leerLibroPagina().then(function (L) { return { libro: L, fuente: { tipo: 'pagina', id: null }, aviso: aviso }; }); };
     if (!m) return dePagina();
     var leer = m[1] === 'base' ? usoDb.then(function (d) { if (!d) throw new Error('sin base compartida en esta vista'); return compartida.leer(d, m[2]); }) : enNavegador.leer(m[2]);
     return leer.then(function (L) {
-      if (!L) throw new Error('ya no está en la biblioteca');
+      if (!L) { var e = new Error('ya no está en la biblioteca'); e.noEsta = true; throw e; }
       L.id = m[2]; L.claves_anteriores = [];  // las claves viejas de localStorage son del libro de la página
       N.sanearLibro(L);
+      var problemas = N.validarLibro(L);
+      if (problemas.length) { var e2 = new Error('el libro guardado no es válido: ' + problemas[0]); e2.noEsta = true; throw e2; }
       return { libro: L, fuente: { tipo: m[1], id: m[2] } };
     }).catch(function (e) {
-      lsSet(ABIERTO_KEY, '');
-      return dePagina('No se pudo abrir el libro elegido (' + ((e && e.message) || e) + '); se abrió el de la página.');
+      if (e && e.noEsta) guardarEleccion('');
+      return dePagina('No se pudo abrir el libro elegido (' + ((e && e.message) || e) + '); se abrió el de la página' + (e && e.noEsta ? '.' : ', y se volverá a intentar al recargar.'));
     });
   }
   // Colecciones del libro abierto en la base.
@@ -2760,57 +2836,90 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
   }
   // Un rechazo pasajero se reintenta una vez, como en las anotaciones.
   function conReintento(fn) { return fn().catch(function (e) { if (!esTransitorio(e)) throw e; return new Promise(function (r) { setTimeout(r, 200 + Math.random() * 400); }).then(fn); }); }
+  function partesDe(m) { var n = m && m.partes; return typeof n === 'number' && n >= 1 && n <= PARTES_MAX && n === Math.floor(n) ? n : 0; }
+  function rutaParte(m, i) { return m.version ? m.version + '-' + i : String(i); }
+  // Cada versión de un libro compartido escribe sus partes con su propio prefijo (`<versión>-<n>`) y sólo al final la
+  // ficha que las nombra (versión, número de partes, largo y huella del texto). Así, una subida que falla a mitad (o que
+  // alguien lee mientras tanto) nunca mezcla dos versiones: la ficha sigue apuntando a la anterior, intacta, y al leer
+  // se comprueba que lo armado coincide con la ficha. Las partes de la versión anterior se borran después.
   var compartida = {
-    listar: function (d) { return d.collection('libros').get().then(function (s) { return s.docs.map(function (x) { return x.data(); }).filter(function (m) { return m && m.id && m.partes; }); }); },
+    listar: function (d) { return d.collection('libros').get().then(function (s) { return s.docs.map(function (x) { return x.data(); }).filter(function (m) { return m && typeof m.id === 'string' && /^[A-Za-z0-9_-]+$/.test(m.id) && partesDe(m); }); }); },
+    ficha: function (d, id) { return d.collection('libros').doc(id).get().then(function (s) { return s.exists ? s.data() : null; }); },
     leer: function (d, id) {
-      return d.collection('libros').doc(id).get().then(function (s) {
-        if (!s.exists) return null;
-        var m = s.data(), ps = [];
-        for (var i = 1; i <= m.partes; i++) ps.push(d.collection('libros/' + id + '/partes').doc(String(i)).get());
+      return compartida.ficha(d, id).then(function (m) {
+        if (!m) return null;
+        var n = partesDe(m), ps = [];
+        if (!n) throw new Error('la ficha del libro en la base está dañada');
+        for (var i = 1; i <= n; i++) ps.push(d.collection('libros/' + id + '/partes').doc(rutaParte(m, i)).get());
         return Promise.all(ps).then(function (xs) {
-          if (xs.some(function (x) { return !x.exists; })) throw new Error('faltan partes del libro en la base');
-          return JSON.parse(xs.map(function (x) { return x.data().datos; }).join(''));
+          if (xs.some(function (x) { return !x.exists; })) throw new Error('faltan partes del libro en la base (¿se está reemplazando? vuelve a abrirlo en un momento)');
+          var texto = xs.map(function (x) { return String(x.data().datos || ''); }).join('');
+          if ((m.largo && texto.length !== m.largo) || (m.huella && N.huella(texto) !== m.huella)) throw new Error('las partes del libro no coinciden con su ficha');
+          return JSON.parse(texto);
         });
       });
     },
-    // Primero las partes y al final la ficha que las cuenta: un libro a medio subir no aparece en la lista.
     guardar: function (d, meta, libro, avance) {
-      var partes = trocear(JSON.stringify(libro)), col = d.collection('libros/' + meta.id + '/partes'), previas = 0;
-      return d.collection('libros').doc(meta.id).get().then(function (s) { previas = s.exists ? (s.data().partes || 0) : 0; })
+      var texto = JSON.stringify(libro), partes = trocear(texto), col = d.collection('libros/' + meta.id + '/partes'), previa = null, escritas = [];
+      var version = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      return compartida.ficha(d, meta.id).then(function (m) { previa = m; })
         .then(function () {
           return partes.reduce(function (p, datos, i) {
-            return p.then(function () { avance(i + 1, partes.length); return conReintento(function () { return col.doc(String(i + 1)).set({ n: i + 1, datos: datos }); }); });
+            return p.then(function () {
+              avance(i + 1, partes.length);
+              var ruta = version + '-' + (i + 1);
+              return conReintento(function () { return enCurso(col.doc(ruta).set({ n: i + 1, datos: datos })); }).then(function () { escritas.push(ruta); });
+            });
           }, Promise.resolve());
         })
-        .then(function () { meta.partes = partes.length; return conReintento(function () { return d.collection('libros').doc(meta.id).set(meta); }); })
-        .then(function () { var b = []; for (var i = partes.length + 1; i <= previas; i++) b.push(col.doc(String(i)).delete().catch(function () {})); return Promise.all(b); });
+        .then(function () {
+          meta.version = version; meta.partes = partes.length; meta.largo = texto.length; meta.huella = N.huella(texto);
+          return conReintento(function () { return enCurso(d.collection('libros').doc(meta.id).set(meta)); });
+        })
+        .then(function () {
+          var n = partesDe(previa), b = [];
+          for (var i = 1; i <= n; i++) b.push(col.doc(rutaParte(previa, i)).delete().catch(function () {}));
+          return Promise.all(b);
+        }, function (e) {
+          // la subida no se completó: la ficha sigue en la versión anterior; se retiran las partes nuevas sueltas
+          escritas.forEach(function (r) { col.doc(r).delete().catch(function () {}); });
+          throw e;
+        });
     },
     // Se borran el libro y sus partes; sus anotaciones quedan en la base y vuelven si se importa de nuevo.
     borrar: function (d, id) {
-      return d.collection('libros').doc(id).get().then(function (s) {
-        var n = s.exists ? (s.data().partes || 0) : 0;
-        return d.collection('libros').doc(id).delete().then(function () { var b = []; for (var i = 1; i <= n; i++) b.push(d.collection('libros/' + id + '/partes').doc(String(i)).delete().catch(function () {})); return Promise.all(b); });
+      return compartida.ficha(d, id).then(function (m) {
+        return d.collection('libros').doc(id).delete().then(function () {
+          var n = partesDe(m), b = [];
+          for (var i = 1; i <= n; i++) b.push(d.collection('libros/' + id + '/partes').doc(rutaParte(m, i)).delete().catch(function () {}));
+          return Promise.all(b);
+        });
       });
     }
   };
 
   // --- abrir otro libro: recordar la elección y recargar cuando no quede nada por escribir
+  // Lo que todavía no confirmó la base (una escritura lenta, o a la espera de su reintento) pasa a la copia del navegador
+  // antes de recargar; al volver a este libro, la página la recupera y la vuelve a subir.
   function abrirLibro(tipo, id) {
-    lsSet(ABIERTO_KEY, claveAbierta(tipo, id));
+    if (!guardarEleccion(claveAbierta(tipo, id))) { estadoBib('Este navegador no deja guardar la elección (almacenamiento bloqueado): no se puede cambiar de libro.', true); return false; }
     estadoBib('Abriendo…');
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();  // guarda la nota en edición
     var inicio = Date.now();
     (function esperar() {
-      if (ESCRIBIENDO > 0 && Date.now() - inicio < 4000) { setTimeout(esperar, 100); return; }
+      var vuelo = Object.keys(EN_VUELO).filter(function (k) { return !!anots[k]; });
+      if ((ESCRIBIENDO > 0 || vuelo.length) && Date.now() - inicio < 4000) { setTimeout(esperar, 100); return; }
+      if (vuelo.length) guardarLocal(vuelo);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
       location.reload();
     })();
+    return true;
   }
 
   // --- la ventana de la biblioteca
   var LISTA = [];      // [{ tipo, id, titulo, autor, detalle }]
   var PREVIA = null;   // { libro, avisos, origen } del archivo leído, a la espera de confirmar
-  var BASE_BIB = null, PUEDE_COMPARTIR = false;
+  var BASE_BIB = null, PUEDE_COMPARTIR = false, LISTA_FALLO = false;
   function estadoBib(t, aviso) { var e = $('#bib-estado'); e.textContent = t || ''; e.className = 'bib-estado' + (aviso ? ' aviso' : ''); }
   function abrirBiblioteca() {
     abrirDialogo($('#biblioteca'));
@@ -2822,17 +2931,19 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       BASE_BIB = r[0];
       if (!BASE_BIB) { PUEDE_COMPARTIR = false; return []; }
       var permiso = r[1] && r[1].can ? r[1].can('data.write').catch(function () { return null; }) : Promise.resolve(null);
+      // si la lista compartida no se puede leer, tampoco se ofrece guardar en ella: no se sabría si pisa el libro de otro
+      LISTA_FALLO = false;
       return permiso.then(function (p) { PUEDE_COMPARTIR = p !== false && !SOLO_LECTURA; return compartida.listar(BASE_BIB); })
-        .then(function (ms) { return ms.map(function (m) { return { tipo: 'base', id: m.id, titulo: m.titulo, autor: m.autor || '', detalle: 'compartido' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
+        .then(function (ms) { return ms.map(function (m) { return { tipo: 'base', id: m.id, titulo: String(m.titulo || m.id), autor: String(m.autor || ''), detalle: 'compartido' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { LISTA_FALLO = true; PUEDE_COMPARTIR = false; return []; });
     });
-    var nav = enNavegador.listar().then(function (ms) { return ms.map(function (m) { return { tipo: 'local', id: m.id, titulo: m.titulo, autor: m.autor || '', detalle: 'sólo en este navegador' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
+    var nav = enNavegador.listar().then(function (ms) { return ms.map(function (m) { return { tipo: 'local', id: m.id, titulo: String(m.titulo || m.id), autor: m.autor || '', detalle: 'sólo en este navegador' + (m.importado ? ' · importado el ' + String(m.importado).slice(0, 10) : '') }; }); }, function () { return []; });
     return Promise.all([pagina, base, nav]).then(function (r) { LISTA = r[0].concat(r[1], r[2]); return LISTA; });
   }
   function renderBiblioteca() {
     var ul = $('#bib-lista');
     return cargarLista().then(function () {
       ul.innerHTML = '';
-      $('#bib-intro').textContent = BASE_BIB ? (PUEDE_COMPARTIR ? 'Los libros compartidos los ve todo el que abre esta página; los de este navegador, sólo tú.' : 'Puedes leer los libros compartidos; los que importes quedarán sólo en este navegador.') : 'Sin base compartida: los libros que importes quedan sólo en este navegador.';
+      $('#bib-intro').textContent = LISTA_FALLO ? 'No se pudo leer la biblioteca compartida; por ahora, lo que importes quedará sólo en este navegador. Vuelve a abrir la biblioteca para reintentar.' : BASE_BIB ? (PUEDE_COMPARTIR ? 'Los libros compartidos los ve todo el que abre esta página; los de este navegador, sólo tú.' : 'Puedes leer los libros compartidos; los que importes quedarán sólo en este navegador.') : 'Sin base compartida: los libros que importes quedan sólo en este navegador.';
       if (!LISTA.length) ul.appendChild(el('li', { 'class': 'vacio', text: 'Todavía no hay libros. Importa uno abajo.' }));
       LISTA.forEach(function (x) {
         var abierto = x.tipo === FUENTE.tipo && (x.tipo === 'pagina' || x.id === FUENTE.id) && !!LIBRO;
@@ -2885,7 +2996,7 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     estadoBib('Borrando…');
     var hecho = x.tipo === 'base' ? compartida.borrar(BASE_BIB, x.id) : enNavegador.borrar(x.id).then(function () {
       // las anotaciones de un libro sólo de este navegador viven en su clave local
-      ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) { try { localStorage.removeItem('lector-anotaciones:' + x.id + s); } catch (e) {} });
+      ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) { try { localStorage.removeItem(claveLocalDe('local', x.id) + s); } catch (e) {} });
     });
     hecho.then(function () {
       estadoBib('Libro borrado.');
@@ -2947,13 +3058,28 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
     var meta = { id: d.id, titulo: L.titulo, autor: L.autor, subtitulo: L.subtitulo || '', generado: L.generado || null, importado: ahora(), origen: PREVIA.origen, archivos: L.fuentes || [], secciones: L.secciones.length, bloques: nb, por: ME || null };
     $('#bib-importar').disabled = true;
     estadoBib('Guardando…');
-    var guardado = d.donde === 'base' ? compartida.guardar(BASE_BIB, meta, L, function (i, n) { if (n > 1) estadoBib('Guardando en la biblioteca compartida… ' + i + ' de ' + n); }) : enNavegador.guardar(meta, L);
-    guardado.then(function () { PREVIA = null; abrirLibro(d.donde, d.id); }, function (e) {
+    // Justo antes de guardar en la biblioteca compartida se vuelve a mirar si alguien guardó entre tanto un libro con ese
+    // id: sólo se reemplaza lo que el lector eligió reemplazar.
+    var libre = d.donde === 'base' && !(d.choca && d.id === N.slug(d.titulo)) ? compartida.ficha(BASE_BIB, d.id) : Promise.resolve(null);
+    libre.then(function (otro) {
+      if (otro) {
+        LISTA.push({ tipo: 'base', id: d.id, titulo: String(otro.titulo || d.id), autor: String(otro.autor || ''), detalle: 'compartido' });
+        actualizarPrevia();
+        var e = new Error('mientras tanto alguien guardó un libro con ese título; elige reemplazarlo o guardarlo como otro');
+        e.choque = true; throw e;
+      }
+      return d.donde === 'base' ? compartida.guardar(BASE_BIB, meta, L, function (i, n) { if (n > 1) estadoBib('Guardando en la biblioteca compartida… ' + i + ' de ' + n); }) : enNavegador.guardar(meta, L);
+    }).then(function () {
+      PREVIA = null;
+      if (!abrirLibro(d.donde, d.id)) $('#bib-importar').disabled = false;
+    }, function (e) {
       $('#bib-importar').disabled = false;
+      if (e && e.choque) { estadoBib(e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.', true); return; }
       estadoBib('No se pudo guardar (' + ((e && (e.code || e.message)) || 'error') + ')' + (d.donde === 'base' ? '; prueba a guardarlo sólo en este navegador.' : '.'), true);
     });
   }
   $('#b-biblioteca').addEventListener('click', abrirBiblioteca);
+  $('#aviso-libro .cerrar').addEventListener('click', function () { $('#aviso-libro').hidden = true; $('#lectura').focus({ preventScroll: true }); });
   $('#biblioteca').addEventListener('click', function (ev) { if (ev.target === this || ev.target.closest('.dialogo-cab .cerrar')) cerrarDialogo(this); });
   $('#bib-elegir').addEventListener('click', function () { $('#bib-archivo').click(); });
   $('#bib-archivo').addEventListener('change', function () { prepararImportacion(this.files); this.value = ''; });
@@ -2986,7 +3112,9 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       var L = r.libro;
       if (!L || !L.secciones || !L.secciones.length) throw new Error('el libro no tiene secciones');
       FUENTE = r.fuente; LIBRO = L; SECS = L.secciones;
-      LOCAL_KEY = 'lector-anotaciones:' + (L.id || 'libro');
+      // el libro de la página conserva su clave de siempre ('lector-anotaciones:' + (L.id || 'libro')); uno importado
+      // lleva su lugar en la clave (claveLocalDe)
+      LOCAL_KEY = claveLocalDe(FUENTE.tipo, FUENTE.tipo === 'pagina' ? L.id : FUENTE.id);
       document.title = 'Lector · ' + L.titulo;
       VISTO = lsJSON(LOCAL_KEY + ':visto'); LEIDAS = lsJSON(LOCAL_KEY + ':leidas'); CAPAS_ON = lsJSON(LOCAL_KEY + ':capas');
       renderLibro(); renderCapasMenu(); renderProgreso();
@@ -2995,7 +3123,10 @@ figure .fig-ausente { border: 1px dashed var(--line); color: var(--fg-2); font-f
       var h = (location.hash || '').replace('#', ''), ultima = lsGet(LOCAL_KEY + ':ultima');
       irA(SEC_BY_ID[h] ? h : (SEC_BY_ID[ultima] ? ultima : (SEC_BY_ID[L.inicio] ? L.inicio : SECS[0].id)));
       pintarTodo(); renderPanel(); renderCuentas();
-      if (r.aviso) estado(r.aviso, true); else estado('Conectando con la base de anotaciones…');
+      // un aviso del arranque (el libro elegido no se pudo abrir) queda a la vista hasta que se cierre: la barra de estado
+      // lo pisaría con «Conectado…»
+      if (r.aviso) { $('span', $('#aviso-libro')).textContent = r.aviso; $('#aviso-libro').hidden = false; anunciar(r.aviso); }
+      estado('Conectando con la base de anotaciones…');
     });
     libroListo.catch(function (e) {
       if (e && e.sinLibro) { mostrarSinLibro(); return; }

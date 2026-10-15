@@ -24,6 +24,22 @@
     for (i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return typeof btoa !== 'undefined' ? btoa(s) : Buffer.from(s, 'binary').toString('base64');
   }
+  // Texto de un archivo: UTF-8 (o UTF-16 con su marca); si no lo es, el juego de caracteres que declare un HTML o, en
+  // su defecto, windows-1252 (lo que guardan el Bloc de notas «ANSI» y Word como página web), con un aviso.
+  function decodificarTexto(bytes, nombre, avisos) {
+    var dec = function (cs, fatal) { return new TextDecoder(cs, fatal ? { fatal: true } : undefined).decode(bytes); };
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) return dec('utf-16le');
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) return dec('utf-16be');
+    try { return dec('utf-8', true); } catch (e) { /* no es UTF-8 */ }
+    var cab = '', i, cs = 'windows-1252';
+    for (i = 0; i < Math.min(bytes.length, 4096); i++) cab += String.fromCharCode(bytes[i]);
+    var m = /<meta[^>]+charset\s*=\s*["']?([\w:.-]+)/i.exec(cab) || /<\?xml[^>]+encoding\s*=\s*["']([\w:.-]+)/i.exec(cab);
+    if (m && !/^utf-?8$/i.test(m[1])) cs = m[1];
+    var texto;
+    try { texto = dec(cs); } catch (e) { cs = 'windows-1252'; texto = dec(cs); }
+    avisos.push(nombre + ' no está en UTF-8: se leyó como ' + cs + '.');
+    return texto;
+  }
   function textoLibre(n) { return espacios(n ? (n.textContent || '') : ''); }
   // Rutas dentro de un ZIP: relativa a la carpeta de `desde`, sin «..» ni fragmento.
   function resolver(desde, href) {
@@ -39,9 +55,10 @@
   function colaImagenes(leer, avisos) {
     var pendientes = [];
     return {
+      enTexto: 0,  // imágenes metidas entre el texto de un párrafo, que no se pueden mostrar como figura
       pedir: function (b, ruta) { b.html.src = ''; if (ruta) pendientes.push({ b: b, ruta: ruta }); },
       resolver: function () {
-        var total = 0, omitidas = 0;
+        var yo = this, total = 0, omitidas = 0;
         return pendientes.reduce(function (p, x) {
           return p.then(function () {
             var tipo = TIPOS_IMAGEN[extension(x.ruta)];
@@ -53,6 +70,7 @@
             }, function () { omitidas++; });
           });
         }, Promise.resolve()).then(function () {
+          if (yo.enTexto) avisos.push(yo.enTexto + (yo.enTexto === 1 ? ' imagen dentro del texto de un párrafo se omitió.' : ' imágenes dentro del texto de un párrafo se omitieron.'));
           if (omitidas) avisos.push(omitidas + (omitidas === 1 ? ' figura quedó' : ' figuras quedaron') + ' sólo con su leyenda (imagen ausente, de formato no admitido o demasiado grande).');
         });
       }
@@ -79,9 +97,18 @@
     var dentro = hijos(n).map(enLinea).join('');
     if (t === 'strong' || t === 'b') return envolver('strong', dentro);
     if (t === 'em' || t === 'i' || t === 'cite' || t === 'dfn' || t === 'var') return envolver('em', dentro);
-    return dentro;
+    // un bloque dentro de una celda, un ítem o un título (párrafos, listas anidadas, HTML sin saltos de línea) no
+    // pega su texto al vecino
+    return EN_LINEA.test(t) ? dentro : ' ' + dentro + ' ';
   }
   function htmlEnLinea(n) { return espacios(hijos(n).map(enLinea).join('')); }
+  function textoEnLinea(n) { return espacios(N.textoDeHtml(htmlEnLinea(n))); }
+  // las filas de una tabla, sin las de las tablas anidadas en sus celdas (que ya van en el texto de la celda)
+  function filasHtml(tabla) {
+    var filas = [];
+    hijos(tabla).forEach(function (x) { if (x.nodeType !== 1) return; var t = local(x); if (t === 'tr') filas.push(x); else if (t === 'thead' || t === 'tbody' || t === 'tfoot') hijos(x).forEach(function (y) { if (y.nodeType === 1 && local(y) === 'tr') filas.push(y); }); });
+    return filas;
+  }
   function nivelTitulo(n) { var m = /^h([1-6])$/.exec(local(n)); return m && textoLibre(n) ? parseInt(m[1], 10) : 0; }
   function nivelesHtml(doc, usados) {
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(function (h, i) { var ns = doc.getElementsByTagName(h); for (var k = 0; k < ns.length; k++) if (textoLibre(ns[k])) { usados[i + 1] = 1; break; } });
@@ -105,18 +132,25 @@
         var t = local(n);
         if (OMITIR.test(t)) return;
         if (t === 'img') { soltar(); figura(n, ''); return; }
-        if (EN_LINEA.test(t)) { pendiente += enLinea(n); return; }
+        if (EN_LINEA.test(t)) {
+          // una imagen dentro de un enlace o un span: sola, es una figura; entre texto, se omite y se avisa
+          var dentroImgs = n.getElementsByTagName ? n.getElementsByTagName('img') : [];
+          if (dentroImgs.length && !textoLibre(n)) { soltar(); for (var q = 0; q < dentroImgs.length; q++) figura(dentroImgs[q], ''); return; }
+          ctx.imagenes.enTexto += dentroImgs.length;
+          pendiente += enLinea(n); return;
+        }
         soltar();
         var nv = nivelTitulo(n);
         if (nv) {
           var dest = ctx.niveles[nv] || { t: 'h4' };
-          if (dest.sec) st.nueva(textoLibre(n), dest.sec, src());
+          if (dest.sec) st.nueva(textoEnLinea(n), dest.sec, src());
           else st.bloque(dest.t, htmlEnLinea(n), src());
           return;
         }
         if (t === 'p' || t === 'dt' || t === 'dd' || t === 'caption' || t === 'address') {
           var imgs = n.getElementsByTagName('img');
           if (imgs.length && !textoLibre(n)) { for (var k = 0; k < imgs.length; k++) figura(imgs[k], ''); return; }
+          ctx.imagenes.enTexto += imgs.length;
           parrafo(htmlEnLinea(n)); return;
         }
         if (t === 'pre') { parrafo(N.escaparHtml(n.textContent || '')); return; }
@@ -131,7 +165,7 @@
           return;
         }
         if (t === 'table') {
-          var filas = [], trs = n.getElementsByTagName('tr');
+          var filas = [], trs = filasHtml(n);
           for (var r = 0; r < trs.length; r++) {
             var celdas = hijos(trs[r]).filter(function (x) { return x.nodeType === 1 && (local(x) === 'td' || local(x) === 'th'); }).map(htmlEnLinea);
             if (celdas.length) filas.push(celdas);
@@ -159,7 +193,7 @@
   function cuerpoDe(doc) { return doc.getElementsByTagName('body')[0] || doc.documentElement; }
 
   function importarHtml(archivos, opciones) {
-    var avisos = [], st = N.estadoLibro(''), usados = {}, docs = archivos.map(function (a) { var d = documentoHtml(N.decodificarUtf8(a.bytes), opciones.parsear, extension(a.nombre) === 'xhtml'); nivelesHtml(d, usados); return { nombre: a.nombre, doc: d }; });
+    var avisos = [], st = N.estadoLibro(''), usados = {}, docs = archivos.map(function (a) { var d = documentoHtml(decodificarTexto(a.bytes, a.nombre, avisos), opciones.parsear, extension(a.nombre) === 'xhtml'); nivelesHtml(d, usados); return { nombre: a.nombre, doc: d }; });
     var niveles = mapaNiveles(usados), imagenes = colaImagenes(function () { return Promise.reject(new Error('sin imágenes')); }, avisos);
     docs.forEach(function (x) { bloquesHtml(cuerpoDe(x.doc), { st: st, niveles: niveles, nombre: x.nombre, imagenes: imagenes, rutaImagen: function () { return null; } }); });
     var primero = docs[0] && docs[0].doc, t = primero && primero.getElementsByTagName('title')[0];
@@ -321,7 +355,7 @@
         orden++;
         if (local(p) === 'tbl') {
           cerrar(); ultimaFigura = null;
-          var filas = todosNS(p, 'tr').map(function (tr) { return hijos(tr).filter(function (c) { return c.nodeType === 1 && local(c) === 'tc'; }).map(function (tc) { return espacios(todosNS(tc, 'p').map(enLineaW).join(' ')); }); }).filter(function (f) { return f.length; });
+          var filas = directos(p, 'tr').map(function (tr) { return hijos(tr).filter(function (c) { return c.nodeType === 1 && local(c) === 'tc'; }).map(function (tc) { return espacios(todosNS(tc, 'p').map(enLineaW).join(' ')); }); }).filter(function (f) { return f.length; });
           if (filas.length) st.bloque('table', filas, src());
           return;
         }
@@ -340,6 +374,7 @@
           return;
         }
         if (!texto) return;
+        imagenes.enTexto += blips.length;
         if (/^(title|t[ií]tulo)$/.test(est.nombre)) { cerrar(); if (!meta.titulo) meta.titulo = texto; ultimaFigura = null; return; }
         if (/^(subtitle|subt[ií]tulo)$/.test(est.nombre)) { cerrar(); if (!meta.subtitulo) meta.subtitulo = texto; return; }
         // la leyenda que sigue a una imagen es su pie, no un párrafo aparte
@@ -355,8 +390,9 @@
           if (dest.sec) st.nueva(texto, dest.sec, src()); else st.bloque(dest.t, h, src());
           return;
         }
-        var numPr = wHijo(ppr, 'numPr');
-        if (numPr || est.num) {
+        var numPr = wHijo(ppr, 'numPr'), numIdP = numPr ? wAttr(wHijo(numPr, 'numId'), 'val') : null;
+        // numId 0 en el párrafo es la forma de Word de quitarle la numeración que hereda del estilo
+        if ((numPr && numIdP !== '0') || (!numPr && est.num)) {
           var numId = wAttr(wHijo(numPr, 'numId'), 'val'), ilvl = wAttr(wHijo(numPr, 'ilvl'), 'val') || '0', fmt = (formatos[numId] || {})[ilvl] || 'bullet';
           var t = fmt === 'bullet' || fmt === 'none' ? 'ul' : 'ol';
           if (cita) cerrar();
@@ -418,7 +454,7 @@
       }
       if (tipo === 'md') {
         var avisosMd = [], secciones = N.parsearMarkdown(archivos.map(function (a) {
-          var t = N.decodificarUtf8(a.bytes); return { nombre: a.nombre, texto: /\.te?xt$/i.test(a.nombre) ? txtAMarkdown(t) : t };
+          var t = decodificarTexto(a.bytes, a.nombre, avisosMd); return { nombre: a.nombre, texto: /\.te?xt$/i.test(a.nombre) ? txtAMarkdown(t) : t };
         }), '');
         var cola = colaImagenes(function (r) { return figuras[r] ? Promise.resolve(figuras[r]) : Promise.reject(new Error('falta')); }, avisosMd);
         secciones.forEach(function (s) { s.bloques.forEach(function (b) { if (b.t === 'figure') cola.pedir(b, b.html.src); }); });

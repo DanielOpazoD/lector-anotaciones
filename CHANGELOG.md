@@ -14,6 +14,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 - «Deshacer borrado» como aviso flotante, a mano también con el panel abierto en el teléfono. Al borrar, el foco pasa a la ficha vecina.
 - Panel más despejado: filtros y exportación en desplegables, con el filtro activo resumido; «Quitar filtros» cuando un filtro deja la lista vacía.
 - Orden `lector-anotaciones pagina [--salida index.html] [--comprobar]` y opción `construir --pagina`.
+- Correcciones de accesibilidad de la revisión independiente: concentración y panel, contraste del tema oscuro (texto sobre la tinta de 1,92:1 a 9,4:1), foco que no cae al cuerpo, diálogos que no se cierran con un clic en su relleno, barra táctil sin desborde, áreas de toque, región viva propia sólo para avisos, cambio de ancho con un cajón abierto, Esc por capas también desde un campo, títulos y leyendas que crecen con «Aa», y guardar la nota en edición al salir de la página.
 
 ### Cambiado
 
@@ -21,7 +22,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 
 ### Seguridad
 
-- Lo que no es el libro de la página (importado de un archivo, o leído de la biblioteca compartida, donde escribe cualquier colaborador) se reduce a texto, `<strong>` y `<em>` antes de mostrarse; las figuras sólo admiten rutas relativas o `data:image`.
+- Lo que no es el libro de la página (importado de un archivo, o leído de la biblioteca compartida, donde escribe cualquier colaborador) se reduce a texto, `<strong>` y `<em>` antes de mostrarse; las figuras sólo admiten rutas relativas a la página (ni de otro sitio, ni `//…`, ni con barras invertidas) o `data:image`; y un libro con ids de sección que no sean letras, dígitos, `-` o `_` se rechaza al importarlo y al abrirlo.
+
+### Robustez de la biblioteca (revisión independiente antes de publicar)
+
+- Las claves locales de un libro importado llevan su lugar (`lector-anotaciones:base:<id>`, `lector-anotaciones:local:<id>`), y la elección del libro abierto y los ajustes viven fuera de ese espacio: ningún libro pisa las notas de otro.
+- Reemplazar un libro compartido es atómico: partes con versión y ficha que las nombra, comprobadas al leer; una subida que falla no deja partes sueltas ni mezcla versiones.
+- Abrir otro libro espera también a los reintentos y deja en el navegador lo que la base no confirmó, para subirlo al volver.
+- Antes de guardar en la biblioteca compartida se vuelve a comprobar el choque de títulos; si la lista no se puede leer, sólo se ofrece este navegador.
+- Importadores: espacios entre bloques dentro de celdas, ítems y títulos; tablas anidadas sin texto repetido; marcos de una columna en Word; `numId 0` sin lista; aviso por imágenes omitidas dentro del texto; texto que no está en UTF-8 leído como windows-1252 (o el charset del HTML) con aviso.
+- El Markdown de la página coincide con `markdown.py` también con espacios Unicode (`\x85`, `\x1c`), la marca de orden de bytes y dígitos de otras escrituras.
+- Un aviso de arranque (el libro elegido no se pudo abrir) queda a la vista hasta cerrarlo; la elección sólo se olvida si el libro ya no existe; con localStorage bloqueado se usa sessionStorage o se dice que no se puede cambiar de libro.
 
 ## [0.2.12] - 2026-10-15
 

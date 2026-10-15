@@ -21,7 +21,8 @@ def test_contratos_con_el_resto_del_sistema(web_index: Path):
     assert "collection(rutaBase('anotaciones'))" in html, "la colección que lee `exportar` y Claude"
     assert "FUENTE.tipo === 'base' ? 'libros/' + FUENTE.id + '/' + nombre : nombre" in html
     assert "window.claude.use('db')" in html
-    assert "'lector-anotaciones:' + (L.id" in html, "el respaldo local se separa por libro"
+    assert "'lector-anotaciones:' + (id || 'libro')" in html, "el respaldo local se separa por libro"
+    assert "'lector-anotaciones:' + tipo + ':' + id" in html, "y el de un libro importado lleva su lugar"
     for color in ("revisar", "cortar", "duda", "conservar"):
         assert f'data-c="{color}"' in html
     for tipo in ("'subrayado'", "'pagina'", "'capitulo'", "'general'"):
