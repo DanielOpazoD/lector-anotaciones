@@ -80,7 +80,14 @@ def _cola(a: dict) -> list[str]:
         lineas.append(f"  - Respuesta{detalle}: {(a.get('respuesta') or '').strip().replace(chr(10), ' ')}")
     if a.get("replica"):
         lineas.append(f"  - Réplica: {a['replica'].strip().replace(chr(10), ' ')}")
+    if reabierta(a):
+        lineas.append(f"  - Reabierta por el autor ({a['revisado'][:10]}) tras la respuesta.")
     return lineas
+
+
+def reabierta(a: dict) -> bool:
+    """Respondida como atendida o descartada y devuelta por el autor desde «Por revisar»."""
+    return bool(a.get("revisado")) and a.get("cierre") in ("atendida", "descartada") and a.get("estado") != "resuelta"
 
 
 def _linea(a: dict) -> list[str]:

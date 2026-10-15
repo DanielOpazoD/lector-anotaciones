@@ -1318,6 +1318,7 @@ try {
   // respuestas de quien edita: atendida, pregunta, descartada y atendida con el pasaje reescrito.
   const ctxV = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxV.addInitScript(sinBase);
+  await ctxV.grantPermissions(['clipboard-read', 'clipboard-write']);
   const pv4 = await ctxV.newPage();
   const erroresV = [];
   pv4.on('pageerror', (e) => erroresV.push(String(e)));
@@ -1430,6 +1431,9 @@ try {
   check(trasR.estado === 'abierta' && !!trasR.revisado && cursorR === `nota-${vC}`, `R reabre la respuesta descartada, la da por revisada y deja el cursor en la nota (${JSON.stringify({ estado: trasR.estado, cursorR })})`);
   await pv4.keyboard.type(' Mejor quitarla.');
   await pv4.keyboard.press('Escape');
+  // quien vuelca las anotaciones ve que el autor la devolvió
+  const copiaR = await enFicha(pv4, `.ficha[data-id="${vC}"]`, 'button[data-accion="copiar"]').then(() => pv4.evaluate(() => navigator.clipboard.readText()), () => '').catch(() => '');
+  check(/Respuesta \(descartada\): .*\nReabierta por el autor \(\d{4}-\d\d-\d\d\) tras la respuesta\./.test(copiaR), `«Copiar» en una respuesta reabierta lo dice (${JSON.stringify(copiaR.split('\n').slice(-2))})`);
   await pv4.focus(`.ficha[data-id="${vC}"]`).catch(() => {});
   await pv4.keyboard.press('.');
   await pv4.waitForTimeout(150);

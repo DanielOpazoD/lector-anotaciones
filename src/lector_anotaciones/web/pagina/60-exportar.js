@@ -1,4 +1,6 @@
   // ------------------------------------------------------------ exportar
+  // Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
+  function reabierta(a) { return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta'; }
   // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
   // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
   // Lo que la base no tiene sale de la página con una señal, para que quien lo reciba sepa que no lo verá en la base.
@@ -25,6 +27,7 @@
     if (a.nota) out.push('Nota: ' + a.nota);
     if (a.respuesta || a.cierre) out.push('Respuesta' + (a.cierre ? ' (' + a.cierre + (a.commit ? ', ' + a.commit : '') + ')' : '') + ': ' + (a.respuesta || ''));
     if (a.replica) out.push('Réplica: ' + a.replica);
+    if (reabierta(a)) out.push('Reabierta por el autor (' + a.revisado.slice(0, 10) + ') tras la respuesta.');
     return out.join('\n');
   }
   function copiarSeleccion(boton) {
@@ -67,6 +70,7 @@
       else out.push('- [' + a.tipo + (a.pagina ? ' p. ' + a.pagina : '') + (a.estado === 'resuelta' ? ', resuelta' : '') + '] ' + (a.nota || '(sin texto)').replace(/\n/g, ' ') + senalSinGuardar(a));
       if (a.respuesta || a.cierre) out.push('  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' '));
       if (a.replica) out.push('  - Réplica: ' + a.replica.replace(/\n/g, ' '));
+      if (reabierta(a)) out.push('  - Reabierta por el autor (' + a.revisado.slice(0, 10) + ') tras la respuesta.');
     });
     return out.join('\n');
   }

@@ -102,6 +102,16 @@ def test_a_markdown_incluye_respuesta_cierre_replica_y_lector():
     assert "- [ ] **nota general**: Revisar el título.\n  - Respuesta (pregunta): ¿Dónde?" in md
 
 
+def test_a_markdown_senala_lo_reabierto_desde_por_revisar():
+    devuelta = dict(SUBRAYADO, id="a9", respuesta="Hecho.", cierre="atendida", revisado="2026-10-17T08:00:00.000Z")
+    md = a_markdown([devuelta], ahora=AHORA)
+    assert "  - Respuesta (atendida): Hecho.\n  - Reabierta por el autor (2026-10-17) tras la respuesta." in md
+    revisada = dict(devuelta, estado="resuelta")
+    assert "Reabierta" not in a_markdown([revisada], ahora=AHORA), "atendida y revisada no es reabierta"
+    pregunta = dict(devuelta, cierre="pregunta")
+    assert "Reabierta" not in a_markdown([pregunta], ahora=AHORA), "una pregunta abierta sigue esperando, no se reabrió"
+
+
 def test_a_markdown_ordena_como_el_libro_si_se_le_da_el_orden():
     orden = orden_de_secciones({"secciones": [{"id": "prefacio"}, {"id": "cap-01"}]})
     md = a_markdown(TODAS, orden_secciones=orden, ahora=AHORA)
