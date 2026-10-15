@@ -205,6 +205,7 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
   <button class="col-btn c-duda" type="button" data-c="duda" title="duda o verificar" aria-label="duda"></button>
   <button class="col-btn c-conservar" type="button" data-c="conservar" title="conservar" aria-label="conservar"></button>
   <button class="btn peq" type="button" id="sel-nota">+ con nota</button>
+  <button class="btn peq" type="button" id="sel-copiar" title="Copiar el texto seleccionado con sección, página y línea de origen">Copiar</button>
 </div>
 
 <script>
@@ -567,6 +568,9 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
     var res = el('button', { 'class': 'btn peq', type: 'button', text: a.estado === 'resuelta' ? 'Reabrir' : 'Resuelta' });
     res.addEventListener('click', function () { a.estado = a.estado === 'resuelta' ? 'abierta' : 'resuelta'; guardar(a); });
     acc.appendChild(res);
+    var cop = el('button', { 'class': 'btn peq', type: 'button', text: 'Copiar', title: 'Copiar esta anotación como texto para pegarla en el chat' });
+    cop.addEventListener('click', function () { copiar(textoAnotacion(a), cop); });
+    acc.appendChild(cop);
     var del = el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar' });
     del.addEventListener('click', function () {
       var c = el('span', { 'class': 'confirmar' }, [el('span', { text: '¿Borrar?' }), el('button', { 'class': 'btn peq', type: 'button', text: 'Sí', onclick: function () { borrar(a.id); } }), el('button', { 'class': 'btn peq', type: 'button', text: 'No', onclick: function () { acc.replaceChild(del, c); } })]);
@@ -600,6 +604,26 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
   }
 
   // ------------------------------------------------------------ exportar
+  // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
+  // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
+  function textoAnotacion(a) {
+    var tipos = { pagina: 'nota de página', capitulo: 'nota de sección', general: 'nota general' };
+    var cab = '[' + (a.tipo === 'subrayado' ? a.color : tipos[a.tipo] || a.tipo) + (a.estado === 'resuelta' ? ', resuelta' : '') + '] '
+      + (a.sidTitulo || 'General') + (a.pagina ? ' · p. ' + a.pagina : '') + (a.src ? ' · ' + a.src : '');
+    var out = [cab];
+    if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
+    if (a.nota) out.push('Nota: ' + a.nota);
+    return out.join('\n');
+  }
+  function copiarSeleccion(boton) {
+    var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    var r = sel.getRangeAt(0), pA = ancestroPid(r.startContainer), pB = ancestroPid(r.endContainer); if (!pA) return;
+    var s = SEC_BY_ID[BLOQUE_SEC[pA.getAttribute('data-pid')]] || {};
+    var ref = (s.titulo || '') + (pA.getAttribute('data-pg') ? ' · p. ' + pA.getAttribute('data-pg') : '') + ' · ' + pA.getAttribute('data-src')
+      + (pB && pB !== pA ? ' → ' + pB.getAttribute('data-src') : '');
+    var texto = sel.toString().replace(/^\s*p\. \d+\s*/, '').replace(/\n\s*p\. \d+\s*/g, '\n').trim();
+    copiar('[' + ref + ']\n«' + texto + '»', boton);
+  }
   function exportarJSON() { return JSON.stringify({ libro: LIBRO.titulo, generado: LIBRO.generado, exportado: ahora(), anotaciones: Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; }) }, null, 2); }
   function exportarMD() {
     var L = Object.keys(anots).map(function (k) { return anots[k]; }).sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
@@ -660,6 +684,8 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
   $$('#sel-tb .col-btn').forEach(function (b) { b.addEventListener('mousedown', function (ev) { ev.preventDefault(); }); b.addEventListener('click', function () { crearSubrayado(b.getAttribute('data-c'), false); }); });
   $('#sel-nota').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
   $('#sel-nota').addEventListener('click', function () { crearSubrayado('revisar', true); });
+  $('#sel-copiar').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+  $('#sel-copiar').addEventListener('click', function () { copiarSeleccion(this); });
 
   // ------------------------------------------------------------ controles
   $$('.tab').forEach(function (t) { t.addEventListener('click', function () { tab = t.getAttribute('data-tab'); $$('.tab').forEach(function (x) { x.classList.toggle('activa', x === t); }); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel(); }); });

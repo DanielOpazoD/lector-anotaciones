@@ -146,6 +146,19 @@ try {
   const json = (() => { try { return JSON.parse(copiado); } catch { return null; } })();
   check(json && Array.isArray(json.anotaciones) && json.anotaciones.length === 2, 'Copiar todo (JSON) produce {libro, anotaciones[]}');
 
+  // Copiar una sola anotación como texto, y copiar una selección con su referencia.
+  await page.click('.tab[data-tab="todas"]');
+  await page.click(`.ficha[data-id="${sub.id}"] .acciones button:has-text("Copiar")`);
+  const unaCopia = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(unaCopia.startsWith('[revisar] ') && unaCopia.includes(`· ${sub.src}`) && unaCopia.includes(`«${sub.cita}»`),
+    'Copiar en una ficha da color, sección, página, archivo:línea y la cita');
+  await seleccionar(page, 25);
+  await page.waitForSelector('#sel-tb', { state: 'visible' });
+  await page.click('#sel-copiar');
+  const selCopia = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(/^\[Capítulo 1\..*· 00_preliminares\.md:\d+\]\n«.{25}»$/.test(selCopia), `Copiar en la barra de selección da la referencia y el texto (${JSON.stringify(selCopia).slice(0, 80)}…)`);
+  await page.evaluate(() => window.getSelection().removeAllRanges());
+
   // ---------------------------------------------------------------- reubicación tras un cambio del libro
   // Se simula lo que pasa al reconstruir libro.json: la misma cita con desplazamientos viejos, la misma
   // cita atribuida al bloque siguiente (un párrafo insertado antes), y una cita que ya no existe.

@@ -18,6 +18,13 @@ fuentes/*.md  ──construir──▶  libro.json  ──▶  web/index.html  �
 
 Publicada como página privada en claude.ai con la capacidad `db`, la página guarda cada anotación en una base compartida que Claude lee directamente en la sesión siguiente. Sin esa base, guarda en el navegador y lo dice. Ver [docs/PUBLICAR.md](docs/PUBLICAR.md).
 
+## Cómo llegan las anotaciones a quien edita las fuentes
+
+- **Base compartida (automática).** Publicada en claude.ai con la capacidad `db`, cada anotación queda en la colección `anotaciones`; un asistente la lee directamente en la sesión siguiente sin que el autor copie nada.
+- **Una anotación.** El botón «Copiar» de cada ficha copia un texto breve con color, sección, página, `archivo:línea`, la cita y la nota, listo para pegarlo en un chat o un correo.
+- **Una selección.** Al seleccionar texto, la barra ofrece «Copiar»: el pasaje con su sección, página y `archivo:línea`, para comentar algo sin anotarlo.
+- **Todo.** «Copiar todo» en JSON (para `exportar` o para un asistente) o en Markdown (para leerlo).
+
 ## Instalación
 
 Requiere Python 3.11 o superior. Para asignar páginas hace falta `poppler-utils` (`pdftotext`, `pdfinfo`); sin él, todo funciona salvo la paginación.
