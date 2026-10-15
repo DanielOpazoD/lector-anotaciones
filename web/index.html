@@ -234,7 +234,7 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var ordenado = function (o) { if (!o || typeof o !== 'object') return o; var r = {}; Object.keys(o).sort().forEach(function (k) { r[k] = o[k]; }); return r; };
   var igual = function (a, b) { return JSON.stringify(ordenado(a)) === JSON.stringify(ordenado(b)); };
-  var lsSet = function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} };
+  var lsSet = function (k, v) { try { localStorage.setItem(k, v); return localStorage.getItem(k) === v; } catch (e) { return false; } };
 
   // ------------------------------------------------------------ libro
   function renderLibro() {
@@ -336,7 +336,10 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
     if (col) col.doc(id).delete().catch(function (e) { estado('No se pudo borrar (' + (e && e.code || 'error') + ')', true); });
     else guardarLocal();
   }
-  function guardarLocal() { lsSet(LOCAL_KEY, JSON.stringify(anots)); estado('Guardado sólo en este navegador', true); }
+  function guardarLocal() {
+    if (lsSet(LOCAL_KEY, JSON.stringify(anots))) estado('Guardado sólo en este navegador', true);
+    else estado('No se pudo guardar en este navegador (almacenamiento lleno o bloqueado): copia tus anotaciones con el botón antes de cerrar', true);
+  }
   function cargarLocal() {
     try {
       var j = JSON.parse(lsGet(LOCAL_KEY) || '{}');
@@ -348,10 +351,15 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
         if (k === LOCAL_KEY) return;
         try { var v = JSON.parse(lsGet(k) || '{}'); Object.keys(v).forEach(function (id) { if (!j[id]) { j[id] = v[id]; migradas++; } }); } catch (e) {}
       });
-      if (migradas) { lsSet(LOCAL_KEY, JSON.stringify(j)); anteriores.forEach(function (k) { if (k !== LOCAL_KEY) try { localStorage.removeItem(k); } catch (e) {} }); }
+      var guardadas = true;
+      if (migradas) {
+        guardadas = lsSet(LOCAL_KEY, JSON.stringify(j));
+        // la clave vieja sólo se retira cuando la copia nueva quedó escrita de verdad; si no, sigue siendo la única copia
+        if (guardadas) anteriores.forEach(function (k) { if (k !== LOCAL_KEY) try { localStorage.removeItem(k); } catch (e) {} });
+      }
       Object.keys(j).forEach(function (k) { anots[k] = j[k]; });
-      return migradas;
-    } catch (e) { return 0; }
+      return { migradas: migradas, guardadas: guardadas };
+    } catch (e) { return { migradas: 0, guardadas: true }; }
   }
 
   // ------------------------------------------------------------ anotaciones: creación
@@ -696,8 +704,11 @@ aside .lista { padding: 10px 12px 60px; display: flex; flex-direction: column; g
     Promise.all([libroListo, use]).then(function (r) {
       var d = r[1];
       if (!d) {
-        modo = 'local'; var migradas = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
-        estado((migradas ? migradas + ' anotaciones recuperadas de la versión anterior de la página. ' : '') + 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.', true);
+        modo = 'local'; var mig = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
+        var aviso = 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
+        if (mig.migradas && mig.guardadas) aviso = mig.migradas + ' anotaciones recuperadas de la versión anterior de la página. ' + aviso;
+        if (mig.migradas && !mig.guardadas) aviso = 'No se pudieron guardar ' + mig.migradas + ' anotaciones recuperadas de la versión anterior (almacenamiento lleno o bloqueado); se conservan en la clave anterior. Copia tus anotaciones con el botón.';
+        estado(aviso, true);
         return;
       }
       db = d; col = db.collection('anotaciones'); modo = 'db';

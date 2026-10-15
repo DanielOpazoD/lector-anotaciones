@@ -243,6 +243,30 @@ try {
   check(claves.vieja === null && !!claves.nueva, 'quedan bajo la clave nueva y la vieja se retira');
   await ctxMig.close();
 
+  // ---------------------------------------------------------------- migración con el almacenamiento lleno
+  // Si la copia nueva no se puede escribir, la clave vieja debe seguir ahí (es la única copia) y la barra avisar.
+  const ctxLleno = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxLleno.addInitScript(sinBase);
+  await ctxLleno.addInitScript(() => {
+    localStorage.setItem('lector-viejo', JSON.stringify({ vieja1: { id: 'vieja1', tipo: 'general', nota: 'Nota heredada', estado: 'abierta', creado: '2026-01-01T00:00:00.000Z' } }));
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) { if (/^lector-anotaciones:/.test(k) && !/:ultima$/.test(k)) throw new DOMException('QuotaExceededError', 'QuotaExceededError'); return original.call(this, k, v); };
+  });
+  const plleno = await ctxLleno.newPage();
+  await plleno.route('**/libro.json', async (route) => {
+    const L = JSON.parse(fs.readFileSync(LIBRO, 'utf8'));
+    L.claves_anteriores = ['lector-viejo'];
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(L) });
+  });
+  await plleno.goto(base);
+  await plleno.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await plleno.waitForFunction(() => /No se pudieron guardar/.test(document.querySelector('#estado').textContent));
+  const llenoEstado = await plleno.evaluate(() => ({ vieja: localStorage.getItem('lector-viejo'), nueva: Object.keys(localStorage).find((k) => /^lector-anotaciones:/.test(k) && !/:ultima$/.test(k)) || null }));
+  check(llenoEstado.vieja !== null && llenoEstado.nueva === null, 'si la copia nueva no se puede escribir, la clave vieja se conserva y la barra avisa');
+  await plleno.click('.tab[data-tab="todas"]');
+  check((await plleno.$$eval('.ficha textarea', (ts) => ts.map((t) => t.value))).includes('Nota heredada'), 'y las anotaciones heredadas siguen visibles en esa sesión');
+  await ctxLleno.close();
+
   // ---------------------------------------------------------------- ancho de teléfono
   const movil = await browser.newContext({ viewport: { width: 400, height: 800 } });
   await movil.addInitScript(sinBase);

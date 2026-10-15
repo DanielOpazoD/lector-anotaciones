@@ -44,6 +44,8 @@ def test_los_subrayados_se_comprueban_antes_de_pintarse(web_index: Path):
 def test_migra_las_anotaciones_de_claves_anteriores(web_index: Path):
     html = web_index.read_text(encoding="utf-8")
     assert "LIBRO.claves_anteriores" in html and "localStorage.removeItem(k)" in html
+    assert "if (guardadas) anteriores.forEach" in html, "la clave vieja sólo se retira si la copia nueva quedó guardada"
+    assert "return localStorage.getItem(k) === v" in html, "lsSet confirma la escritura en vez de tragarse el error"
 
 
 def test_el_panel_conserva_el_editor_activo(web_index: Path):
