@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lector de anotaciones</title>
+<link rel="icon" href="data:,">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400;1,7..72,600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+{{ESTILOS}}</style>
+</head>
+<body>
+<div id="app">
+  <header class="barra">
+    <div class="titulo">Lector <small id="sub">Cargando…</small></div>
+    <span id="sl-chip" class="chip" hidden title="En este libro puedes leer y copiar, no anotar">sólo lectura</span>
+    <div id="movil-barra"><button class="btn peq" id="b-indice" type="button" aria-controls="indice" aria-expanded="false">Índice</button><button class="btn peq" id="b-panel" type="button" aria-controls="panel" aria-expanded="false">Anotaciones <span id="n-panel"></span></button></div>
+    <div class="espacio"></div>
+    <input type="search" id="buscar" placeholder="Buscar en el libro y en las notas…" aria-label="Buscar en el libro y en las notas">
+    <button class="btn peq" id="b-foco" type="button" title="Modo concentración: sólo el texto (tecla F)">Concentración</button>
+    <details id="capas" class="capas-det" hidden><summary class="btn peq" title="Señales editoriales calculadas al construir el libro">Capas</summary><div class="capas-menu" id="capas-menu"></div></details>
+    <button class="btn peq" id="b-atajos" type="button" title="Atajos de teclado (tecla ?)" aria-label="Atajos de teclado">?</button>
+    <span id="estado">Cargando…</span><span id="deshacer-zona"></span>
+  </header>
+  <main class="mesa">
+    <nav class="indice" id="indice" aria-label="Índice"></nav>
+    <section class="lectura" id="lectura">
+      <div class="vacio">Cargando el libro…</div>
+    </section>
+    <aside class="panel" id="panel" aria-label="Anotaciones">
+      <div class="panel-cab">
+        <div class="tabs">
+          <button class="tab activa" type="button" data-tab="capitulo">Esta sección</button>
+          <button class="tab" type="button" data-tab="todas">Todas</button>
+          <button class="tab" type="button" data-tab="buscar">Búsqueda</button>
+        </div>
+        <button class="btn peq" id="b-nota-cap" type="button">+ Nota de la sección</button>
+        <span class="confirmar">p.&nbsp;<input type="number" id="pg-num" min="1" style="width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--marco)" aria-label="Número de página"> <button class="btn peq" id="b-nota-pg" type="button">+ Nota de página</button></span>
+        <button class="btn peq" id="b-nota-gen" type="button">+ Nota general</button>
+        <div class="filtros" id="filtros">
+          <button class="filtro on" type="button" data-f="todas">todas</button>
+          <button class="filtro" type="button" data-f="revisar">revisar</button>
+          <button class="filtro" type="button" data-f="cortar">cortar</button>
+          <button class="filtro" type="button" data-f="duda">duda</button>
+          <button class="filtro" type="button" data-f="conservar">conservar</button>
+          <button class="filtro" type="button" data-f="notas">notas de página/sección</button>
+          <button class="filtro" type="button" data-f="abiertas">sólo abiertas</button>
+          <button class="filtro" type="button" data-f="respondidas">con respuesta</button>
+          <button class="filtro" type="button" data-f="preguntas">preguntas</button>
+          <select id="f-autor" aria-label="Lector" hidden><option value="">todos los lectores</option></select>
+          <select id="f-etiqueta" aria-label="Etiqueta" hidden><option value="">todas las etiquetas</option></select>
+        </div>
+        <div class="leyenda"><span class="l-revisar">revisar o reescribir</span><span class="l-cortar">cortar</span><span class="l-duda">duda o verificar</span><span class="l-conservar">conservar, me gusta</span></div>
+        <div style="display:flex;gap:4px;width:100%"><button class="btn peq" id="b-copiar" type="button">Copiar todo (JSON)</button><button class="btn peq" id="b-copiar-md" type="button">Copiar todo (Markdown)</button></div>
+      </div>
+      <div class="lista" id="lista"><div class="vacio">Aún no hay anotaciones. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.</div></div>
+    </aside>
+  </main>
+</div>
+<div id="lightbox" role="dialog" aria-label="Figura ampliada"><img alt=""></div>
+<div id="atajos" role="dialog" aria-label="Atajos de teclado">
+  <div class="anotar"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> subrayar la selección (revisar, cortar, duda, conservar)</div>
+  <div class="anotar"><kbd>N</kbd> subrayar con nota</div>
+  <div><kbd>C</kbd> copiar la selección con referencia</div>
+  <div><kbd>J</kbd> / <kbd>K</kbd> sección siguiente / anterior · <kbd>L</kbd> marcar leída · <kbd>F</kbd> concentración</div>
+  <div><kbd>Esc</kbd> cerrar · <kbd>?</kbd> esta ayuda</div>
+</div>
+<div id="sel-tb" role="toolbar" aria-label="Subrayar">
+  <span class="etq">Subrayar</span>
+  <button class="col-btn c-revisar" type="button" data-c="revisar" title="revisar o reescribir" aria-label="revisar"></button>
+  <button class="col-btn c-cortar" type="button" data-c="cortar" title="cortar" aria-label="cortar"></button>
+  <button class="col-btn c-duda" type="button" data-c="duda" title="duda o verificar" aria-label="duda"></button>
+  <button class="col-btn c-conservar" type="button" data-c="conservar" title="conservar" aria-label="conservar"></button>
+  <button class="btn peq" type="button" id="sel-nota">+ con nota</button>
+  <button class="btn peq" type="button" id="sel-copiar" title="Copiar el texto seleccionado con sección, página y línea de origen">Copiar</button>
+</div>
+
+<script>
+{{NUCLEO}}(function () {
+  'use strict';
+{{PAGINA}}})();
+</script>
+</body>
+</html>

@@ -36,6 +36,9 @@ Repository = "https://github.com/DanielOpazoD/lector-anotaciones"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+lector_anotaciones = ["web/*.html", "web/*.css", "web/nucleo/*.js", "web/pagina/*.js"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"

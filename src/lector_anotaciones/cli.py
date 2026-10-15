@@ -1,4 +1,4 @@
-"""Línea de órdenes: `lector-anotaciones construir …` y `lector-anotaciones exportar …`."""
+"""Línea de órdenes: `lector-anotaciones construir …`, `… pagina …` y `… exportar …`."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from . import __version__
 from .capas import ConfigCapas, leer_lista
 from .construir import cargar_anterior, construir, escribir, resumen, validar
 from .exportar import a_markdown, cargar, orden_de_secciones
+from .pagina import escribir_pagina, esta_al_dia
 from .paginas import HerramientaFaltante
 
 
@@ -56,6 +57,19 @@ def _parser() -> argparse.ArgumentParser:
         "--muletillas", type=Path, help="archivo con una muletilla por línea (sustituye la lista por defecto)"
     )
     c.add_argument("--terminos-retirados", type=Path, help="archivo con un término retirado por línea")
+    c.add_argument(
+        "--pagina",
+        action="store_true",
+        help="escribe también la página de lectura (index.html) junto a la salida, lista para servir o publicar",
+    )
+
+    g = sub.add_parser("pagina", help="escribe la página de lectura y anotación (un único index.html sin dependencias)")
+    g.add_argument("--salida", type=Path, default=Path("index.html"), help="archivo HTML de salida")
+    g.add_argument(
+        "--comprobar",
+        action="store_true",
+        help="no escribe nada: termina con error si la salida no coincide con lo que se empaquetaría ahora",
+    )
 
     e = sub.add_parser("exportar", help="convierte las anotaciones (JSON) en un Markdown de trabajo")
     e.add_argument("anotaciones", type=Path, help="JSON copiado desde la página o volcado de la colección")
@@ -104,7 +118,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"problema: {pr}", file=sys.stderr)
         tam = escribir(libro, args.salida)
         print(f"ok {args.salida}: {resumen(libro)}, {tam // 1024} KB")
+        if args.pagina:
+            destino = Path(args.salida).parent / "index.html"
+            print(f"ok {destino}: página de lectura, {escribir_pagina(destino) // 1024} KB")
         return 1 if (problemas and args.estricto) else 0
+    if args.orden == "pagina":
+        if args.comprobar:
+            if esta_al_dia(args.salida):
+                print(f"ok {args.salida}: al día con las fuentes de la página")
+                return 0
+            orden = f"lector-anotaciones pagina --salida {args.salida}"
+            print(f"error: {args.salida} no coincide con las fuentes; regenérala con `{orden}`", file=sys.stderr)
+            return 1
+        print(f"ok {args.salida}: página de lectura, {escribir_pagina(args.salida) // 1024} KB")
+        return 0
     if args.orden == "exportar":
         try:
             anots = cargar(args.anotaciones)
