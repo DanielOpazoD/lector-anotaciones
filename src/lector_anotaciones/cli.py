@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.orden == "construir":
         avisos: list[str] = []
         try:
-            anterior = None if args.sin_anterior else cargar_anterior(args.anterior or args.salida)
+            anterior = None if args.sin_anterior else cargar_anterior(args.anterior or args.salida, avisos)
             capas = None
             if not args.sin_capas:
                 capas = ConfigCapas(frase_larga=args.frase_larga)
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             orden = None
             titulo = args.titulo
             if args.libro:
-                libro = json.loads(Path(args.libro).read_text(encoding="utf-8"))
+                libro = json.loads(Path(args.libro).read_text(encoding="utf-8-sig"))
                 orden = orden_de_secciones(libro)
                 titulo = titulo or libro.get("titulo", "")
         except (FileNotFoundError, ValueError) as e:

@@ -1,0 +1,110 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R] /Count 8 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 104 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (Un libro de prueba Subtítulo de prueba Autora Ejemplo 2026) Tj T* () Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 83 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (© 2026 Autora Ejemplo Primera edición) Tj T* () Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 174 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (Prefacio) Tj T* () Tj T* (Este es el primer párrafo del prefacio, con cursiva y negrita. Continúa en la) Tj T* (línea siguiente.) Tj T* () Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 61 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (PARTE I. Hechos) Tj T* () Tj ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 402 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (Capítulo 1. El hecho) Tj T* () Tj T* (Un subtítulo) Tj T* () Tj T* (- Primer ítem) Tj T* () Tj T* (- Segundo ítem) Tj T* () Tj T* (1. Uno) Tj T* () Tj T* (2. Dos) Tj T* () Tj T* (A   B) Tj T* () Tj T* (1   2) Tj T* () Tj T* (Una cita) Tj T* () Tj T* (en dos líneas.) Tj T* () Tj T* (Leyenda de la figura) Tj T* () Tj T* (Párrafo con <etiqueta> & ampersand.) Tj T* () Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 15 0 R >>
+endobj
+15 0 obj
+<< /Length 133 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (Capítulo 1. El hecho) Tj T* () Tj T* (Sección repetida para probar los identificadores.) Tj T* () Tj ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 17 0 R >>
+endobj
+17 0 obj
+<< /Length 106 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (Interludio I. Un alto) Tj T* () Tj T* (Texto del interludio.) Tj T* () Tj ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 19 0 R >>
+endobj
+19 0 obj
+<< /Length 104 >>
+stream
+BT /F1 11 Tf 14 TL 72 720 Td (Apéndice A. Plantilla) Tj T* () Tj T* (Texto del apéndice.) Tj T* () Tj ET
+endstream
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000168 00000 n 
+0000000265 00000 n 
+0000000391 00000 n 
+0000000546 00000 n 
+0000000672 00000 n 
+0000000805 00000 n 
+0000000931 00000 n 
+0000001156 00000 n 
+0000001284 00000 n 
+0000001396 00000 n 
+0000001524 00000 n 
+0000001978 00000 n 
+0000002106 00000 n 
+0000002291 00000 n 
+0000002419 00000 n 
+0000002577 00000 n 
+0000002705 00000 n 
+trailer
+<< /Size 20 /Root 1 0 R >>
+startxref
+2861
+%%EOF

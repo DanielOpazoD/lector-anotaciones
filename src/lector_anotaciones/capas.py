@@ -14,6 +14,7 @@ usan los subrayados. Las capas:
 
 from __future__ import annotations
 
+import bisect
 import re
 from dataclasses import dataclass, field
 
@@ -107,6 +108,11 @@ def citas_narrativas(texto: str) -> list[list[int]]:
     return [[m.start(), m.end()] for m in _CITA_NARRATIVA.finditer(texto)]
 
 
+def largo_utf16(texto: str) -> int:
+    """Lo que mide `texto` en unidades UTF-16 (`String.length` en la página)."""
+    return sum(2 if ord(c) >= 0x10000 else 1 for c in texto)
+
+
 def a_utf16(texto: str, rangos: list[list[int]]) -> list[list[int]]:
     """Convierte índices de puntos de código (Python) a unidades UTF-16 (lo que mide `String.length` en la página).
 
@@ -132,6 +138,65 @@ def calcular_capas(texto: str, config: ConfigCapas | None = None) -> dict[str, l
         "cn": citas_narrativas(texto),
     }
     return {k: a_utf16(texto, v) for k, v in capas.items() if v}
+
+
+def _reproyectar(partes: list[str], inicios: list[int], rangos: list[list[int]]) -> list[list[int]]:
+    """Lleva rangos del texto unido por espacios al texto pegado del bloque, en unidades UTF-16.
+
+    `inicios` es dónde empieza cada parte en el texto unido. Un rango que cruce el límite de su parte se
+    recorta al final de ella; si no queda nada, se omite.
+    """
+    desplazamientos = [0]
+    for parte in partes:
+        desplazamientos.append(desplazamientos[-1] + largo_utf16(parte))
+    salida = []
+    for a, b in rangos:
+        k = bisect.bisect_right(inicios, a) - 1
+        parte, inicio = partes[k], inicios[k]
+        b = min(b, inicio + len(parte))
+        if b <= a:
+            continue
+        base = desplazamientos[k]
+        salida.append([base + largo_utf16(parte[: a - inicio]), base + largo_utf16(parte[: b - inicio])])
+    return salida
+
+
+def capas_por_partes(partes: list[str], config: ConfigCapas | None = None) -> dict[str, list[list[int]]]:
+    """Las capas de un bloque compuesto de varios trozos (los ítems de una lista, las celdas de una tabla).
+
+    Las frases largas y las citas se buscan parte por parte, para que el final de un ítem y el comienzo
+    del siguiente no formen una sola oración. Las muletillas, los términos retirados y las repeticiones
+    se buscan sobre las partes unidas por un espacio, de modo que una palabra repetida entre dos ítems o
+    celdas sí se ve (y dos ítems pegados no forman una sola palabra); un rango que cruzaría de una parte
+    a la siguiente se recorta al final de la suya. En todos los casos las coordenadas son las del texto
+    pegado del bloque (su `textContent`), en unidades UTF-16. Con una sola parte equivale a `calcular_capas`.
+    """
+    cfg = config or ConfigCapas()
+    if not partes:
+        return {}
+    unido = " ".join(partes)
+    inicios = [0]
+    for parte in partes[:-1]:
+        inicios.append(inicios[-1] + len(parte) + 1)
+    por_parte: dict[str, list[list[int]]] = {"fl": [], "cn": []}
+    desplazamiento = 0
+    for parte in partes:
+        for clave, rangos in (("fl", frases_largas(parte, cfg.frase_larga)), ("cn", citas_narrativas(parte))):
+            por_parte[clave].extend([a + desplazamiento, b + desplazamiento] for a, b in a_utf16(parte, rangos))
+        desplazamiento += largo_utf16(parte)
+    unidas = {
+        "mu": _buscar_expresiones(unido, cfg.muletillas),
+        "tr": _buscar_expresiones(unido, cfg.terminos_retirados),
+        "rep": repeticiones(unido, cfg.repeticion_min_letras, cfg.repeticion_ventana),
+    }
+    capas = {
+        "fl": por_parte["fl"],
+        "mu": _reproyectar(partes, inicios, unidas["mu"]),
+        "tr": _reproyectar(partes, inicios, unidas["tr"]),
+        "rep": _reproyectar(partes, inicios, unidas["rep"]),
+        "cn": por_parte["cn"],
+    }
+    return {k: v for k, v in capas.items() if v}
 
 
 def leer_lista(ruta) -> list[str]:

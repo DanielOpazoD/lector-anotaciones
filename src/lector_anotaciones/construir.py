@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 
 from . import __version__
-from .capas import ConfigCapas, calcular_capas
+from .capas import ConfigCapas, capas_por_partes
 from .markdown import expandir_fuentes, parse_fuentes
 from .paginas import asignar_paginas, calcular_desfase, sin_paginas, texto_paginas_pdf
 from .util import slug, texto_plano
@@ -20,16 +20,13 @@ FORMATO = 2
 _ID_BLOQUE = re.compile(r"^(.+)-b(\d+)$")
 
 
-def texto_render(b: dict) -> str:
-    """El texto del bloque tal como lo muestra la página (su `textContent`, sin marcador de página).
-
-    Es el sistema de coordenadas de los subrayados y de las capas, y lo que se resume en `h`.
-    """
+def partes_render(b: dict) -> list[str]:
+    """Los trozos de texto con que la página compone el bloque: uno por ítem o celda, o uno solo."""
     h = b["html"]
     if isinstance(h, str):
-        return html_mod.unescape(texto_plano(h))
+        return [html_mod.unescape(texto_plano(h))]
     if isinstance(h, dict):
-        return html_mod.unescape(texto_plano(h.get("caption", "")))
+        return [html_mod.unescape(texto_plano(h.get("caption", "")))]
     if isinstance(h, list):
         partes = []
         for x in h:
@@ -37,23 +34,44 @@ def texto_render(b: dict) -> str:
                 partes.extend(html_mod.unescape(texto_plano(c)) for c in x)
             else:
                 partes.append(html_mod.unescape(texto_plano(x)))
-        return "".join(partes)
-    return ""
+        return partes
+    return []
+
+
+def texto_render(b: dict) -> str:
+    """El texto del bloque tal como lo muestra la página (su `textContent`, sin marcador de página).
+
+    Es el sistema de coordenadas de los subrayados y de las capas, y lo que se resume en `h`. En listas,
+    tablas y portada los ítems o celdas van pegados, sin separador, como en el `textContent`.
+    """
+    return "".join(partes_render(b))
 
 
 def huella(texto: str) -> str:
     return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:12]
 
 
-def cargar_anterior(ruta: Path | None) -> dict | None:
-    """La salida anterior, si existe, para marcar qué bloques cambiaron desde entonces."""
+def cargar_anterior(ruta: Path | None, avisos: list[str] | None = None) -> dict | None:
+    """La salida anterior, si existe, para marcar qué bloques cambiaron desde entonces.
+
+    Si el archivo existe pero no se puede leer como un libro, se devuelve None y se deja un aviso en
+    `avisos` (si se da), para que no pase por «nada cambió» en silencio.
+    """
     if ruta is None or not Path(ruta).is_file():
         return None
     try:
-        libro = json.loads(Path(ruta).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        libro = json.loads(Path(ruta).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as e:
+        if avisos is not None:
+            avisos.append(f"no se pudo leer la salida anterior {ruta} ({e}); no se marcan los bloques cambiados")
         return None
-    return libro if isinstance(libro, dict) and "secciones" in libro else None
+    if isinstance(libro, dict) and "secciones" in libro:
+        return libro
+    if avisos is not None:
+        avisos.append(
+            f"la salida anterior {ruta} no tiene la forma de un libro.json; no se marcan los bloques cambiados"
+        )
+    return None
 
 
 def construir(
@@ -83,7 +101,7 @@ def construir(
             texto = texto_render(b)
             b["h"] = huella(texto)
             if capas is not None:
-                m = calcular_capas(texto, capas)
+                m = capas_por_partes(partes_render(b), capas)
                 if m:
                     b["m"] = m
     cambios = marcar_cambios(secciones, anterior) if anterior else 0
@@ -132,12 +150,98 @@ def construir(
     }
 
 
+UMBRAL_SEMEJANZA = 0.5
+UMBRAL_PALABRAS_COMUNES = 0.3
+VENTANA_EMPAREJAMIENTO = 3
+_PALABRA = re.compile(r"\w+")
+
+# un bloque listo para comparar: (índice en su lista, palabras en orden, conjunto de palabras)
+_Preparado = tuple[int, list[str], frozenset[str]]
+
+
+def _preparar(bloques: list[tuple[int, str]]) -> list[_Preparado]:
+    """Parte cada texto en palabras (minúsculas) una sola vez; un bloque sin palabras se compara por caracteres."""
+    salida = []
+    for i, texto in bloques:
+        palabras = _PALABRA.findall(texto.lower()) or list(texto)
+        salida.append((i, palabras, frozenset(palabras)))
+    return salida
+
+
+def _palabras_comunes(a: frozenset[str], b: frozenset[str]) -> float:
+    """Jaccard de los conjuntos de palabras (0 a 1): el filtro barato antes de comparar en orden."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _semejanza(a: list[str], b: list[str]) -> float:
+    """Proporción de palabras en común, en orden, entre dos bloques (0 a 1); las cotas rápidas descartan lo distinto."""
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    if sm.real_quick_ratio() < UMBRAL_SEMEJANZA or sm.quick_ratio() < UMBRAL_SEMEJANZA:
+        return 0.0
+    return sm.ratio()
+
+
+def _emparejar(viejos: list[_Preparado], nuevos: list[_Preparado], ventana: int | None) -> list[tuple[int, int]]:
+    """Pares (índice viejo, índice nuevo) de mayor semejanza, sin repetir ninguno y sólo por encima del umbral.
+
+    Con `ventana`, sólo se comparan los bloques a esa distancia de posiciones dentro de las dos listas (la
+    diagonal del tramo); con None, todos contra todos. En ambos casos la comparación en orden, que es la
+    cara, sólo se hace entre bloques que comparten bastantes palabras.
+    """
+    candidatos = []
+    for a, (i, palabras_v, conjunto_v) in enumerate(viejos):
+        for b, (j, palabras_n, conjunto_n) in enumerate(nuevos):
+            if ventana is not None and abs(a - b) > ventana:
+                continue
+            if _palabras_comunes(conjunto_v, conjunto_n) < UMBRAL_PALABRAS_COMUNES:
+                continue
+            r = _semejanza(palabras_v, palabras_n)
+            if r >= UMBRAL_SEMEJANZA:
+                candidatos.append((-r, i, j))
+    usados_v: set[int] = set()
+    usados_n: set[int] = set()
+    pares = []
+    for _, i, j in sorted(candidatos):
+        if i in usados_v or j in usados_n:
+            continue
+        usados_v.add(i)
+        usados_n.add(j)
+        pares.append((i, j))
+    return pares
+
+
+def emparejar_por_semejanza(viejos: list[tuple[int, str]], nuevos: list[tuple[int, str]]) -> list[tuple[int, int]]:
+    """Pares (índice viejo, índice nuevo) de mayor semejanza, sin repetir ninguno y sólo por encima del umbral.
+
+    Una edición global (cambiar un nombre o las comillas en todo el capítulo) altera cada bloque, y
+    comparar todos contra todos costaría minutos: primero se miran sólo los bloques a pocas posiciones
+    unos de otros (una inserción o un borrado desplaza una o dos, no cien), y sólo lo que queda sin
+    pareja a ambos lados se vuelve a intentar sin esa ventana.
+    """
+    preparados_v, preparados_n = _preparar(viejos), _preparar(nuevos)
+    pares = _emparejar(preparados_v, preparados_n, VENTANA_EMPAREJAMIENTO)
+    emparejados_v = {i for i, _ in pares}
+    emparejados_n = {j for _, j in pares}
+    sueltos_v = [x for x in preparados_v if x[0] not in emparejados_v]
+    sueltos_n = [x for x in preparados_n if x[0] not in emparejados_n]
+    if sueltos_v and sueltos_n:
+        pares.extend(_emparejar(sueltos_v, sueltos_n, None))
+    return pares
+
+
 def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
     """Escribe `anterior` en los bloques cuyo texto cambió respecto de la salida previa; devuelve cuántos.
 
     Los ids son posicionales, así que no sirven para emparejar: se alinean las dos listas de huellas de
-    cada sección con difflib. Los bloques con la misma huella están intactos; los tramos sustituidos se
-    emparejan en orden; los insertados no tienen versión anterior y los borrados no se marcan.
+    cada sección con difflib. Los bloques con la misma huella están intactos. En cada tramo que difiere,
+    los bloques viejos y nuevos se emparejan por semejanza de texto (no por posición, que confunde una
+    inserción o un borrado pegado a una modificación); lo que queda suelto en la sección se vuelve a
+    emparejar entre sí, por si difflib prefirió alinear bloques repetidos. Un bloque nuevo sin pareja
+    es una inserción y no lleva `anterior`; un bloque viejo sin pareja es un borrado y no se marca.
+    Cuando el tramo cambia exactamente un bloque por otro, el anterior es inequívoco y se emparejan
+    aunque no se parezcan (un párrafo reescrito del todo en su sitio).
     """
     previas = {s["id"]: s.get("bloques", []) for s in anterior.get("secciones", [])}
     cambios = 0
@@ -145,15 +249,33 @@ def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
         prev = previas.get(sec["id"])
         if prev is None:
             continue
+        nuevos = sec["bloques"]
         hp = [b.get("h") or "" for b in prev]
-        hn = [b["h"] for b in sec["bloques"]]
+        hn = [b["h"] for b in nuevos]
+        textos_prev = [texto_render(b) if b.get("h") else None for b in prev]
+        textos_nuevos = [texto_render(b) for b in nuevos]
+        sueltos_v: list[tuple[int, str]] = []
+        sueltos_n: list[tuple[int, str]] = []
         for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, hp, hn, autojunk=False).get_opcodes():
-            if op != "replace":
+            if op == "equal":
                 continue
-            for pb, b in zip(prev[i1:i2], sec["bloques"][j1:j2], strict=False):
-                if pb.get("h"):
-                    b["anterior"] = texto_render(pb)
-                    cambios += 1
+            viejos = [(i, textos_prev[i]) for i in range(i1, i2) if textos_prev[i] is not None]
+            tramo_nuevos = [(j, textos_nuevos[j]) for j in range(j1, j2)]
+            if op == "replace" and len(viejos) == 1 and len(tramo_nuevos) == 1:
+                pares = [(viejos[0][0], tramo_nuevos[0][0])]
+            else:
+                pares = emparejar_por_semejanza(viejos, tramo_nuevos)
+            for i, j in pares:
+                nuevos[j]["anterior"] = textos_prev[i]
+            emparejados_v = {i for i, _ in pares}
+            emparejados_n = {j for _, j in pares}
+            sueltos_v.extend(x for x in viejos if x[0] not in emparejados_v)
+            sueltos_n.extend(x for x in tramo_nuevos if x[0] not in emparejados_n)
+            cambios += len(pares)
+        pares = emparejar_por_semejanza(sueltos_v, sueltos_n)
+        for i, j in pares:
+            nuevos[j]["anterior"] = textos_prev[i]
+        cambios += len(pares)
     return cambios
 
 

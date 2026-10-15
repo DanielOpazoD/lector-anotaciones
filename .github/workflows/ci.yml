@@ -24,6 +24,8 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
+      # poppler para que las pruebas que leen un PDF de verdad corran en vez de saltarse
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest
@@ -36,19 +38,30 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils pandoc
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
       - run: pip install -e .
-      - name: Maquetar el ejemplo en PDF (pandoc) y construir libro.json con páginas
+      - name: Maquetar el ejemplo en un PDF mínimo y construir libro.json con páginas
         run: |
-          mkdir -p ejemplo/salida
-          pandoc ejemplo/fuentes/*.md -o ejemplo/salida/libro.html --standalone --metadata title="Libro de ejemplo"
-          # La portada y la página legal del dialecto no son Markdown estándar: pandoc las deja como texto, lo que basta para la prueba.
-          lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
-          python -c "import json; L=json.load(open('ejemplo/salida/libro.json')); assert L['secciones'], 'sin secciones'; print(len(L['secciones']), 'secciones')"
+          # Sin maquetador en el runner, el PDF lo escribe tests/pdf_minimo.py (texto plano, una sección por página);
+          # basta para que pdfinfo y pdftotext lean páginas de verdad y `--pdf` recorra todo el camino.
+          python -m tests.pdf_minimo ejemplo/fuentes --salida ejemplo/salida/libro.pdf
+          pdfinfo ejemplo/salida/libro.pdf
+          lector-anotaciones construir ejemplo/fuentes --pdf ejemplo/salida/libro.pdf --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
+          python - <<'PY'
+          import json
+          L = json.load(open("ejemplo/salida/libro.json", encoding="utf-8"))
+          assert L["secciones"], "sin secciones"
+          assert L["paginas_fisicas"], "el PDF no aportó páginas físicas"
+          con = [b for s in L["secciones"] for b in s["bloques"] if b.get("pagina")]
+          assert con, "ningún bloque tiene página"
+          print(len(L["secciones"]), "secciones;", len(con), "bloques con página de", L["paginas_fisicas"], "físicas")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: libro-ejemplo
-          path: ejemplo/salida/libro.json
+          path: |
+            ejemplo/salida/libro.json
+            ejemplo/salida/libro.pdf
 
   web:
     name: página (Playwright)

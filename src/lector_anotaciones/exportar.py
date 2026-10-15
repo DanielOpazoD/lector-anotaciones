@@ -25,7 +25,7 @@ TIPOS = {"subrayado": "subrayado", "pagina": "nota de página", "capitulo": "not
 
 def cargar(ruta: Path) -> list[dict]:
     """Lee el JSON en cualquiera de las tres formas y devuelve la lista de anotaciones."""
-    datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
+    datos = json.loads(Path(ruta).read_text(encoding="utf-8-sig"))
     return normalizar(datos)
 
 
@@ -53,7 +53,13 @@ def _indice_bloque(a: dict) -> int:
 
 
 def _orden(a: dict) -> tuple:
-    return (a.get("pagina") or 0, _indice_bloque(a), a.get("inicio") or 0, a.get("creado") or "")
+    """Dentro de una sección, el orden del libro: por bloque y desplazamiento, como `ordenKey` en la página.
+
+    La página de la anotación no cuenta (se fijó al crearla y puede faltar o haber quedado vieja); sólo
+    ordena entre sí a las notas de página, que no tienen bloque.
+    """
+    pagina = (a.get("pagina") or 0) if not a.get("pid") else 0
+    return (_indice_bloque(a), pagina, a.get("inicio") or 0, a.get("creado") or "")
 
 
 def _grupo(a: dict) -> str:
