@@ -29,7 +29,7 @@ ROMANOS = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
 _ABRE_BLOQUE = re.compile(r"^(#{1,4} |- |\d+\. |\||> |\[FIGURA|\[/?PORTADA\]|\[/?LEGAL\])")
 _FIGURA = re.compile(r"^\[FIGURA:\s*(\S+)\s*\|\s*(.+)\]$")
 _SEPARADOR_TABLA = re.compile(r"^\|\s*:?-{2,}")
-_ITEM_NUMERADO = re.compile(r"^\d+\. ")
+_ITEM_NUMERADO = re.compile(r"^(\d+)\. ")
 _NEGRITA = re.compile(r"\*\*([^*]+)\*\*")
 _CURSIVA = re.compile(r"(?<![\w∗])\*([^*\n]+)\*(?!\w)")
 
@@ -151,13 +151,15 @@ def _parse_lineas(lines: list[str], nombre: str, st: _Estado) -> None:
                 i += 1
             st.bloque("ul", items, src, " ".join(html.unescape(texto_plano(x)) for x in items))
             continue
-        if _ITEM_NUMERADO.match(linea):
+        if m := _ITEM_NUMERADO.match(linea):
             items = []
             textos = []
+            primero = int(m.group(1))
             while i < len(lines) and (m := _ITEM_NUMERADO.match(lines[i])):
                 items.append(inline(lines[i][m.end() :].strip()))
-                # el texto de búsqueda conserva la numeración original, que es lo que imprime el PDF
-                textos.append(m.group(0) + html.unescape(texto_plano(items[-1])))
+                # el texto de búsqueda lleva los números que imprime el PDF: los maquetadores (pandoc, LaTeX)
+                # y el <ol> de la página renumeran en secuencia desde el primero, aunque la fuente escriba «1.» en todos
+                textos.append(f"{primero + len(textos)}. " + html.unescape(texto_plano(items[-1])))
                 i += 1
             st.bloque("ol", items, src, " ".join(textos))
             continue

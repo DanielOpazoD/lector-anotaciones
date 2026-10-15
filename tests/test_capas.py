@@ -60,3 +60,24 @@ def test_capas_por_partes_desplaza_los_rangos_en_unidades_utf16():
     )
     assert capas_por_partes(["Por eso lo digo."]) == calcular_capas("Por eso lo digo.")
     assert capas_por_partes([]) == {}
+
+
+def test_capas_por_partes_ve_lo_repetido_entre_partes_y_recorta_lo_que_cruza_un_limite():
+    from lector_anotaciones.capas import capas_por_partes
+
+    partes = ["Primero la incertidumbre", "Incertidumbre después"]
+    pegado = "".join(partes)
+    capas = capas_por_partes(partes, ConfigCapas())
+    assert [pegado[a:b] for a, b in capas["rep"]] == ["incertidumbre", "Incertidumbre"], (
+        "a cero caracteres de distancia"
+    )
+    assert capas["rep"] == [[11, 24], [24, 37]]
+    # con un emoji antes, los rangos de la segunda parte siguen en unidades UTF-16 del texto pegado
+    assert capas_por_partes(["😀 incertidumbre", "incertidumbre"], ConfigCapas())["rep"] == [[3, 16], [16, 29]]
+    # una muletilla o un término que sólo existe al unir dos partes se recorta al final de la suya
+    assert capas_por_partes(["Por", "eso lo digo."], ConfigCapas()) == {"mu": [[0, 3]]}
+    cfg = ConfigCapas(terminos_retirados=["relleno capilar"])
+    assert capas_por_partes(["el relleno", "capilar"], cfg) == {"tr": [[3, 10]]}
+    assert capas_por_partes(["Una frase corta."] * 30, ConfigCapas(frase_larga=20)) == {}, (
+        "las frases largas siguen contándose parte por parte"
+    )

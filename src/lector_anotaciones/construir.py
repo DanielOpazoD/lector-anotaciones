@@ -151,22 +151,53 @@ def construir(
 
 
 UMBRAL_SEMEJANZA = 0.5
+UMBRAL_PALABRAS_COMUNES = 0.3
+VENTANA_EMPAREJAMIENTO = 3
+_PALABRA = re.compile(r"\w+")
+
+# un bloque listo para comparar: (índice en su lista, palabras en orden, conjunto de palabras)
+_Preparado = tuple[int, list[str], frozenset[str]]
 
 
-def _semejanza(a: str, b: str) -> float:
-    """Proporción de texto en común entre dos bloques (0 a 1); las cotas rápidas evitan comparar lo que no se parece."""
+def _preparar(bloques: list[tuple[int, str]]) -> list[_Preparado]:
+    """Parte cada texto en palabras (minúsculas) una sola vez; un bloque sin palabras se compara por caracteres."""
+    salida = []
+    for i, texto in bloques:
+        palabras = _PALABRA.findall(texto.lower()) or list(texto)
+        salida.append((i, palabras, frozenset(palabras)))
+    return salida
+
+
+def _palabras_comunes(a: frozenset[str], b: frozenset[str]) -> float:
+    """Jaccard de los conjuntos de palabras (0 a 1): el filtro barato antes de comparar en orden."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _semejanza(a: list[str], b: list[str]) -> float:
+    """Proporción de palabras en común, en orden, entre dos bloques (0 a 1); las cotas rápidas descartan lo distinto."""
     sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
     if sm.real_quick_ratio() < UMBRAL_SEMEJANZA or sm.quick_ratio() < UMBRAL_SEMEJANZA:
         return 0.0
     return sm.ratio()
 
 
-def emparejar_por_semejanza(viejos: list[tuple[int, str]], nuevos: list[tuple[int, str]]) -> list[tuple[int, int]]:
-    """Pares (índice viejo, índice nuevo) de mayor semejanza, sin repetir ninguno y sólo por encima del umbral."""
+def _emparejar(viejos: list[_Preparado], nuevos: list[_Preparado], ventana: int | None) -> list[tuple[int, int]]:
+    """Pares (índice viejo, índice nuevo) de mayor semejanza, sin repetir ninguno y sólo por encima del umbral.
+
+    Con `ventana`, sólo se comparan los bloques a esa distancia de posiciones dentro de las dos listas (la
+    diagonal del tramo); con None, todos contra todos. En ambos casos la comparación en orden, que es la
+    cara, sólo se hace entre bloques que comparten bastantes palabras.
+    """
     candidatos = []
-    for i, tv in viejos:
-        for j, tn in nuevos:
-            r = _semejanza(tv, tn)
+    for a, (i, palabras_v, conjunto_v) in enumerate(viejos):
+        for b, (j, palabras_n, conjunto_n) in enumerate(nuevos):
+            if ventana is not None and abs(a - b) > ventana:
+                continue
+            if _palabras_comunes(conjunto_v, conjunto_n) < UMBRAL_PALABRAS_COMUNES:
+                continue
+            r = _semejanza(palabras_v, palabras_n)
             if r >= UMBRAL_SEMEJANZA:
                 candidatos.append((-r, i, j))
     usados_v: set[int] = set()
@@ -181,6 +212,25 @@ def emparejar_por_semejanza(viejos: list[tuple[int, str]], nuevos: list[tuple[in
     return pares
 
 
+def emparejar_por_semejanza(viejos: list[tuple[int, str]], nuevos: list[tuple[int, str]]) -> list[tuple[int, int]]:
+    """Pares (índice viejo, índice nuevo) de mayor semejanza, sin repetir ninguno y sólo por encima del umbral.
+
+    Una edición global (cambiar un nombre o las comillas en todo el capítulo) altera cada bloque, y
+    comparar todos contra todos costaría minutos: primero se miran sólo los bloques a pocas posiciones
+    unos de otros (una inserción o un borrado desplaza una o dos, no cien), y sólo lo que queda sin
+    pareja a ambos lados se vuelve a intentar sin esa ventana.
+    """
+    preparados_v, preparados_n = _preparar(viejos), _preparar(nuevos)
+    pares = _emparejar(preparados_v, preparados_n, VENTANA_EMPAREJAMIENTO)
+    emparejados_v = {i for i, _ in pares}
+    emparejados_n = {j for _, j in pares}
+    sueltos_v = [x for x in preparados_v if x[0] not in emparejados_v]
+    sueltos_n = [x for x in preparados_n if x[0] not in emparejados_n]
+    if sueltos_v and sueltos_n:
+        pares.extend(_emparejar(sueltos_v, sueltos_n, None))
+    return pares
+
+
 def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
     """Escribe `anterior` en los bloques cuyo texto cambió respecto de la salida previa; devuelve cuántos.
 
@@ -190,6 +240,8 @@ def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
     inserción o un borrado pegado a una modificación); lo que queda suelto en la sección se vuelve a
     emparejar entre sí, por si difflib prefirió alinear bloques repetidos. Un bloque nuevo sin pareja
     es una inserción y no lleva `anterior`; un bloque viejo sin pareja es un borrado y no se marca.
+    Cuando el tramo cambia exactamente un bloque por otro, el anterior es inequívoco y se emparejan
+    aunque no se parezcan (un párrafo reescrito del todo en su sitio).
     """
     previas = {s["id"]: s.get("bloques", []) for s in anterior.get("secciones", [])}
     cambios = 0
@@ -209,7 +261,10 @@ def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
                 continue
             viejos = [(i, textos_prev[i]) for i in range(i1, i2) if textos_prev[i] is not None]
             tramo_nuevos = [(j, textos_nuevos[j]) for j in range(j1, j2)]
-            pares = emparejar_por_semejanza(viejos, tramo_nuevos)
+            if op == "replace" and len(viejos) == 1 and len(tramo_nuevos) == 1:
+                pares = [(viejos[0][0], tramo_nuevos[0][0])]
+            else:
+                pares = emparejar_por_semejanza(viejos, tramo_nuevos)
             for i, j in pares:
                 nuevos[j]["anterior"] = textos_prev[i]
             emparejados_v = {i for i, _ in pares}

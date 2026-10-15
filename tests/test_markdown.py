@@ -141,3 +141,12 @@ def test_el_texto_de_listas_y_tablas_no_lleva_entidades_html():
     ul, tabla = secciones[0]["bloques"]
     assert ul["texto"] == "Tos & fiebre <38" and ul["html"] == ["Tos &amp; fiebre &lt;38"]
     assert tabla["texto"] == "x & y z"
+
+
+def test_la_lista_numerada_renumera_el_texto_de_busqueda_desde_el_primer_numero():
+    # como pandoc, LaTeX y el <ol> de la página: la fuente puede escribir «1.» en todos los ítems
+    ((unos,),) = [s["bloques"] for s in parse_texto("# A\n\n1. Lavarse las manos\n1. Secarlas bien\n1. Aplicar gel\n")]
+    assert unos["t"] == "ol" and unos["html"] == ["Lavarse las manos", "Secarlas bien", "Aplicar gel"]
+    assert unos["texto"] == "1. Lavarse las manos 2. Secarlas bien 3. Aplicar gel"
+    ((sietes,),) = [s["bloques"] for s in parse_texto("# A\n\n7. Siete\n7. Otra vez\n10. Diez\n")]
+    assert sietes["texto"] == "7. Siete 8. Otra vez 9. Diez"

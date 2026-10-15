@@ -1,4 +1,6 @@
 import json
+import random
+import time
 from datetime import date
 from pathlib import Path
 
@@ -249,27 +251,119 @@ def test_anterior_con_bloques_repetidos(tmp_path: Path):
 
 
 def test_anterior_no_empareja_lo_que_no_se_parece(tmp_path: Path):
-    anteriores = _versiones(tmp_path, ["A primero.", "B segundo."], ["A primero.", "Otro párrafo sin relación."])
-    assert anteriores == [None, None], "una sustitución completa es un borrado más una inserción"
+    # en un tramo con más de un bloque por lado, lo que no se parece no se empareja: es un borrado más una inserción
+    anteriores = _versiones(
+        tmp_path,
+        ["A primero.", "B segundo.", "C tercero."],
+        ["A primero.", "Otro párrafo sin relación.", "C tercero corregido."],
+    )
+    assert anteriores == [None, None, "C tercero."]
+
+
+def test_anterior_de_un_parrafo_reescrito_del_todo_en_su_sitio(tmp_path: Path):
+    # cuando el tramo cambia exactamente un bloque por otro, el anterior es inequívoco aunque no se parezcan
+    assert _versiones(tmp_path, ["Uno dos tres cuatro."], ["Zeta equis griega ye."]) == ["Uno dos tres cuatro."]
+    anteriores = _versiones(
+        tmp_path,
+        ["A primero.", "Uno dos tres cuatro.", "C tercero."],
+        ["A primero.", "Zeta equis griega ye.", "C tercero."],
+    )
+    assert anteriores == [None, "Uno dos tres cuatro.", None]
+
+
+def test_anterior_con_insercion_y_borrado_adyacentes_en_el_mismo_tramo(tmp_path: Path):
+    # inserción pegada a una modificación y, más abajo, borrado pegado a otra: cada retocado recibe su propio texto
+    anteriores = _versiones(
+        tmp_path,
+        ["A primero.", "B segundo.", "C tercero.", "D cuarto.", "E quinto."],
+        ["A primero.", "N nuevo.", "B segundo corregido.", "D cuarto corregido.", "E quinto."],
+    )
+    assert anteriores == [None, None, "B segundo.", "D cuarto.", None]
+
+
+def test_anterior_amplia_la_ventana_si_la_insercion_desplaza_mas_de_tres_posiciones(tmp_path: Path):
+    letras = [
+        "Alfa beta gamma",
+        "Delta épsilon zeta",
+        "Eta theta iota",
+        "Kappa lambda mu",
+        "Nu xi ómicron",
+        "Pi rho sigma",
+    ]
+    retocados = [f"{x} de siempre." for x in letras]
+    nuevos = [f"Nuevo {n} que no estaba." for n in ("uno", "dos", "tres", "cuatro", "cinco")]
+    anteriores = _versiones(tmp_path, retocados, nuevos + [f"{x} de ahora." for x in letras])
+    assert anteriores == [None] * 5 + retocados, (
+        "lejos de la diagonal del tramo, pero cada uno con una sola pareja posible"
+    )
+
+
+def _parrafos_de_prosa(cuantos: int, palabras: int = 60) -> list[str]:
+    """Párrafos deterministas que mezclan palabras gramaticales comunes y palabras de contenido variadas."""
+    azar = random.Random(7)
+    comunes = ["de", "la", "el", "que", "y", "en", "un", "una", "los", "las", "se", "por", "con", "para", "no", "es"]
+    salida = []
+    for _ in range(cuantos):
+        ws = [
+            azar.choice(comunes) if azar.random() < 0.5 else f"palabra{azar.randint(0, 400)}" for _ in range(palabras)
+        ]
+        salida.append(" ".join(ws).capitalize() + ".")
+    return salida
+
+
+def test_una_edicion_global_de_trescientos_bloques_se_empareja_en_menos_de_dos_segundos(tmp_path: Path):
+    # cambiar una palabra en cada párrafo del capítulo (un nombre, las comillas): todos cambian, nada se desplaza
+    v1 = _parrafos_de_prosa(300)
+    v2 = [" ".join([*ws[:10], "cambiada", *ws[11:]]) for ws in (p.split() for p in v1)]
+    fuente = tmp_path / "a.md"
+    fuente.write_text("# Uno\n\n" + "\n\n".join(v1) + "\n", encoding="utf-8")
+    libro1 = construir([fuente])
+    fuente.write_text("# Uno\n\n" + "\n\n".join(v2) + "\n", encoding="utf-8")
+    inicio = time.perf_counter()
+    libro2 = construir([fuente], anterior=libro1)
+    segundos = time.perf_counter() - inicio
+    assert [b.get("anterior") for b in libro2["secciones"][0]["bloques"]] == v1 and libro2["cambios"] == 300
+    assert segundos < 2, f"{segundos:.1f} s para emparejar 300 bloques cambiados"
 
 
 def test_capas_de_listas_y_tablas_se_calculan_por_item(tmp_path: Path):
     from lector_anotaciones.capas import ConfigCapas
     from lector_anotaciones.construir import texto_render
 
-    items = "\n".join(f"- Ítem número {i} con cinco palabras." for i in range(1, 13))
+    items = "\n".join(f"- Ítem número {i} con cinco voces." for i in range(1, 13))
     tabla = "| Celda uno | Por eso |\n|---|---|\n| Dos | tres |"
     fuente = tmp_path / "a.md"
     fuente.write_text(
         f"# Uno\n\n{items}\n\n{tabla}\n\n- Primero\n- Por eso incertidumbre, incertidumbre\n", encoding="utf-8"
     )
     lista, tabla_b, muletilla = construir([fuente], capas=ConfigCapas(frase_larga=20))["secciones"][0]["bloques"]
-    assert "m" not in lista, "doce ítems cortos no son una frase larga"
+    assert "m" not in lista, "doce ítems cortos no son una frase larga ni repiten palabras largas"
     texto = texto_render(tabla_b)
     assert [texto[a:b] for a, b in tabla_b["m"]["mu"]] == ["Por eso"], "las coordenadas son las del texto pegado"
     texto = texto_render(muletilla)
     assert [texto[a:b] for a, b in muletilla["m"]["mu"]] == ["Por eso"]
     assert [texto[a:b] for a, b in muletilla["m"]["rep"]] == ["incertidumbre", "incertidumbre"]
+
+
+def test_repeticiones_partidas_entre_items_o_celdas(tmp_path: Path):
+    from lector_anotaciones.capas import ConfigCapas
+    from lector_anotaciones.construir import texto_render
+
+    fuente = tmp_path / "a.md"
+    fuente.write_text(
+        "# Uno\n\n- Primero la incertidumbre\n- Incertidumbre después\n\n"
+        "| Incertidumbre | x |\n|---|---|\n| y | incertidumbre |\n",
+        encoding="utf-8",
+    )
+    lista, tabla = construir([fuente], capas=ConfigCapas())["secciones"][0]["bloques"]
+    texto = texto_render(lista)
+    assert texto == "Primero la incertidumbreIncertidumbre después"
+    assert [texto[a:b] for a, b in lista["m"]["rep"]] == ["incertidumbre", "Incertidumbre"], (
+        "la repetición partida entre dos ítems se ve, y las coordenadas son las del texto pegado"
+    )
+    texto = texto_render(tabla)
+    assert [texto[a:b] for a, b in tabla["m"]["rep"]] == ["Incertidumbre", "incertidumbre"]
+    assert "fl" not in lista["m"] and "fl" not in tabla["m"]
 
 
 def test_cargar_anterior_tolera_bom_y_avisa_si_no_se_puede_leer(tmp_path: Path):

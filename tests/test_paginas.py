@@ -130,6 +130,18 @@ def test_lista_numerada_de_items_cortos_encuentra_la_pagina_en_que_empieza():
     )
 
 
+def test_lista_numerada_escrita_con_unos_encuentra_su_pagina():
+    # la fuente escribe «1.» en todos los ítems; el PDF imprime 1, 2, 3
+    secciones = parse_texto(LISTA_NUMERADA.replace("2. Secarlas", "1. Secarlas").replace("3. Aplicar", "1. Aplicar"))
+    textos = [
+        normalizar_pagina("Un párrafo introductorio bastante largo que está en la página uno del PDF."),
+        normalizar_pagina("1. Lavarse las manos\n2. Secarlas bien\n3. Aplicar gel\n\nOtro párrafo largo que sigue"),
+    ]
+    asignar_paginas(secciones, textos)
+    assert secciones[0]["bloques"][1]["texto"] == "1. Lavarse las manos 2. Secarlas bien 3. Aplicar gel"
+    assert [b["pagina"] for b in secciones[0]["bloques"]] == [1, 2, 2]
+
+
 def test_el_pdf_de_fixture_se_regenera_igual(fixture_md: Path):
     # tests/fixtures/libro_min.pdf sale de `python -m tests.pdf_minimo tests/fixtures/libro_min.md --salida tests/fixtures/libro_min.pdf`
     assert pdf_de_fuentes([fixture_md]) == (FIXTURES / "libro_min.pdf").read_bytes()

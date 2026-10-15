@@ -78,6 +78,8 @@ Cada `#` o `##` de las fuentes abre una sección. Los ids siguen las convencione
 | `figure` | `{"src": "figs/archivo.png", "caption": "…"}` | `[FIGURA: archivo.png \| Leyenda]` |
 | `portada` | lista de cadenas (una por línea) | `[PORTADA] … [/PORTADA]` |
 
+En las listas numeradas, el texto con que se busca la página en el PDF lleva los números en secuencia desde el primero (`1. … 2. … 3. …` aunque la fuente escriba `1.` en todos los ítems), que es como los imprimen pandoc, LaTeX y la página.
+
 En todos los casos el HTML ya está escapado y sólo contiene `<strong>` y `<em>`. `src` es `archivo.md:línea` de la primera línea del bloque. `pagina` es la impresa (física menos desfase), o `null` cuando el bloque cae en las páginas preliminares o no hubo PDF.
 
 Tres campos más por bloque:
@@ -85,8 +87,8 @@ Tres campos más por bloque:
 | Campo | Significado |
 |---|---|
 | `h` | Huella (12 hex de SHA-1) del texto tal como lo muestra la página. Las anotaciones guardan la suya en `bh`; la página marca «cambió desde tu última lectura» comparando con la huella que vio el lector. |
-| `anterior` | Sólo en los bloques cuyo texto cambió respecto de la salida anterior: el texto viejo, para que la página muestre la diferencia palabra por palabra. Se conserva una sola generación hacia atrás. Como los ids son posicionales, los bloques viejos y nuevos de cada sección se emparejan por semejanza de texto (al menos la mitad en común); un bloque nuevo sin pareja es una inserción y no lo lleva. |
-| `m` | Capas editoriales con algo que señalar: `{"fl": [[ini, fin], …], "mu": …, "tr": …, "rep": …, "cn": …}`, en caracteres del texto mostrado. `fl` frases de más de N palabras (`--frase-larga`), `mu` muletillas (`--muletillas archivo`), `tr` términos retirados (`--terminos-retirados archivo`), `rep` una palabra larga repetida a menos de 120 caracteres, `cn` citas narrativas «Autor (año)». En listas, tablas y portada se calculan ítem por ítem (o celda por celda), de modo que el final de un ítem y el comienzo del siguiente no cuentan como una sola palabra ni una sola oración; las coordenadas siguen siendo las del texto pegado del bloque. |
+| `anterior` | Sólo en los bloques cuyo texto cambió respecto de la salida anterior: el texto viejo, para que la página muestre la diferencia palabra por palabra. Se conserva una sola generación hacia atrás. Como los ids son posicionales, los bloques viejos y nuevos de cada sección se emparejan por semejanza de texto (al menos la mitad de las palabras en común, mirando primero los bloques a pocas posiciones unos de otros); un bloque nuevo sin pareja es una inserción y no lo lleva. Si en un tramo cambió exactamente un bloque por otro, se emparejan aunque no se parezcan: un párrafo reescrito del todo en su sitio conserva su `anterior`. |
+| `m` | Capas editoriales con algo que señalar: `{"fl": [[ini, fin], …], "mu": …, "tr": …, "rep": …, "cn": …}`, en caracteres del texto mostrado. `fl` frases de más de N palabras (`--frase-larga`), `mu` muletillas (`--muletillas archivo`), `tr` términos retirados (`--terminos-retirados archivo`), `rep` una palabra larga repetida a menos de 120 caracteres, `cn` citas narrativas «Autor (año)». En listas, tablas y portada, `fl` y `cn` se calculan ítem por ítem (o celda por celda), de modo que dos ítems no cuentan como una sola oración; `mu`, `tr` y `rep` se buscan sobre los ítems unidos por un espacio, así que una palabra repetida entre dos ítems o celdas sí se señala, y un rango que cruzaría de un ítem al siguiente se recorta al final del suyo. Las coordenadas siguen siendo las del texto pegado del bloque. |
 
 ## Invariantes que comprueba `validar`
 
