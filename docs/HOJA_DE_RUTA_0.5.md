@@ -25,7 +25,7 @@ Lo que se hace, en qué orden, y cómo se sabe que quedó hecho. Se actualiza al
 | E6 | Pruebas de navegador en archivos `.spec` de `@playwright/test`, en paralelo | hecho: 27 pruebas, las mismas 290 comprobaciones, ~40 s en vez de ~105 s |
 | E2 | Sincronizador en el núcleo: decisiones de guardado puras, con base simulada en `node --test` | hecho: 11 pruebas de núcleo; 290 comprobaciones de navegador intactas |
 | E3 | Almacén de estado de la vista con reglas y suscripciones | hecho: 8 variables globales menos, 3 pruebas de núcleo; la regla de la bandeja cubierta en núcleo y navegador |
-| E4 | Fichas por id: el panel reutiliza las fichas que no cambiaron | pendiente |
+| E4 | Fichas por id: el panel reutiliza las fichas que no cambiaron | hecho: redibujar 300 fichas sin cambios, de 64–115 ms a 2–4 ms; ficha() en cinco partes |
 | E5 | Tipos: JSDoc y `tsc --checkJs` en la CI | pendiente |
 | E7 | Modelo: esquema versionado, ancla estable por bloque, hilo de la conversación | pendiente |
 | E8 | `pendientes`/`responder`/`aplicar`, sugerencias, marcas en el teléfono, deshacer cambios | pendiente |

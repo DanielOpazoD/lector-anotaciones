@@ -3893,6 +3893,53 @@ function ordenKey(a) {
   var bi = a.pid ? parseInt(a.pid.split('-b').pop(), 10) : -1;
   return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi) * 10 + (a.inicio || 0) / 100000;
 }
+// ------------------------------------------------------------ fichas por id
+// Cada ficha dibujada se guarda con la anotación y la «firma de vista» con que se dibujó: lo que, además de la
+// anotación, cambia lo que muestra (activa, por revisar, revisada, sin guardar, dónde quedó, si su pasaje cambió, sólo
+// lectura, quién es el lector y su perfil, si hay varios lectores, la huella de su bloque). Un redibujo reutiliza el
+// nodo si las dos siguen iguales.
+var FICHAS = {}, // id → { a, firma, nodo }
+  ultimoMargen = false;
+function firmaFicha(a, varios) {
+  var u = UBIC[a.id],
+    pe = pidEfectivo(a);
+  return [
+    V.fichaFoco === a.id,
+    porRevisar(a),
+    !!V.revisadas[a.id],
+    SINC.sinGuardar[a.id] || '',
+    u ? u.estado + ':' + u.pid : '',
+    cambioDe(a) || '',
+    SOLO_LECTURA,
+    ME || '',
+    a.autor ? JSON.stringify(PERFILES[a.autor] || null) : '',
+    varios,
+    pe && BLOQUES[pe] ? BLOQUES[pe].h || '' : '',
+  ].join('|');
+}
+function fichaPara(a, varios) {
+  var c = FICHAS[a.id],
+    firma = firmaFicha(a, varios);
+  if (c && c.a === a && c.firma === firma) return { nodo: c.nodo, nueva: false };
+  var nodo = ficha(a);
+  FICHAS[a.id] = { a: a, firma: firma, nodo: nodo };
+  return { nodo: nodo, nueva: true };
+}
+// Tras cambiar en su sitio una ficha ya dibujada (activarla, o un guardado silencioso que el cuadro ya muestra), su
+// registro se pone al día para que el próximo redibujo no la rehaga.
+function refirmar(id) {
+  var c = FICHAS[id],
+    a = anots[id];
+  if (!c || !a || !c.nodo.isConnected) return;
+  c.a = a;
+  c.firma = firmaFicha(a, variosAutores());
+}
+// Deja en `cont` exactamente `nodos`, en ese orden, sin mover los que ya están en su lugar.
+function colocarHijos(cont, nodos) {
+  for (var i = 0; i < nodos.length; i++)
+    if (cont.children[i] !== nodos[i]) cont.insertBefore(nodos[i], cont.children[i] || null);
+  while (cont.children.length > nodos.length) cont.removeChild(cont.lastElementChild);
+}
 function renderPanel() {
   if (V.tab === 'buscar') return;
   // Si el autor está escribiendo una nota, el redibujo no debe quitarle el editor: se recuerda el
@@ -3912,7 +3959,6 @@ function renderPanel() {
     };
   var box = $('#lista'),
     desplaz = box.scrollTop;
-  box.innerHTML = '';
   renderSelectores();
   marcarFiltro();
   renderCuentaRevisar();
@@ -3927,7 +3973,11 @@ function renderPanel() {
     }).filter(Boolean)
   );
   $('#n-panel').textContent = Object.keys(anots).length ? '(' + Object.keys(anots).length + ')' : '';
-  if (V.tab === 'revisar') box.appendChild(cabezaBandeja(L));
+  var cabeza = V.tab === 'revisar' ? [cabezaBandeja(L)] : [];
+  // fuera del registro las fichas de anotaciones que ya no están (también si la lista queda vacía)
+  Object.keys(FICHAS).forEach(function (id) {
+    if (!anots[id]) delete FICHAS[id];
+  });
   if (!L.length) {
     var filtrado = V.tab !== 'revisar' && (V.filtro !== 'todas' || !!V.filtroAutor || !!V.filtroEtiqueta);
     var vacio = el('div', {
@@ -3951,21 +4001,31 @@ function renderPanel() {
       });
       vacio.appendChild(qf);
     }
-    box.appendChild(vacio);
+    colocarHijos(box, cabeza.concat([vacio]));
     actualizarNav();
     return;
   }
-  var destino = box;
+  // las fichas que no cambiaron se reutilizan (y no se mueven si ya están en su lugar); sólo se dibujan las nuevas
+  var varios = variosAutores(),
+    nuevas = [],
+    nodos = L.map(function (a) {
+      var r = fichaPara(a, varios);
+      if (r.nueva) nuevas.push(r.nodo);
+      return r.nodo;
+    });
   if (margen) {
-    destino = el('div', { 'class': 'capa-margen' });
-    box.appendChild(destino);
-  }
-  L.forEach(function (a) {
-    destino.appendChild(ficha(a));
-  });
-  ajustarTextareas(box);
+    var capa = $(':scope > .capa-margen', box) || el('div', { 'class': 'capa-margen' });
+    colocarHijos(box, cabeza.concat([capa]));
+    colocarHijos(capa, nodos);
+  } else colocarHijos(box, cabeza.concat(nodos));
+  // las notas se ajustan en las fichas nuevas; si cambió el ancho de las fichas (lista ↔ margen), en todas
+  if (margen !== ultimoMargen) ajustarTextareas(box);
+  else if (nuevas.length) ajustarTextareasDe(nuevas);
+  ultimoMargen = margen;
   if (margen) colocarMargen();
   else box.scrollTop = desplaz;
+  // si el elemento enfocado sigue en la página (su ficha se reutilizó), no hay nada que restaurar
+  if (act && act.isConnected && document.activeElement === act) foco = focoBoton = null;
   if (foco) {
     var ta = document.getElementById(foco.id);
     if (ta) {
@@ -4089,7 +4149,16 @@ function fijarAlto(ta, h) {
 // Por lotes: primero todas las escrituras, luego todas las lecturas, luego todas las escrituras; así el navegador
 // calcula la maquetación una vez y no una por nota (con cientos de fichas, redibujar o cambiar el ancho no se traba).
 function ajustarTextareas(raiz) {
-  var tas = $$('.ficha textarea', raiz || $('#lista'));
+  ajustarLote($$('.ficha textarea', raiz || $('#lista')));
+}
+function ajustarTextareasDe(nodos) {
+  var tas = [];
+  nodos.forEach(function (n) {
+    tas.push.apply(tas, $$('textarea', n));
+  });
+  ajustarLote(tas);
+}
+function ajustarLote(tas) {
   tas.forEach(function (ta) {
     ta.style.height = 'auto';
   });
@@ -4102,6 +4171,7 @@ function ajustarTextareas(raiz) {
 }
 function activar(id) {
   if (V.fichaFoco === id) return;
+  var antes = V.fichaFoco;
   VISTA.cambiar({ fichaFoco: id });
   $$('.ficha.foco').forEach(function (f) {
     f.classList.remove('foco');
@@ -4118,18 +4188,27 @@ function activar(id) {
   $$('mark.hl[data-aids~="' + id + '"]').forEach(function (m) {
     m.classList.add('foco');
   });
+  refirmar(antes);
+  refirmar(id);
   if (margenActivo()) reacomodarPorActivar(id);
   actualizarNav();
 }
+// ------------------------------------------------------------ la ficha de una anotación, por partes
+// `ctx`: la anotación con que se dibuja (`a`), el nodo (`f`), la anotación viva (`actual()`) y lo que se calcula una vez
+// (`pendiente`, `cambio`, `u`). Las clausuras de la ficha leen la anotación viva, no la copia con que se dibujó: un
+// guardado silencioso (nota, réplica) sustituye el objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o
+// el estado después deben llevar lo recién escrito.
 function ficha(a) {
-  // Las clausuras de la ficha leen la anotación viva, no la copia con que se dibujó: un guardado silencioso (nota,
-  // réplica) sustituye el objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o el estado después
-  // deben llevar lo recién escrito.
-  var actual = function () {
-    return anots[a.id] || a;
+  var ctx = {
+    a: a,
+    actual: function () {
+      return anots[a.id] || a;
+    },
+    pendiente: porRevisar(a),
+    cambio: cambioDe(a),
+    u: UBIC[a.id],
   };
-  var pendiente = porRevisar(a),
-    cambio = cambioDe(a);
+  var pendiente = ctx.pendiente;
   var f = el('div', {
     'class':
       'ficha t-' +
@@ -4148,6 +4227,38 @@ function ficha(a) {
       etiqueta(a) +
       (pendiente ? ' · respuesta por revisar' : ''),
   });
+  ctx.f = f;
+  f.appendChild(fichaCabecera(ctx));
+  fichaAvisos(ctx).forEach(function (n) {
+    f.appendChild(n);
+  });
+  if (a.cierre === 'pregunta') f.classList.add('cierre-pregunta');
+  if (a.tipo === 'subrayado')
+    f.appendChild(el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
+  if (SOLO_LECTURA) {
+    fichaSoloLectura(ctx);
+    return f;
+  }
+  fichaEdicion(ctx);
+  f.appendChild(fichaAcciones(ctx));
+  // tocar la ficha (fuera de sus controles) la activa; llegar a ella con el teclado, también
+  f.addEventListener('click', function (ev) {
+    if (ev.target.closest('button, a, textarea, input, select, label, summary')) return;
+    activar(a.id);
+    if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
+  });
+  f.addEventListener('focusin', function () {
+    activar(a.id);
+  });
+  return f;
+}
+// Cabecera: categoría, sección y página, lector, cierre, «nueva respuesta» o «revisada», e «ir al texto».
+function fichaCabecera(ctx) {
+  var a = ctx.a,
+    u = ctx.u,
+    cambio = ctx.cambio,
+    pendiente = ctx.pendiente,
+    actual = ctx.actual;
   var cab = el('div', { 'class': 'cab' }, [
     el('span', {}, [
       a.tipo === 'subrayado' && a.color ? el('span', { 'class': 'cat', text: a.color }) : null,
@@ -4164,7 +4275,6 @@ function ficha(a) {
     );
   if (pendiente) cab.firstChild.appendChild(el('span', { 'class': 'nueva', text: 'nueva respuesta' }));
   else if (V.revisadas[a.id]) cab.firstChild.appendChild(el('span', { 'class': 'nueva hecha', text: '✓ revisada' }));
-  var u = UBIC[a.id];
   if (
     (a.pid && !(u && u.estado === 'perdido')) ||
     cambio ||
@@ -4177,7 +4287,14 @@ function ficha(a) {
     });
     cab.appendChild(ir);
   }
-  f.appendChild(cab);
+  return cab;
+}
+// Avisos: sin guardar en la base, reubicada, perdida, bloque cambiado desde que se anotó.
+function fichaAvisos(ctx) {
+  var a = ctx.a,
+    u = ctx.u,
+    cambio = ctx.cambio,
+    out = [];
   if (SINC.sinGuardar[a.id]) {
     var ag = el('div', {
       'class': 'aviso-guardar',
@@ -4190,10 +4307,10 @@ function ficha(a) {
       });
       ag.appendChild(re);
     }
-    f.appendChild(ag);
+    out.push(ag);
   }
   if (u && u.estado === 'reubicado')
-    f.appendChild(
+    out.push(
       el('div', {
         'class': 'aviso-ubic',
         text:
@@ -4203,7 +4320,7 @@ function ficha(a) {
       })
     );
   if (u && u.estado === 'perdido')
-    f.appendChild(
+    out.push(
       el('div', {
         'class': 'aviso-ubic',
         text: cambio
@@ -4220,40 +4337,54 @@ function ficha(a) {
     BLOQUES[pe].h !== a.bh &&
     !(u && u.estado === 'perdido')
   )
-    f.appendChild(
+    out.push(
       el('div', {
         'class': 'aviso-cambio',
         text: 'El bloque cambió desde que anotaste' + (a.libro ? ' (fuentes del ' + a.libro + ')' : '') + '.',
       })
     );
-  if (a.cierre === 'pregunta') f.classList.add('cierre-pregunta');
-  if (a.tipo === 'subrayado')
-    f.appendChild(el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
-  if (SOLO_LECTURA) {
-    f.appendChild(el('div', { 'class': 'nota-texto', text: a.nota || '' }));
-    if (a.respuesta || a.cierre) {
-      var rs = el('div', { 'class': 'respuesta' });
-      rs.appendChild(el('div', { 'class': 'quien', text: 'Respuesta' + (a.commit ? ' · ' + a.commit : '') }));
-      rs.appendChild(document.createTextNode(a.respuesta || ''));
-      f.appendChild(rs);
-    }
-    if (a.replica) f.appendChild(el('div', { 'class': 'nota-texto', text: a.replica }));
-    var accSL = el('div', { 'class': 'acciones siempre' });
-    var copSL = el('button', {
-      'class': 'btn peq copiar',
-      type: 'button',
-      text: 'Copiar',
-      title: 'Copiar esta anotación como texto',
-      'data-accion': 'copiar',
-    });
-    copSL.addEventListener('click', function () {
-      copiar(textoAnotacion(actual()), copSL);
-    });
-    accSL.appendChild(copSL);
-    f.appendChild(accSL);
-    return f;
+  return out;
+}
+// Sólo lectura: la nota y la respuesta como texto, y «Copiar».
+function fichaSoloLectura(ctx) {
+  var a = ctx.a,
+    f = ctx.f,
+    actual = ctx.actual;
+  f.appendChild(el('div', { 'class': 'nota-texto', text: a.nota || '' }));
+  if (a.respuesta || a.cierre) {
+    var rs = el('div', { 'class': 'respuesta' });
+    rs.appendChild(el('div', { 'class': 'quien', text: 'Respuesta' + (a.commit ? ' · ' + a.commit : '') }));
+    rs.appendChild(document.createTextNode(a.respuesta || ''));
+    f.appendChild(rs);
   }
-  // Esc o Ctrl/Cmd+Enter: guardar (al perder el foco) y volver al texto
+  if (a.replica) f.appendChild(el('div', { 'class': 'nota-texto', text: a.replica }));
+  var accSL = el('div', { 'class': 'acciones siempre' });
+  var copSL = el('button', {
+    'class': 'btn peq copiar',
+    type: 'button',
+    text: 'Copiar',
+    title: 'Copiar esta anotación como texto',
+    'data-accion': 'copiar',
+  });
+  copSL.addEventListener('click', function () {
+    copiar(textoAnotacion(actual()), copSL);
+  });
+  accSL.appendChild(copSL);
+  f.appendChild(accSL);
+}
+// Al entrar en una nota con el teclado (o desde el código), el cursor va al final, para seguir escribiendo; con el
+// puntero queda donde se tocó, y una selección ya hecha (al principio, o de todo el texto) no se toca.
+function cursorAlFinal(ta) {
+  if (punteroAbajo || ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
+  try {
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  } catch (e) {}
+}
+// Edición: la nota (y sus etiquetas), la respuesta de quien edita y, si es una pregunta, el cuadro de la réplica. Esc o
+// Ctrl/Cmd+Enter en un cuadro guarda (al perder el foco) y vuelve al texto.
+function fichaEdicion(ctx) {
+  var a = ctx.a,
+    f = ctx.f;
   var salirConTecla = function (ev) {
     if (ev.key !== 'Escape' && !(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey))) return;
     ev.preventDefault();
@@ -4288,6 +4419,7 @@ function ficha(a) {
     ajustarAlto(ta);
   });
   ta.addEventListener('focus', function () {
+    cursorAlFinal(ta);
     ajustarAlto(ta);
   });
   ta.addEventListener('keydown', salirConTecla);
@@ -4343,11 +4475,20 @@ function ficha(a) {
       ajustarAlto(rp);
     });
     rp.addEventListener('focus', function () {
+      cursorAlFinal(rp);
       ajustarAlto(rp);
     });
     rp.addEventListener('keydown', salirConTecla);
     f.appendChild(rp);
   }
+}
+// Acciones: colores, «✓ Atendida» y «Reabrir» (por revisar) o «Resuelta», «Ver el cambio», «Copiar» y «Borrar».
+function fichaAcciones(ctx) {
+  var a = ctx.a,
+    f = ctx.f,
+    actual = ctx.actual,
+    pendiente = ctx.pendiente,
+    cambio = ctx.cambio;
   var acc = el('div', { 'class': 'acciones' });
   if (a.tipo === 'subrayado') {
     var cols = el('div', { 'class': 'colores' });
@@ -4459,20 +4600,12 @@ function ficha(a) {
     });
     var c = el('span', { 'class': 'confirmar' }, [el('span', { text: '¿Borrar?' }), si, no]);
     acc.replaceChild(c, del);
+    // la pregunta es pasajera: si la ficha se redibuja, vuelve con «Borrar»
+    delete FICHAS[a.id];
     si.focus({ preventScroll: true });
   });
   acc.appendChild(del);
-  f.appendChild(acc);
-  // tocar la ficha (fuera de sus controles) la activa; llegar a ella con el teclado, también
-  f.addEventListener('click', function (ev) {
-    if (ev.target.closest('button, a, textarea, input, select, label, summary')) return;
-    activar(a.id);
-    if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });
-  });
-  f.addEventListener('focusin', function () {
-    activar(a.id);
-  });
-  return f;
+  return acc;
 }
 function guardarSilencioso(id, parche) {
   // Ediciones de nota y réplica. Lo escrito es trabajo del lector y no se tira: si la base rechaza, el borrador
@@ -4482,6 +4615,8 @@ function guardarSilencioso(id, parche) {
   var ant = anots[id];
   if (!ant || SOLO_LECTURA) return;
   SINC.cambiar(Object.assign({}, ant, parche), ahora());
+  // la ficha ya muestra lo escrito: no hace falta rehacerla (salvo que cambie lo que muestra, como «revisada»)
+  if (!('revisado' in parche)) refirmar(id);
   if (col) escribirEnBase(id, null);
   else guardarLocal(modo === 'cargando' ? [id] : undefined);
 }
@@ -5558,11 +5693,13 @@ $('#b-mas').addEventListener('click', function () {
 // la nota ya se guardó al perder el foco.
 function salirDeFicha() {
   if (!V.fichaFoco) return;
+  var antes = V.fichaFoco;
   VISTA.cambiar({ fichaFoco: null });
   $$('.ficha.foco, mark.hl.foco').forEach(function (n) {
     n.classList.remove('foco');
     if (n.classList.contains('ficha')) ajustarTextareas(n);
   });
+  refirmar(antes);
   colocarMargenPronto();
   actualizarNav();
 }

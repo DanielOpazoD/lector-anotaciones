@@ -845,3 +845,70 @@ test('Por revisar: sólo lo propio, y sin identidad, sólo lo sin autor', async 
     await cx.close();
   }
 });
+
+test('Fichas por id: el panel reutiliza las que no cambiaron y conserva el cuadro que se edita', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(() => {
+    const g = (id, nota, creado) => ({ id, tipo: 'general', nota, estado: 'abierta', creado, autor: 'u_me' });
+    window.__semilla = {
+      g1: g('g1', 'Primera nota general', '2026-10-01T00:00:00.000Z'),
+      g2: g('g2', 'Segunda nota general', '2026-10-01T00:01:00.000Z'),
+      g3: g('g3', 'Tercera nota general', '2026-10-01T00:02:00.000Z'),
+    };
+  });
+  await ctx.addInitScript(conBase);
+  const p = await ctx.newPage();
+  const errores = [];
+  p.on('pageerror', (e) => errores.push(String(e)));
+  await p.goto(base);
+  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await p.click('.tab[data-tab="todas"]');
+  await p.waitForSelector('.ficha[data-id="g3"]');
+  // se marcan los nodos dibujados; un redibujo que no cambia nada los deja como están
+  const marcar = () =>
+    p.evaluate(() =>
+      document.querySelectorAll('#lista .ficha').forEach((f) => {
+        f.__marca = 1;
+      })
+    );
+  const marcadas = () =>
+    p.evaluate(() =>
+      Object.fromEntries(Array.from(document.querySelectorAll('#lista .ficha')).map((f) => [f.dataset.id, !!f.__marca]))
+    );
+  await marcar();
+  await p.evaluate(() =>
+    window.__cambioExterno('g2', { respuesta: 'Hecho.', cierre: 'atendida', respondido: '2026-10-02T00:00:00.000Z' })
+  );
+  await esperar(p, () => !!document.querySelector('.ficha[data-id="g2"] .respuesta'));
+  const tras = await marcadas();
+  check(
+    tras.g1 && !tras.g2 && tras.g3,
+    `un cambio en una anotación rehace sólo su ficha; las demás son los mismos nodos (${JSON.stringify(tras)})`
+  );
+  // escribir en g1 mientras llega un cambio de g3: el cuadro es el mismo elemento, con el foco y el cursor donde estaban
+  await p.focus('.ficha[data-id="g1"] textarea.nota');
+  await p.keyboard.press('End');
+  await p.keyboard.type(' (sigo)');
+  const cuadro = await p.evaluate(() => {
+    const t = document.querySelector('.ficha[data-id="g1"] textarea.nota');
+    t.__mismo = 1;
+    return t.selectionStart;
+  });
+  await p.evaluate(() => window.__cambioExterno('g3', { nota: 'Tercera nota, cambiada en otra sesión' }));
+  await esperar(p, () => /cambiada en otra sesión/.test(document.querySelector('.ficha[data-id="g3"] textarea').value));
+  const enEdicion = await p.evaluate(() => {
+    const t = document.querySelector('.ficha[data-id="g1"] textarea.nota');
+    return { mismo: !!t.__mismo, foco: document.activeElement === t, cursor: t.selectionStart, valor: t.value };
+  });
+  check(
+    enEdicion.mismo && enEdicion.foco && enEdicion.cursor === cuadro && /\(sigo\)$/.test(enEdicion.valor),
+    `el cuadro que se edita sigue siendo el mismo, con el foco y el cursor, cuando llega el cambio de otra anotación (${JSON.stringify(enEdicion)})`
+  );
+  check(
+    errores.length === 0,
+    `sin errores de página al reutilizar fichas${errores.length ? ': ' + errores.join(' | ') : ''}`
+  );
+  await ctx.close();
+});

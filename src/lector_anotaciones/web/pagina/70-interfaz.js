@@ -295,11 +295,13 @@ $('#b-mas').addEventListener('click', function () {
 // la nota ya se guardó al perder el foco.
 function salirDeFicha() {
   if (!V.fichaFoco) return;
+  var antes = V.fichaFoco;
   VISTA.cambiar({ fichaFoco: null });
   $$('.ficha.foco, mark.hl.foco').forEach(function (n) {
     n.classList.remove('foco');
     if (n.classList.contains('ficha')) ajustarTextareas(n);
   });
+  refirmar(antes);
   colocarMargenPronto();
   actualizarNav();
 }
