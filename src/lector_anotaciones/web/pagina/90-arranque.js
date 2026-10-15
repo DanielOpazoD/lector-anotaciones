@@ -96,7 +96,12 @@
         });
         if (primeraFoto) { primeraFoto = false; recuperarYSubir(); }
         if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
-        if (!snap.metadata.fromCache) estado('Conectado · ' + Object.keys(anots).length + ' anotaciones');
+        if (!snap.metadata.fromCache) {
+          var nr = cuantasPorRevisar();
+          estado('Conectado · ' + Object.keys(anots).length + ' anotaciones' + (nr ? ' · ' + nr + (nr === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : ''));
+          // las respuestas nuevas se anuncian una vez por visita, al llegar
+          if (nr && !avisoRevisar) { avisoRevisar = true; anunciar(nr + (nr === 1 ? ' respuesta nueva por revisar' : ' respuestas nuevas por revisar') + ': pestaña «Por revisar» del panel.'); }
+        }
       }, function (e) { estado('La base dejó de responder (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
     }).catch(function () { /* el error del libro ya se mostró */ });
   }

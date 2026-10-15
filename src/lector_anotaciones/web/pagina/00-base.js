@@ -8,6 +8,7 @@
   var CAPAS_ON = {}, VISTO = {}, LEIDAS = {}, filtroAutor = '', filtroEtiqueta = '';
   var ultimoBorrado = null, lectura = null;
   var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
+  var avisoRevisar = false;  // ya se anunció en esta visita que hay respuestas por revisar
   var EN_VUELO = {};        // id -> 1 mientras la base no confirma (o rechaza del todo) su escritura, reintento incluido
   var ESCRIBIENDO = 0;      // escrituras en la base todavía sin respuesta (antes de recargar para abrir otro libro)
   var SIN_GUARDAR = {};     // id -> código del último rechazo de una anotación que la base todavía no tiene

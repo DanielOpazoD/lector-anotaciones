@@ -16,7 +16,7 @@
   <header class="barra">
     <div class="titulo">Lector <small id="sub">Cargando…</small></div>
     <span id="sl-chip" class="chip" hidden title="En este libro puedes leer y copiar, no anotar">sólo lectura</span>
-    <div id="movil-barra"><button class="btn peq" id="b-indice" type="button" aria-controls="indice" aria-expanded="false">Índice</button><button class="btn peq" id="b-panel" type="button" aria-controls="panel" aria-expanded="false">Anotaciones <span id="n-panel"></span></button></div>
+    <div id="movil-barra"><button class="btn peq" id="b-indice" type="button" aria-controls="indice" aria-expanded="false">Índice</button><button class="btn peq" id="b-panel" type="button" aria-controls="panel" aria-expanded="false">Anotaciones <span id="n-panel"></span><span class="cuenta-tab" id="n-panel-revisar"></span></button></div>
     <div class="espacio"></div>
     <button class="btn peq" id="b-mas" type="button" aria-controls="herramientas" aria-expanded="false" aria-label="Buscar y más herramientas" title="Buscar, concentración, capas, ajustes y atajos">⋯</button>
     <div class="herramientas" id="herramientas">
@@ -46,16 +46,25 @@
       <div class="panel-cab">
         <div class="panel-fila">
         <div class="tabs" role="tablist" aria-label="Qué anotaciones mostrar">
-          <button class="tab activa" type="button" role="tab" id="tab-capitulo" data-tab="capitulo" aria-controls="lista" aria-selected="true">Esta sección</button>
+          <button class="tab activa" type="button" role="tab" id="tab-capitulo" data-tab="capitulo" aria-controls="lista" aria-selected="true" title="Las anotaciones de la sección abierta">Sección</button>
           <button class="tab" type="button" role="tab" id="tab-todas" data-tab="todas" aria-controls="lista" aria-selected="false" tabindex="-1">Todas</button>
+          <button class="tab" type="button" role="tab" id="tab-revisar" data-tab="revisar" aria-controls="lista" aria-selected="false" tabindex="-1" title="Respuestas que todavía no revisaste">Por revisar <span class="cuenta-tab" id="n-revisar"></span></button>
           <button class="tab" type="button" role="tab" id="tab-buscar" data-tab="buscar" aria-controls="lista" aria-selected="false" tabindex="-1">Búsqueda</button>
         </div>
         <button class="btn peq cerrar" type="button" data-cerrar="panel" aria-label="Cerrar las anotaciones">×</button>
         </div>
-        <div class="nuevas">
-          <button class="btn peq" id="b-nota-cap" type="button">+ Nota de la sección</button>
-          <span class="confirmar nota-pg"><label for="pg-num">p.</label><input type="number" id="pg-num" min="1" inputmode="numeric" aria-label="Número de página"><button class="btn peq" id="b-nota-pg" type="button">+ Nota de página</button></span>
-          <button class="btn peq" id="b-nota-gen" type="button">+ Nota general</button>
+        <div class="panel-fila herramientas-panel">
+          <details class="menu-det" id="nueva-det"><summary class="btn peq" title="Nota de la sección, de una página o general">+ Nota</summary><div class="menu nuevas">
+            <button class="btn peq" id="b-nota-cap" type="button">+ Nota de la sección</button>
+            <span class="confirmar nota-pg"><label for="pg-num">p.</label><input type="number" id="pg-num" min="1" inputmode="numeric" aria-label="Número de página"><button class="btn peq" id="b-nota-pg" type="button">+ Nota de página</button></span>
+            <button class="btn peq" id="b-nota-gen" type="button">+ Nota general</button>
+          </div></details>
+          <span class="nav-anot" role="group" aria-label="Recorrer las anotaciones">
+            <button class="btn peq" id="anot-ant" type="button" aria-label="Anotación anterior" title="Anotación anterior (tecla ,)">‹</button>
+            <span id="anot-pos" class="anot-pos" aria-live="polite"></span>
+            <button class="btn peq" id="anot-sig" type="button" aria-label="Anotación siguiente" title="Anotación siguiente (tecla .)">›</button>
+          </span>
+          <button class="btn peq" id="b-margen" type="button" aria-pressed="true" title="Mostrar las notas de la sección a la altura de su pasaje">Al margen</button>
         </div>
         <details class="plegable" id="filtros-det"><summary>Filtros <span id="filtro-resumen"></span></summary>
           <div class="filtros" id="filtros" role="group" aria-label="Filtrar anotaciones">
@@ -91,6 +100,8 @@
   <div class="anotar"><kbd>N</kbd> subrayar con nota</div>
   <div><kbd>C</kbd> copiar la selección con referencia</div>
   <div><kbd>J</kbd> / <kbd>K</kbd> sección siguiente / anterior · <kbd>L</kbd> marcar leída · <kbd>F</kbd> concentración</div>
+  <div><kbd>.</kbd> / <kbd>,</kbd> anotación siguiente / anterior</div>
+  <div class="anotar">En «Por revisar»: <kbd>A</kbd> atendida · <kbd>R</kbd> reabrir · <kbd>V</kbd> ver el cambio</div>
   <div class="anotar">En una nota: <kbd>Esc</kbd> o <kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda y vuelve al texto</div>
   <div><kbd>Esc</kbd> cerrar · <kbd>?</kbd> esta ayuda · clic fuera de una ficha o un panel lo cierra</div>
 </dialog>

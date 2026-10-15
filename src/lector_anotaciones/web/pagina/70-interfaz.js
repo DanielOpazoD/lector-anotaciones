@@ -42,7 +42,11 @@
     $('#filtro-resumen').textContent = partes.length ? '· ' + partes.join(', ') : '';
   }
   function quitarFiltros() { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; }
-  $$('.tab').forEach(function (t) { t.addEventListener('click', function () { tab = t.getAttribute('data-tab'); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel(); }); });
+  $$('.tab').forEach(function (t) { t.addEventListener('click', function () {
+    // al salir de «Por revisar», las revisadas en esta visita dejan la bandeja
+    if (tab === 'revisar' && t.getAttribute('data-tab') !== 'revisar') REVISADAS = {};
+    tab = t.getAttribute('data-tab'); marcarTab(); if (tab === 'buscar') buscar($('#buscar').value); else renderPanel();
+  }); });
   $('.tabs').addEventListener('keydown', function (ev) {
     var ts = $$('.tab'), i = ts.indexOf(document.activeElement); if (i < 0) return;
     var j = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : ev.key === 'Home' ? 0 : ev.key === 'End' ? ts.length - 1 : null;
@@ -52,10 +56,14 @@
   $$('.filtro').forEach(function (f) { f.addEventListener('click', function () { filtro = f.getAttribute('data-f'); if (tab === 'buscar') { tab = 'todas'; marcarTab(); } renderPanel(); }); });
 
   // ------------------------------------------------------------ controles
-  $('#b-nota-cap').addEventListener('click', notaSeccion);
-  $('#b-nota-gen').addEventListener('click', notaGeneral);
-  $('#b-nota-pg').addEventListener('click', function () { notaPagina($('#pg-num').value, secActual); });
-  $('#pg-num').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') notaPagina($('#pg-num').value, secActual); });
+  // el menú «+ Nota» se cierra al elegir (la nota nueva queda abierta con el cursor en ella)
+  var cerrarNueva = function () { $('#nueva-det').open = false; };
+  $('#b-nota-cap').addEventListener('click', function () { cerrarNueva(); notaSeccion(); });
+  $('#b-nota-gen').addEventListener('click', function () { cerrarNueva(); notaGeneral(); });
+  $('#b-nota-pg').addEventListener('click', function () { cerrarNueva(); notaPagina($('#pg-num').value, secActual); });
+  $('#pg-num').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { cerrarNueva(); notaPagina($('#pg-num').value, secActual); } });
+  $('#anot-ant').addEventListener('click', function () { navegar(-1); });
+  $('#anot-sig').addEventListener('click', function () { navegar(1); });
   $('#b-copiar').addEventListener('click', function () { copiar(exportarJSON(), this); });
   $('#b-copiar-md').addEventListener('click', function () { copiar(exportarMD(), this); });
   $('#buscar').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') buscar(this.value); });
@@ -126,6 +134,7 @@
       if (dentro) ['indice', 'panel'].forEach(function (c) { $('#' + c).classList.toggle('abierta', c === dentro.id); });
     }
     sincronizarLaterales();
+    if (LIBRO && tab !== 'buscar') renderPanel();  // las notas al margen sólo van en pantalla ancha
   }
   if (mqMovil.addEventListener) mqMovil.addEventListener('change', alCambiarAncho); else if (mqMovil.addListener) mqMovil.addListener(alCambiarAncho);
   sincronizarLaterales();
@@ -141,7 +150,8 @@
   function salirDeFicha() {
     if (!fichaFoco) return;
     fichaFoco = null;
-    $$('.ficha.foco, mark.hl.foco').forEach(function (n) { n.classList.remove('foco'); });
+    $$('.ficha.foco, mark.hl.foco').forEach(function (n) { n.classList.remove('foco'); if (n.classList.contains('ficha')) ajustarTextareas(n); });
+    colocarMargenPronto(); actualizarNav();
   }
   // Esc o Ctrl+Enter dentro de una nota: se guarda (al perder el foco), se sale de la ficha y el foco vuelve al pasaje
   // subrayado, o a la ficha si no tiene pasaje; en pantalla estrecha se cierra además el panel.
@@ -188,7 +198,10 @@
   function alternarFoco() {
     var act = document.activeElement;
     if (!$('#app').classList.contains('foco') && act && act.closest && act.closest('#indice, #panel')) $('#lectura').focus({ preventScroll: true });
-    var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false'); }
+    var on = $('#app').classList.toggle('foco'); lsSet(LOCAL_KEY + ':foco', on ? '1' : ''); $('#b-foco').textContent = on ? 'Salir de concentración' : 'Concentración'; $('#b-foco').setAttribute('aria-pressed', on ? 'true' : 'false');
+    // el panel vuelve a verse (o deja de verse): sus notas se miden de nuevo y el margen se activa o no
+    if (!on && LIBRO && tab !== 'buscar') renderPanel();
+  }
   var COLOR_TECLA = { '1': 'revisar', '2': 'cortar', '3': 'duda', '4': 'conservar' };
   // Esc cierra de a una capa por vez, la más reciente primero: menú de la barra, «⋯», la selección y su barra, la
   // lectura en voz alta, el cajón, la concentración y, al final, la ficha. Vale también con el foco en un campo de
@@ -215,6 +228,14 @@
     else if (COLOR_TECLA[ev.key] && haySel) { ev.preventDefault(); crearSubrayado(COLOR_TECLA[ev.key], false); }
     else if ((ev.key === 'n' || ev.key === 'N') && haySel) { ev.preventDefault(); crearSubrayado('revisar', true); }
     else if ((ev.key === 'c' || ev.key === 'C') && haySel) { ev.preventDefault(); copiarSeleccion($('#sel-copiar')); }
+    else if (ev.key === '.') { ev.preventDefault(); navegar(1); }
+    else if (ev.key === ',') { ev.preventDefault(); navegar(-1); }
+    else if (tab === 'revisar' && fichaFoco && anots[fichaFoco] && !SOLO_LECTURA && /^[arvARV]$/.test(ev.key)) {
+      ev.preventDefault();
+      var k = ev.key.toLowerCase();
+      if (k === 'v') verCambio(fichaFoco);
+      else if (porRevisar(anots[fichaFoco])) revisar(fichaFoco, k === 'a' ? 'atendida' : 'reabrir');
+    }
     else if (ev.key === 'j' || ev.key === 'J') mover(1);
     else if (ev.key === 'k' || ev.key === 'K') mover(-1);
     else if (ev.key === 'l' || ev.key === 'L') alternarLeida(secActual);
@@ -224,11 +245,16 @@
   // Un clic fuera cierra lo que flota: la barra de subrayado (si ya no hay selección), los menús de la barra y la ficha
   // en edición. Fuera de una ficha quiere decir en el texto o en el fondo, no en un control: el botón que crea otra
   // nota, por ejemplo, la enfoca él mismo.
+  // Un clic que empezó en una ficha no es un clic fuera aunque se suelte fuera: al margen, la ficha que se activa al
+  // pulsarla puede moverse bajo el puntero, y el clic llega entonces a la lista que la contiene.
+  var pulsadoEn = null;
+  document.addEventListener('pointerdown', function (ev) { pulsadoEn = ev.target; }, true);
   document.addEventListener('click', function (ev) {
-    var t = ev.target;
+    var t = ev.target, origen = pulsadoEn; pulsadoEn = null;
     if (!tb.contains(t)) { var s = window.getSelection(); if (!s || s.isCollapsed) ocultarTb(); }
     $$('details.menu-det[open]').forEach(function (d) { if (!d.contains(t)) d.open = false; });
-    if (fichaFoco && t && t.closest && !t.closest('.ficha, mark.hl, #sel-tb, dialog, #velo, button, a, input, select, textarea, label, summary, .res')) salirDeFicha();
+    var enFicha = origen && origen.closest && origen.closest('.ficha');
+    if (fichaFoco && !enFicha && t && t.closest && !t.closest('.ficha, mark.hl, #sel-tb, dialog, #velo, button, a, input, select, textarea, label, summary, .res')) salirDeFicha();
   });
   // Al salir de la página (recargar, cerrar, pasar a otra pestaña), la nota en edición se guarda sin esperar la pausa.
   var soltarNota = function () { var a = document.activeElement; if (a && a.tagName === 'TEXTAREA' && a.closest('.ficha')) a.blur(); };

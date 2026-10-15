@@ -109,6 +109,22 @@ async function abrirDe(page, sel) {
 }
 async function pulsar(page, sel) { await abrirDe(page, sel); await page.click(sel); }
 
+// Las acciones de una ficha compacta aparecen al activarla (tocándola): se activa antes de pulsar una.
+async function enFicha(page, selFicha, selBoton) {
+  await page.evaluate((sel) => { const f = document.querySelector(sel); if (f && !f.classList.contains('foco')) f.querySelector('.cab > span').click(); }, selFicha);
+  await page.click(`${selFicha} ${selBoton}`);
+}
+
+// Selecciona un texto dado dentro de la sección visible.
+async function seleccionarTexto(page, t) {
+  return page.evaluate((t) => {
+    for (const b of document.querySelectorAll('article.seccion:not([hidden]) [data-pid]')) {
+      const w = document.createTreeWalker(b, NodeFilter.SHOW_TEXT); let n;
+      while ((n = w.nextNode())) { const i = n.nodeValue.indexOf(t); if (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); return true; } }
+    }
+    return false;
+  }, t);
+}
 async function seleccionar(page, n = 20) {
   // Selecciona los primeros n caracteres del primer párrafo visible y devuelve su pid.
   return page.evaluate((n) => {
@@ -170,7 +186,7 @@ try {
   await page.waitForSelector(`[data-pid="${pid}"] mark.hl.c-revisar`);
   check(true, 'subrayar pinta una marca con el color elegido');
 
-  await page.click('#b-nota-cap');
+  await pulsar(page, '#b-nota-cap');
   await page.waitForSelector('.ficha textarea');
   await page.fill('.ficha textarea', 'Nota de prueba de la sección');
   await page.$eval('.ficha textarea', (t) => t.blur());
@@ -209,7 +225,7 @@ try {
 
   // Copiar una sola anotación como texto, y copiar una selección con su referencia.
   await page.click('.tab[data-tab="todas"]');
-  await page.click(`.ficha[data-id="${sub.id}"] .acciones button:has-text("Copiar")`);
+  await enFicha(page, `.ficha[data-id="${sub.id}"]`, 'button:has-text("Copiar")');
   const unaCopia = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   check(unaCopia.startsWith('[revisar] ') && unaCopia.includes(`· ${sub.src}`) && unaCopia.includes(`«${sub.cita}»`),
     'Copiar en una ficha da color, sección, página, archivo:línea y la cita');
@@ -266,11 +282,11 @@ try {
   const guardadoDespues = await page.evaluate((clave) => JSON.parse(localStorage.getItem(clave)), guardado.clave);
   check(guardadoDespues.movida.inicio === sub.inicio + 7 && guardadoDespues.corrida.pid === pidSiguiente, 'la reubicación no modifica lo guardado');
   // Lo que se copia de una ficha reubicada apunta al bloque donde la cita está hoy, y lo dice; la perdida lo declara.
-  await page.click('.ficha[data-id="corrida"] .acciones button:has-text("Copiar")');
+  await enFicha(page, '.ficha[data-id="corrida"]', 'button:has-text("Copiar")');
   const copiaCorrida = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   check(copiaCorrida.startsWith(`[duda] ${sub.sidTitulo} ·`) && copiaCorrida.includes(`· ${sub.src} ·`) && copiaCorrida.includes('reubicado') && copiaCorrida.includes('(antes viejo.md:1)'),
     `Copiar en una ficha reubicada da el bloque actual y avisa (${JSON.stringify(copiaCorrida).slice(0, 110)}…)`);
-  await page.click('.ficha[data-id="perdida"] .acciones button:has-text("Copiar")');
+  await enFicha(page, '.ficha[data-id="perdida"]', 'button:has-text("Copiar")');
   const copiaPerdida = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   check(copiaPerdida.includes('no encontrado en esta versión del libro') && copiaPerdida.includes(`· ${sub.src}`), 'Copiar en una ficha perdida conserva la referencia original y lo declara');
 
@@ -295,7 +311,7 @@ try {
   check(true, 'el subrayado llega a la base');
   const idSub = await pdb.evaluate(() => Object.values(window.__docs).find((d) => d.tipo === 'subrayado').id);
 
-  await pdb.click('#b-nota-cap');
+  await pulsar(pdb, '#b-nota-cap');
   await pdb.waitForSelector('.ficha.t-capitulo textarea');
   await pdb.focus('.ficha.t-capitulo textarea');
   await pdb.keyboard.type('Primera parte de la nota', { delay: 10 });
@@ -578,7 +594,7 @@ try {
   // deshacer un borrado
   await p2.click('.tab[data-tab="todas"]');
   const antesBorrar = (await p2.$$('.ficha')).length;
-  await p2.click('.ficha .acciones button:has-text("Borrar")');
+  await enFicha(p2, '.ficha', 'button:has-text("Borrar")');
   await p2.click('.ficha .confirmar button:has-text("Sí")');
   await p2.waitForSelector('#deshacer');
   check((await p2.$$('.ficha')).length === antesBorrar - 1, 'borrar quita la ficha y ofrece deshacer');
@@ -665,7 +681,7 @@ try {
   await p3.waitForFunction(() => Object.values(window.__colecciones.respaldos || {}).some((d) => d.libro) || true);
   await p3.waitForTimeout(150);
   check((await p3.evaluate(() => Object.keys(window.__colecciones.respaldos || {}).length)) === 0, 'editar una nota el mismo día no repite el respaldo (ya se hizo hoy)');
-  const copiaResp = await (async () => { await ctx3.grantPermissions(['clipboard-read', 'clipboard-write']); await p3.click('.ficha[data-id="atendida"] .acciones button:has-text("Copiar")'); return p3.evaluate(() => navigator.clipboard.readText()).catch(() => ''); })();
+  const copiaResp = await (async () => { await ctx3.grantPermissions(['clipboard-read', 'clipboard-write']); await enFicha(p3, '.ficha[data-id="atendida"]', 'button:has-text("Copiar")'); return p3.evaluate(() => navigator.clipboard.readText()).catch(() => ''); })();
   check(/Respuesta \(atendida, abc1234\): Quitado en el párrafo 3\./.test(copiaResp), 'copiar una ficha incluye la respuesta y su cierre');
   // una escritura nueva rechazada por la base sin ser de permiso (la base está llena) no se pierde ni se da por guardada:
   // sigue a la vista marcada «sin guardar», con copia en el navegador, y la página sigue editable
@@ -678,12 +694,12 @@ try {
   check(llenaAvisada && llena.marca === 1 && llena.ficha && !llena.enBase && llena.local && !llena.sl, `si la base rechaza la escritura por estar llena, la anotación sigue aquí marcada «sin guardar», con copia en el navegador, y la página sigue editable (avisada en 5 s ${llenaAvisada}, marcas ${llena.marca}, en base ${llena.enBase})`);
   // un cambio de color o de estado rechazado vuelve a lo que la base tiene: `previa` se toma antes de mutar
   await p3.evaluate(() => { window.getSelection().removeAllRanges(); document.querySelector('#estado').textContent = ''; });
-  await p3.click(`.ficha[data-id="${mio.id}"] .col-btn[data-c="revisar"]`);
+  await enFicha(p3, `.ficha[data-id="${mio.id}"]`, '.col-btn[data-c="revisar"]');
   await p3.waitForFunction(() => /No se pudo guardar \(quota_exceeded\)/.test(document.querySelector('#estado').textContent));
   const colorRechazado = await p3.evaluate((id) => ({ marca: !!document.querySelector(`mark.hl.c-duda[data-aids~="${id}"]`), marcaNueva: !!document.querySelector(`mark.hl.c-revisar[data-aids~="${id}"]`), boton: document.querySelector(`.ficha[data-id="${id}"] .col-btn.on`).getAttribute('data-c'), ficha: document.querySelector(`.ficha[data-id="${id}"]`).classList.contains('c-duda'), base: window.__docs[id].color }), mio.id);
   check(colorRechazado.marca && !colorRechazado.marcaNueva && colorRechazado.boton === 'duda' && colorRechazado.ficha && colorRechazado.base === 'duda', `un cambio de color rechazado vuelve al color que la base tiene (marca ${colorRechazado.marca}, botón ${colorRechazado.boton}, base ${colorRechazado.base})`);
   await p3.evaluate(() => { document.querySelector('#estado').textContent = ''; });
-  await p3.click(`.ficha[data-id="${mio.id}"] button[data-accion="estado"]`);
+  await enFicha(p3, `.ficha[data-id="${mio.id}"]`, 'button[data-accion="estado"]');
   await p3.waitForFunction(() => /No se pudo guardar \(quota_exceeded\)/.test(document.querySelector('#estado').textContent));
   const estadoRechazado = await p3.evaluate((id) => ({ resuelta: document.querySelector(`.ficha[data-id="${id}"]`).classList.contains('resuelta'), boton: document.querySelector(`.ficha[data-id="${id}"] button[data-accion="estado"]`).textContent, base: window.__docs[id].estado }), mio.id);
   check(!estadoRechazado.resuelta && estadoRechazado.boton === 'Resuelta' && estadoRechazado.base === 'abierta', `un cambio de estado rechazado vuelve al estado que la base tiene (${estadoRechazado.boton}, base ${estadoRechazado.base})`);
@@ -700,7 +716,7 @@ try {
   const reintentada = await esperar(p3, () => window.__docs.atendida.nota === 'Quitar el adjetivo y el adverbio' && !document.querySelector('.ficha[data-id="atendida"].sin-guardar'));
   check(reintentada, 'reintentar desde la ficha lleva el borrador a la base y quita la marca');
   await p3.$eval('.ficha[data-id="atendida"] textarea', (t) => t.blur());
-  await p3.click('.ficha[data-id="ajena"] .acciones button:has-text("Borrar")');
+  await enFicha(p3, '.ficha[data-id="ajena"]', 'button:has-text("Borrar")');
   await p3.click('.ficha[data-id="ajena"] .confirmar button:has-text("Sí")');
   await p3.waitForFunction(() => !window.__docs.ajena && /^Conectado/.test(document.querySelector('#estado').textContent));
   check(!!(await p3.$('#deshacer')), 'el enlace de deshacer sobrevive al eco de la base que confirma el borrado');
@@ -786,7 +802,7 @@ try {
   await pdz.goto(base);
   await pdz.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pdz.click('.tab[data-tab="todas"]');
-  await pdz.click('.ficha[data-id="y"] .acciones button:has-text("Borrar")');
+  await enFicha(pdz, '.ficha[data-id="y"]', 'button:has-text("Borrar")');
   await pdz.click('.ficha[data-id="y"] .confirmar button:has-text("Sí")');
   await pdz.waitForSelector('#deshacer');
   await pdz.click('#deshacer');
@@ -868,7 +884,7 @@ try {
   await pre.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
   // la base rechaza una sola vez con unavailable: la página reintenta sola (segundo intento) y la anotación llega
   await pre.evaluate(() => { window.__rechazarUnaVez = 'unavailable'; window.__intentos = {}; });
-  await pre.click('#b-nota-cap');
+  await pulsar(pre, '#b-nota-cap');
   await pre.waitForSelector('.ficha.t-capitulo textarea');
   const reintentado = await esperar(pre, () => window.__intentos.anotaciones === 2 && Object.values(window.__docs).some((d) => d.tipo === 'capitulo'));
   const reintento = await pre.evaluate(() => ({ intentos: window.__intentos.anotaciones, sinGuardar: document.querySelectorAll('.ficha.sin-guardar').length, enBase: Object.values(window.__docs).some((d) => d.tipo === 'capitulo') }));
@@ -879,7 +895,7 @@ try {
   const idCap = await pre.evaluate(() => (Object.values(window.__docs).find((d) => d.tipo === 'capitulo') || Object.values(window.__docs)[0] || {}).id);
   // la base sigue sin responder: la anotación nueva no se pierde (memoria, ficha marcada, copia local, reintento a mano)
   await pre.evaluate(() => { window.__rechazar = 'unavailable'; window.__intentos = {}; });
-  await pre.click('#b-nota-gen');
+  await pulsar(pre, '#b-nota-gen');
   const conservadaVisible = await esperar(pre, () => !!document.querySelector('.ficha.sin-guardar.t-general textarea'));
   check(conservadaVisible, 'si el reintento también falla, la anotación nueva sigue a la vista marcada «sin guardar» (en 5 s)');
   if (conservadaVisible) {
@@ -895,7 +911,7 @@ try {
   }
   // deshacer un borrado cuando la base no responde: la anotación con su nota no se pierde
   await pre.evaluate(() => { window.__rechazar = null; });
-  await pre.click(`.ficha[data-id="${idCap}"] .acciones button:has-text("Borrar")`);
+  await enFicha(pre, `.ficha[data-id="${idCap}"]`, 'button:has-text("Borrar")');
   await pre.click(`.ficha[data-id="${idCap}"] .confirmar button:has-text("Sí")`);
   await pre.waitForFunction((id) => !window.__docs[id] && !!document.querySelector('#deshacer'), idCap);
   await pre.evaluate(() => { window.__rechazar = 'unavailable'; });
@@ -921,12 +937,12 @@ try {
   await pcl.goto(base);
   await pcl.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pcl.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
-  await pcl.click('#b-nota-gen');
+  await pulsar(pcl, '#b-nota-gen');
   await pcl.waitForSelector('.ficha.t-general textarea');
   await pcl.fill('.ficha.t-general textarea', 'Nota escrita después de crearla');
   await pcl.$eval('.ficha.t-general textarea', (t) => t.blur());
   check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'general' && d.nota === 'Nota escrita después de crearla')), 'la nota general escrita tras crearla llega a la base');
-  await pcl.click('.ficha.t-general button[data-accion="copiar"]');
+  await enFicha(pcl, '.ficha.t-general', 'button[data-accion="copiar"]');
   const copiaViva = await pcl.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   check(/^\[nota general\] General\nNota: Nota escrita después de crearla$/.test(copiaViva), `«Copiar» en la ficha lleva la nota recién escrita (${JSON.stringify(copiaViva)})`);
   await seleccionar(pcl, 14);
@@ -936,11 +952,11 @@ try {
   await pcl.fill('.ficha.t-subrayado textarea', 'Nota del subrayado');
   await pcl.$eval('.ficha.t-subrayado textarea', (t) => t.blur());
   check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.nota === 'Nota del subrayado')), 'la nota del subrayado llega a la base');
-  await pcl.click('.ficha.t-subrayado .col-btn[data-c="conservar"]');
+  await enFicha(pcl, '.ficha.t-subrayado', '.col-btn[data-c="conservar"]');
   const colorYNota = await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.color === 'conservar'));
   const subrayadoCl = await pcl.evaluate(() => { const d = Object.values(window.__docs).find((x) => x.tipo === 'subrayado'); return { color: d.color, nota: d.nota, cuadro: document.querySelector('.ficha.t-subrayado textarea').value }; });
   check(colorYNota && subrayadoCl.color === 'conservar' && subrayadoCl.nota === 'Nota del subrayado' && subrayadoCl.cuadro === 'Nota del subrayado', `cambiar el color tras escribir la nota manda a la base el color y la nota (color ${subrayadoCl.color}, nota ${JSON.stringify(subrayadoCl.nota)})`);
-  await pcl.click('.ficha.t-subrayado button[data-accion="estado"]');
+  await enFicha(pcl, '.ficha.t-subrayado', 'button[data-accion="estado"]');
   check(await esperar(pcl, () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.estado === 'resuelta' && d.color === 'conservar' && d.nota === 'Nota del subrayado')), 'y cambiar el estado conserva color y nota');
   await ctxCl.close();
 
@@ -962,7 +978,7 @@ try {
   const negada = await png.evaluate(() => ({ marca: document.querySelectorAll('mark.hl.c-duda').length, aviso: (document.querySelector('.ficha.sin-guardar .aviso-guardar') || {}).textContent || '', reintentar: !!document.querySelector('.ficha button[data-accion="reintentar"]'), cuadro: !!document.querySelector('.ficha textarea'), enBase: Object.values(window.__docs).some((d) => d.tipo === 'subrayado'), local: Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k) && /subrayado/.test(localStorage.getItem(k))), estado: document.querySelector('#estado').textContent, cuenta: document.querySelector('#n-panel').textContent }));
   check(negadaVisible && negada.marca === 1 && /not_granted/.test(negada.aviso) && !negada.reintentar && !negada.cuadro && !negada.enBase && negada.local, `una anotación nueva rechazada por permiso sigue a la vista marcada «sin guardar», con copia en el navegador, sin reintentar y en sólo lectura (a la vista ${negadaVisible}, marcas ${negada.marca}, en el navegador ${negada.local})`);
   check(/No se pudo guardar en la base \(not_granted\)/.test(negada.estado) && /copia tus anotaciones/.test(negada.estado) && /sólo lectura/.test(negada.estado), `la barra dice que no se pudo guardar y que se puede copiar (${negada.estado})`);
-  const copiaNegada = negadaVisible ? await png.click('.ficha.sin-guardar button[data-accion="copiar"]').then(() => png.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
+  const copiaNegada = negadaVisible ? await enFicha(png, '.ficha.sin-guardar', 'button[data-accion="copiar"]').then(() => png.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
   await pulsar(png, '#b-copiar');
   const todoNegado = await png.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   await pulsar(png, '#b-copiar-md');
@@ -978,7 +994,7 @@ try {
   await pnd.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await pnd.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
   await pnd.click('.tab[data-tab="todas"]');
-  await pnd.click('.ficha[data-id="valiosa"] .acciones button:has-text("Borrar")');
+  await enFicha(pnd, '.ficha[data-id="valiosa"]', 'button:has-text("Borrar")');
   await pnd.click('.ficha[data-id="valiosa"] .confirmar button:has-text("Sí")');
   await pnd.waitForFunction(() => !window.__docs.valiosa && !!document.querySelector('#deshacer'));
   await pnd.evaluate(() => { window.__rechazar = 'not_granted'; });
@@ -1023,14 +1039,14 @@ try {
   check(conservada.marca && conservada.local && !conservada.enBase, 'una pendiente que no pudo subir sigue en memoria y en el navegador, y la barra lo dice');
   // si la base rechaza el borrado, vuelve a la memoria y la copia local la sigue teniendo (no se pierde al recargar)
   await pt2.click('.tab[data-tab="todas"]');
-  await pt2.click('.ficha .acciones button:has-text("Borrar")');
+  await enFicha(pt2, '.ficha', 'button:has-text("Borrar")');
   await pt2.click('.ficha .confirmar button:has-text("Sí")');
   await pt2.waitForFunction(() => /No se pudo borrar/.test(document.querySelector('#estado').textContent), null, { timeout: 10000 });
   const trasRechazo = await pt2.evaluate(() => ({ marca: !!document.querySelector('mark.hl'), ficha: !!document.querySelector('.ficha'), deshacer: !!document.querySelector('#deshacer'), local: Object.keys(localStorage).filter((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)).map((k) => localStorage.getItem(k)).join('') }));
   check(trasRechazo.marca && trasRechazo.ficha && /subrayado/.test(trasRechazo.local) && !trasRechazo.deshacer, 'si la base rechaza el borrado de una pendiente, vuelve a la memoria, la copia local la conserva y no se ofrece deshacer');
   // borrarla de verdad la saca también de la copia local: al recargar no vuelve
   await pt2.evaluate(() => { window.__rechazar = null; });
-  await pt2.click('.ficha .acciones button:has-text("Borrar")');
+  await enFicha(pt2, '.ficha', 'button:has-text("Borrar")');
   await pt2.click('.ficha .confirmar button:has-text("Sí")');
   await pt2.waitForSelector('#deshacer');
   await pt2.waitForFunction(() => !Object.keys(localStorage).filter((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)).some((k) => /subrayado/.test(localStorage.getItem(k))), null, { timeout: 10000 });
@@ -1132,7 +1148,7 @@ try {
   check(trasRecarga.marca && trasRecarga.local && !trasRecarga.enBase && trasRecarga.ficha && /sólo lectura/.test(trasRecarga.aviso) && /no puede subir/.test(trasRecarga.estado), 'se conserva en el navegador y vuelve al recargar, otra vez marcada');
   await pulsar(pst, '#b-copiar');
   const todoSL = await pst.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  const fichaSL = trasRecarga.ficha ? await pst.click('.ficha.sin-guardar button[data-accion="copiar"]').then(() => pst.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
+  const fichaSL = trasRecarga.ficha ? await enFicha(pst, '.ficha.sin-guardar', 'button[data-accion="copiar"]').then(() => pst.evaluate(() => navigator.clipboard.readText())).catch(() => '') : '';
   check(/"sin_guardar": "sólo lectura"/.test(todoSL) && /sin guardar en la base \(sólo lectura\)/.test(fichaSL), `«Copiar todo» y «Copiar» en la ficha la incluyen con la señal de que la base no la tiene (${JSON.stringify(fichaSL.split('\n')[0])})`);
   await ctxSLTarde.close();
 
@@ -1288,7 +1304,7 @@ try {
   const focoPulsado = await pa.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'));
   await pa.click('#b-foco');
   check(focoPulsado === 'true' && (await pa.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'))) === 'false', 'el botón de concentración anuncia si está activo');
-  await pa.click('.ficha button[data-accion="borrar"]');
+  await enFicha(pa, '.ficha', 'button[data-accion="borrar"]');
   await pa.click('.ficha button[data-accion="si"]');
   const trasBorrarA = await pa.evaluate(() => ({ foco: document.activeElement !== document.body && !!document.activeElement.closest('#panel'), deshacer: !!document.querySelector('#deshacer') }));
   check(trasBorrarA.foco && trasBorrarA.deshacer, `al borrar, el foco queda en el panel y aparece «Deshacer» (${JSON.stringify(trasBorrarA)})`);
@@ -1296,6 +1312,153 @@ try {
   check(await pa.evaluate(() => document.activeElement !== document.body && !!document.activeElement.closest('.ficha, mark')), 'tras deshacer, el foco queda en la anotación recuperada');
   check(erroresA.length === 0, `sin errores de consola en el recorrido de accesibilidad${erroresA.length ? ': ' + erroresA.join(' | ') : ''}`);
   await ctxA.close();
+
+  // ---------------------------------------------------------------- fichas compactas, recorrido, bandeja de revisión y notas al margen (escritorio)
+  // Cuatro subrayados (dos en un mismo párrafo, uno en la lista, uno en el párrafo del capítulo 2 que cambió) con
+  // respuestas de quien edita: atendida, pregunta, descartada y atendida con el pasaje reescrito.
+  const ctxV = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxV.addInitScript(sinBase);
+  const pv4 = await ctxV.newPage();
+  const erroresV = [];
+  pv4.on('pageerror', (e) => erroresV.push(String(e)));
+  pv4.on('console', (m) => { if (m.type() === 'error') erroresV.push(m.text()); });
+  await libroAlterado(pv4, conCambio);
+  await pv4.goto(base + '#cap-01');
+  await pv4.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  // lo que la versión anterior no tenga no detiene el resto: el clic que no encuentra su botón se anota y sigue
+  const tocar = (sel) => pv4.click(sel, { timeout: 2000 }).then(() => true, () => false);
+  for (const [t, k] of [['Un hecho es lo que se observó', '1'], ['se lee una ficha escrita con prisa', '3'], ['Dar por hecho lo que se infirió de una cifra', '2']]) {
+    await seleccionarTexto(pv4, t); await pv4.keyboard.press(k); await pv4.keyboard.press('Escape');
+  }
+  await pv4.evaluate(() => { location.hash = '#cap-02'; });
+  await esperar(pv4, () => !document.querySelector('#sec-cap-02').hidden);
+  await seleccionarTexto(pv4, 'un paso desde lo observado'); await pv4.keyboard.press('4'); await pv4.keyboard.press('Escape');
+  const clave = await pv4.evaluate(() => Object.keys(localStorage).find((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)));
+  const leer = () => pv4.evaluate((k) => { const j = JSON.parse(localStorage.getItem(k) || '{}'); return Object.values(j).sort((a, b) => (a.creado < b.creado ? -1 : 1)); }, clave);
+  const [vA, vB, vC, vD] = (await leer()).map((a) => a.id);
+  await pv4.evaluate(({ k, ids }) => {
+    const j = JSON.parse(localStorage.getItem(k)); const [a, b, c, d] = ids;
+    Object.assign(j[a], { nota: 'Definición demasiado tajante; matizar con un ejemplo clínico.', respuesta: 'Añadí el ejemplo de la fiebre referida.', cierre: 'atendida', commit: 'a1b2c3d', respondido: '2026-10-15T12:00:00Z' });
+    Object.assign(j[b], { respuesta: '¿Prefieres «con prisa» o «al final del turno»?', cierre: 'pregunta', respondido: '2026-10-15T12:10:00Z' });
+    Object.assign(j[c], { nota: 'Repite la idea del párrafo anterior.', respuesta: 'Lo dejé: la lista resume el párrafo.', cierre: 'descartada', respondido: '2026-10-15T12:05:00Z', estado: 'resuelta' });
+    Object.assign(j[d], { respuesta: 'Cambié «salto» por «paso».', cierre: 'atendida', respondido: '2026-10-15T12:20:00Z', bh: 'viejo0000000' });
+    localStorage.setItem(k, JSON.stringify(j));
+  }, { k: clave, ids: [vA, vB, vC, vD] });
+  await pv4.goto(base + '#cap-01');
+  await pv4.reload();
+  await pv4.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  // cada marca abre su anotación, aunque el párrafo tenga dos
+  await pv4.click(`article.seccion:not([hidden]) mark.hl[data-aids~="${vA}"]`);
+  check((await pv4.evaluate(() => (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'))) === vA, 'en un párrafo con dos subrayados, el clic en el primero abre su ficha y no la del otro');
+  // ficha compacta: en reposo la nota se lee como texto, sin marco ni botones; activa, con ellos
+  const compacta = await pv4.evaluate((ids) => {
+    const f = (id) => document.querySelector(`.ficha[data-id="${id}"]`); const ta = (id) => f(id) && f(id).querySelector('textarea.nota');
+    const marco = (id) => ta(id) ? getComputedStyle(ta(id)).borderTopColor : null; const acc = (id) => f(id) ? getComputedStyle(f(id).querySelector('.acciones')).display : null;
+    return { reposoMarco: marco(ids.c), reposoAcc: acc(ids.c), activaMarco: marco(ids.a), activaAcc: acc(ids.a) };
+  }, { a: vA, c: vC });
+  check(compacta.reposoMarco === 'rgba(0, 0, 0, 0)' && compacta.reposoAcc === 'none' && compacta.activaMarco !== 'rgba(0, 0, 0, 0)' && compacta.activaAcc !== 'none', `en reposo la ficha es texto (nota sin marco, sin botones); activa muestra el cuadro y las acciones (${JSON.stringify(compacta)})`);
+  await tocar(`.ficha[data-id="${vC}"] textarea.nota`);
+  const tocada = await pv4.evaluate((id) => ({ foco: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'), cursor: document.activeElement.id }), vC);
+  check(tocada.foco === vC && tocada.cursor === `nota-${vC}`, `tocar la nota de una ficha en reposo la activa con el cursor en la nota (${JSON.stringify(tocada)})`);
+  await pv4.keyboard.press('Escape');
+  // al margen: la ficha a la altura de su pasaje, sin encimarse, y acompaña al texto cuando se desplaza
+  const alMargen = () => pv4.evaluate((a) => {
+    const capa = document.querySelector('#lista.al-margen .capa-margen'); if (!capa) return { capa: false };
+    const fs = Array.from(capa.querySelectorAll('.ficha')).map((f) => { const r = f.getBoundingClientRect(); return { id: f.getAttribute('data-id'), top: r.top, bottom: r.bottom }; }).sort((x, y) => x.top - y.top);
+    const m = document.querySelector(`mark.hl[data-aids~="${a}"]`).getBoundingClientRect(); const fa = fs.find((x) => x.id === a);
+    return { capa: true, n: fs.length, desfase: fa ? Math.round(fa.top - m.top) : null, encimadas: fs.some((x, i) => i > 0 && x.top < fs[i - 1].bottom + 6), tops: fs.map((x) => Math.round(x.top)) };
+  }, vA);
+  await pv4.waitForTimeout(120);
+  const m0 = await alMargen();
+  check(m0.capa && m0.n === 3 && Math.abs(m0.desfase) <= 3 && !m0.encimadas, `en «Sección», las fichas van al margen a la altura de su pasaje y sin encimarse (${JSON.stringify(m0)})`);
+  await pv4.evaluate(() => { document.querySelector('#lectura').scrollTop += 90; });
+  await pv4.waitForTimeout(120);
+  const m1 = await alMargen();
+  check(m1.capa && Math.abs(m1.desfase) <= 3 && m1.tops.every((t, i) => Math.abs(t - (m0.tops[i] - 90)) <= 3), `al desplazar el texto, las fichas lo acompañan (${JSON.stringify({ antes: m0.tops, despues: m1.tops })})`);
+  await pv4.evaluate(() => { document.querySelector('#lectura').scrollTop = 0; });
+  await pv4.click(`article.seccion:not([hidden]) mark.hl[data-aids~="${vC}"]`);
+  const visible = await pv4.evaluate((id) => { const f = document.querySelector(`.ficha[data-id="${id}"]`), l = document.querySelector('#lista').getBoundingClientRect(); if (!f) return null; const r = f.getBoundingClientRect(); return { foco: f.classList.contains('foco'), dentro: r.top >= l.top - 1 && r.top < l.bottom - 40 }; }, vC);
+  check(visible && visible.foco && visible.dentro, `la ficha activa al margen queda a la vista (${JSON.stringify(visible)})`);
+  await pv4.keyboard.press('Escape');
+  const sinMargen = await tocar('#b-margen') && await pv4.evaluate(() => ({ pulsado: document.querySelector('#b-margen').getAttribute('aria-pressed'), margen: !!document.querySelector('#lista.al-margen'), guardado: localStorage.getItem('lector-anotaciones.margen') }));
+  await pv4.reload();
+  await pv4.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  const margenRecarga = await pv4.evaluate(() => ({ margen: !!document.querySelector('#lista.al-margen'), fichas: document.querySelectorAll('#lista .ficha').length }));
+  check(sinMargen && sinMargen.pulsado === 'false' && !sinMargen.margen && sinMargen.guardado === '0' && !margenRecarga.margen && margenRecarga.fichas === 3, `«Al margen» se apaga, vuelve a la lista y se recuerda al recargar (${JSON.stringify({ sinMargen, margenRecarga })})`);
+  await tocar('#b-margen');
+  await tocar('.tab[data-tab="todas"]');
+  const enTodas = await pv4.evaluate(() => !!document.querySelector('#lista.al-margen'));
+  await tocar('.tab[data-tab="capitulo"]');
+  check(!enTodas && (await pv4.evaluate(() => !!document.querySelector('#lista.al-margen'))), '«Todas» es una lista; al volver a «Sección» las fichas vuelven al margen');
+  // recorrer con . y , en el orden del libro, de una sección a otra
+  await pv4.focus('#lectura');
+  const pos = () => pv4.evaluate(() => ({ ff: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id') || null, pos: (document.querySelector('#anot-pos') || {}).textContent || '', sec: Array.from(document.querySelectorAll('article.seccion')).filter((a) => !a.hidden).map((a) => a.id).join() }));
+  await pv4.keyboard.press('.');
+  const r1 = await pos();
+  await pv4.keyboard.press('.'); await pv4.keyboard.press('.'); await pv4.keyboard.press('.');
+  const r4 = await pos();
+  await pv4.keyboard.press('.');
+  await pv4.waitForTimeout(150);
+  const fin = { ...(await pos()), anuncio: await pv4.$eval('#anuncio', (n) => n.textContent) };
+  await pv4.keyboard.press(',');
+  const r3 = await pos();
+  await tocar('#anot-ant');
+  const r2 = await pos();
+  check(r1.ff === vA && r1.pos === '1 de 4' && r4.ff === vD && r4.sec === 'sec-cap-02' && r4.pos === '4 de 4' && fin.ff === vD && /última/.test(fin.anuncio) && r3.ff === vC && r3.sec === 'sec-cap-01' && r2.ff === vB, `. y , (y ‹ ›) recorren las anotaciones en orden, cambian de sección y avisan al llegar al final (${JSON.stringify({ r1, r4, fin, r3, r2 })})`);
+  await pv4.keyboard.press('Escape');
+  // bandeja «Por revisar»: cuenta, A atendida, contestar la pregunta, R reabrir, ver el cambio
+  const cuenta = () => pv4.evaluate(() => (document.querySelector('#n-revisar') || {}).textContent ?? null);
+  const enBandeja = await tocar('#tab-revisar');
+  const bandeja = await pv4.evaluate(() => ({ cab: (document.querySelector('.bandeja-cab') || {}).textContent || '', fichas: document.querySelectorAll('#lista .ficha.por-revisar').length }));
+  check(enBandeja && (await cuenta()) === '4' && /4 respuestas por revisar/.test(bandeja.cab) && bandeja.fichas === 4, `«Por revisar» cuenta y lista las respuestas nuevas (${JSON.stringify(bandeja)})`);
+  await pv4.keyboard.press('.');
+  await pv4.keyboard.press('a');
+  const trasA = (await leer())[0];
+  const despuesA = await pv4.evaluate((id) => ({ ff: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'), revisada: !!document.querySelector(`#lista .ficha.revisada[data-id="${id}"]`) }), vA);
+  check(trasA.estado === 'resuelta' && !!trasA.revisado && despuesA.ff === vB && despuesA.revisada && (await cuenta()) === '3', `A deja la respuesta atendida (resuelta y revisada), la mantiene a la vista marcada y pasa a la siguiente (${JSON.stringify({ estado: trasA.estado, revisado: trasA.revisado, ...despuesA })})`);
+  await tocar(`.ficha[data-id="${vB}"] textarea.replica`);
+  await pv4.keyboard.type('Al final del turno');
+  await pv4.keyboard.press('Escape');
+  await pv4.waitForTimeout(100);
+  const trasB = (await leer())[1];
+  check(trasB.replica === 'Al final del turno' && !!trasB.revisado && (await cuenta()) === '2', `contestar la pregunta la da por revisada (${JSON.stringify({ replica: trasB.replica, revisado: trasB.revisado })})`);
+  await pv4.focus(`.ficha[data-id="${vB}"]`).catch(() => {});
+  await pv4.keyboard.press('.');
+  await pv4.keyboard.press('r');
+  const trasR = (await leer())[2];
+  const cursorR = await pv4.evaluate(() => document.activeElement.id);
+  check(trasR.estado === 'abierta' && !!trasR.revisado && cursorR === `nota-${vC}`, `R reabre la respuesta descartada, la da por revisada y deja el cursor en la nota (${JSON.stringify({ estado: trasR.estado, cursorR })})`);
+  await pv4.keyboard.type(' Mejor quitarla.');
+  await pv4.keyboard.press('Escape');
+  await pv4.focus(`.ficha[data-id="${vC}"]`).catch(() => {});
+  await pv4.keyboard.press('.');
+  await pv4.waitForTimeout(150);
+  const enD = await pv4.evaluate((id) => ({ ff: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'), sec: !document.querySelector('#sec-cap-02').hidden, diff: !!document.querySelector('#sec-cap-02 .diff'), boton: !!document.querySelector(`.ficha[data-id="${id}"] [data-accion="cambio"]`) }), vD);
+  await pv4.evaluate(() => { const d = document.querySelector('#sec-cap-02 .diff'); if (d) d.remove(); });
+  await pv4.keyboard.press('v');
+  await pv4.waitForTimeout(100);
+  const conV = await pv4.evaluate(() => !!document.querySelector('#sec-cap-02 .diff'));
+  check(enD.ff === vD && enD.sec && enD.diff && enD.boton && conV, `llegar a una respuesta cuyo pasaje cambió lleva a él con el antes y el después abiertos; V los vuelve a mostrar (${JSON.stringify({ ...enD, conV })})`);
+  await pv4.keyboard.press('a');
+  await pv4.waitForTimeout(150);
+  const vacia = await pv4.evaluate(() => ({ anuncio: document.querySelector('#anuncio').textContent, fichas: document.querySelectorAll('#lista .ficha').length, revisadas: document.querySelectorAll('#lista .ficha.revisada').length }));
+  check((await cuenta()) === '' && /No quedan/.test(vacia.anuncio) && vacia.fichas === 4 && vacia.revisadas === 4, `al terminar lo avisa, y lo revisado sigue a la vista hasta salir de la pestaña (${JSON.stringify(vacia)})`);
+  await tocar('.tab[data-tab="todas"]');
+  await tocar('#tab-revisar');
+  const vuelta = await pv4.evaluate(() => ({ fichas: document.querySelectorAll('#lista .ficha').length, vacio: (document.querySelector('#lista .vacio') || {}).textContent || '' }));
+  check(vuelta.fichas === 0 && /No hay respuestas por revisar/.test(vuelta.vacio), `al volver, la bandeja está vacía (${JSON.stringify(vuelta)})`);
+  // una respuesta posterior a la revisión vuelve a la bandeja
+  await pv4.evaluate(({ k, id }) => { const j = JSON.parse(localStorage.getItem(k)); j[id].respondido = new Date(Date.now() + 60000).toISOString(); j[id].respuesta = 'Lo volví a matizar.'; localStorage.setItem(k, JSON.stringify(j)); }, { k: clave, id: vA });
+  await pv4.reload();
+  await pv4.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  check((await cuenta()) === '1', 'lo revisado se recuerda al recargar, y una respuesta nueva a lo ya revisado vuelve a la bandeja');
+  // en el teléfono no hay margen: la lista de siempre, en la hoja
+  await pv4.setViewportSize({ width: 400, height: 800 });
+  await pv4.waitForTimeout(150);
+  const movilMargen = await pv4.evaluate(() => ({ boton: getComputedStyle(document.querySelector('#b-margen') || document.body).display, margen: !!document.querySelector('#lista.al-margen') }));
+  check(movilMargen.boton === 'none' && !movilMargen.margen, `en pantalla estrecha no hay notas al margen (${JSON.stringify(movilMargen)})`);
+  check(erroresV.length === 0, `sin errores de consola al revisar y recorrer${erroresV.length ? ': ' + erroresV.join(' | ') : ''}`);
+  await ctxV.close();
 
   // ---------------------------------------------------------------- ancho de teléfono
   const movil = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
@@ -1384,7 +1547,7 @@ try {
   check(!trasEscM.panel && trasEscM.foco === 'MARK', `Esc en la nota cierra el panel y deja el foco en el pasaje (${JSON.stringify(trasEscM)})`);
   // borrar con el panel abierto: «Deshacer» queda a mano, encima del velo
   await pc.click('#b-panel');
-  await pc.click('#panel .ficha button[data-accion="borrar"]');
+  await enFicha(pc, '#panel .ficha', 'button[data-accion="borrar"]');
   await pc.click('#panel .ficha button[data-accion="si"]');
   const undo = await pc.evaluate(() => { const u = document.querySelector('#deshacer'); if (!u) return null; const r = u.getBoundingClientRect(); return { inerte: !!u.closest('[inert]'), dentro: r.width > 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth, encima: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === u }; });
   check(!!undo && !undo.inerte && undo.dentro && undo.encima, `con el panel abierto, «Deshacer» sigue visible y se puede tocar (${JSON.stringify(undo)})`);
@@ -1407,7 +1570,10 @@ try {
   const conNota = await estadoCajon();
   check(conNota.panel && conNota.velo && (await pc.evaluate(() => document.activeElement.tagName)) === 'TEXTAREA', `estrechar la pantalla con una nota en edición deja el panel abierto con el cursor en ella (${JSON.stringify(conNota)})`);
   await pc.setViewportSize({ width: 1280, height: 800 });
-  await pc.mouse.click(400, 400);
+  await esperar(pc, () => !document.querySelector('#panel').classList.contains('abierta'), null, 2000);  // el cambio de media llega en el cuadro siguiente
+  // seguir leyendo: un toque en un párrafo sin subrayados (un subrayado abriría su ficha, y con ella el panel)
+  const puntoLibre = await pc.evaluate(() => { const ps = Array.from(document.querySelectorAll('article.seccion:not([hidden]) p.bloque[data-pid]')).filter((p) => !p.querySelector('mark')); const p = ps[ps.length - 1]; p.scrollIntoView({ block: 'center' }); const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await pc.mouse.click(puntoLibre.x, puntoLibre.y);
   await pc.setViewportSize({ width: 400, height: 800 });
   await pc.waitForTimeout(150);
   const trasAncho = await estadoCajon();

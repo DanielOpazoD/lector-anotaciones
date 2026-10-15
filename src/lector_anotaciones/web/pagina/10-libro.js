@@ -31,7 +31,7 @@
           pagPrev = b.pagina;
         }
         art.appendChild(node);
-        marcarCambio(b, node, art);
+        marcarCambio(b, node);
       });
       lect.appendChild(art);
     });
