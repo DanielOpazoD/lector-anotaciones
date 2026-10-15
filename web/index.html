@@ -498,6 +498,7 @@ figure img { cursor: zoom-in; }
   function borrar(id) {
     if (SOLO_LECTURA) return;
     var a = anots[id], marca = SIN_GUARDAR[id]; if (!a) return;
+    var camposPrevios = CAMPOS_BORRADOR[id] ? Object.assign({}, CAMPOS_BORRADOR[id]) : null;
     quitarDeMemoria(id);
     renderPanel(); renderCuentas();
     // Un borrado confirmado sale también de la copia local, para que una pendiente que no subió no vuelva al recargar;
@@ -509,7 +510,7 @@ figure img { cursor: zoom-in; }
     }
     else if (modo === 'cargando') { var i = pendientesBase.indexOf(id); if (i >= 0) pendientesBase.splice(i, 1); podarLocal([id]); limpiarCampos(id); }
     else { guardarLocal(); limpiarCampos(id); }
-    ofrecerDeshacer(a);
+    ofrecerDeshacer(a, camposPrevios);
   }
   var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado'];  // lo que el lector edita en la página; el resto lo escribe quien edita las fuentes
   var CAMPOS_BORRADOR = {};  // id -> campos que el lector cambió en esta sesión y la base todavía no tiene (se guarda junto a la copia local)
@@ -1313,14 +1314,21 @@ figure img { cursor: zoom-in; }
   }
 
   // ------------------------------------------------------------ deshacer y respaldo
-  function ofrecerDeshacer(a) {
+  function ofrecerDeshacer(a, campos) {
     // El enlace vive en su propia zona, no en el texto de estado: el eco de la base que confirma el
-    // borrado reescribe ese texto y se llevaría el enlace antes de los ocho segundos.
+    // borrado reescribe ese texto y se llevaría el enlace antes de los ocho segundos. Deshacer devuelve
+    // también la lista de campos que el lector había cambiado y la base todavía no tiene.
     ultimoBorrado = a;
     estado('Anotación borrada', true);
     var z = $('#deshacer-zona'); z.innerHTML = '';
     var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: 'Deshacer borrado', title: 'Recuperar la anotación borrada' });
-    u.addEventListener('click', function () { if (ultimoBorrado) { guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada'); } z.innerHTML = ''; });
+    u.addEventListener('click', function () {
+      if (ultimoBorrado) {
+        if (ultimoBorrado === a && campos) CAMPOS_BORRADOR[a.id] = Object.assign({}, campos);
+        guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada');
+      }
+      z.innerHTML = '';
+    });
     z.appendChild(u);
     setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.firstChild === u) z.innerHTML = ''; }, 8000);
   }

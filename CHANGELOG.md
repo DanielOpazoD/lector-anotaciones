@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.12] - 2026-10-15
+
+### Corregido
+
+- «Deshacer borrado» devuelve también la lista de campos que el lector había cambiado y la base todavía no tenía. Antes, borrar y recuperar una anotación sin base compartida perdía esa lista, y al conectar un cambio de color o de estado hecho sin conexión no subía.
+
 ## [0.2.11] - 2026-10-15
 
 ### Corregido

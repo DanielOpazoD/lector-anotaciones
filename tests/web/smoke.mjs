@@ -766,6 +766,35 @@ try {
   check(sueltas, 'y la copia local y su lista de campos se sueltan una vez subidas');
   await ctxOn.close();
 
+  // ---------------------------------------------------------------- deshacer un borrado sin base devuelve la lista de campos
+  // borrador y con lista {color} (cambio de color sin subir); sin base se borra y se deshace; al conectar, el color
+  // del borrador debe subir sobre la copia más vieja de la base
+  const ctxDz = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxDz.addInitScript(sinBase);
+  await ctxDz.addInitScript((clave) => { if (!sessionStorage.getItem('sembrado')) { sessionStorage.setItem('sembrado', '1'); localStorage.setItem(clave, JSON.stringify({ y: { id: 'y', tipo: 'general', nota: 'Nota de y', color: 'duda', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-05T00:00:00.000Z', autor: 'u_me' } })); localStorage.setItem(clave + ':campos', JSON.stringify({ y: { color: true } })); } }, claveL);
+  const pdz = await ctxDz.newPage();
+  await pdz.goto(base);
+  await pdz.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pdz.click('.tab[data-tab="todas"]');
+  await pdz.click('.ficha[data-id="y"] .acciones button:has-text("Borrar")');
+  await pdz.click('.ficha[data-id="y"] .confirmar button:has-text("Sí")');
+  await pdz.waitForSelector('#deshacer');
+  await pdz.click('#deshacer');
+  await pdz.waitForSelector('.ficha[data-id="y"]');
+  const dzLocal = await pdz.evaluate((clave) => ({ campos: JSON.parse(localStorage.getItem(clave + ':campos') || '{}'), copia: JSON.parse(localStorage.getItem(clave) || '{}') }), claveL);
+  check(dzLocal.campos.y && dzLocal.campos.y.color && dzLocal.copia.y, `deshacer un borrado sin base devuelve la anotación y su lista de campos (${JSON.stringify(dzLocal.campos)})`);
+  const dzEstado = await pdz.evaluate((clave) => ({ copia: localStorage.getItem(clave), campos: localStorage.getItem(clave + ':campos') }), claveL);
+  await ctxDz.close();
+  const ctxDz2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxDz2.addInitScript(() => { window.__semilla = { y: { id: 'y', tipo: 'general', nota: 'Nota de y', color: 'revisar', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', editado: '2026-10-02T00:00:00.000Z', autor: 'u_me' } }; });
+  await ctxDz2.addInitScript(conBase);
+  await ctxDz2.addInitScript(([clave, e]) => { if (!sessionStorage.getItem('sembrado')) { sessionStorage.setItem('sembrado', '1'); localStorage.setItem(clave, e.copia); if (e.campos) localStorage.setItem(clave + ':campos', e.campos); } }, [claveL, dzEstado]);
+  const pdz2 = await ctxDz2.newPage();
+  await pdz2.goto(base);
+  const dzSubido = await esperar(pdz2, () => window.__docs && window.__docs.y && window.__docs.y.color === 'duda', null, 10000);
+  check(dzSubido, `al conectar, el color cambiado sin base sube aunque la anotación se borrara y se recuperara (${await pdz2.evaluate(() => window.__docs.y && window.__docs.y.color)})`);
+  await ctxDz2.close();
+
   // ---------------------------------------------------------------- anotar mientras conecta no borra la lista de otro borrador
   // la copia local trae el borrador x con lista {nota}; se anota algo mientras la base conecta (eso escribe la lista);
   // al conectar, x debe subir sólo su nota, sin pisar la réplica más reciente que otra sesión dejó en la base
