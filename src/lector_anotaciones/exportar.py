@@ -10,6 +10,7 @@ Acepta tres formas de entrada, que son las que produce la página o la base comp
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -43,8 +44,20 @@ def normalizar(datos) -> list[dict]:
     return anots
 
 
+_NUM_BLOQUE = re.compile(r"-b(\d+)$")
+
+
+def _indice_bloque(a: dict) -> int:
+    m = _NUM_BLOQUE.search(a.get("pid") or "")
+    return int(m.group(1)) if m else 0
+
+
 def _orden(a: dict) -> tuple:
-    return (a.get("pagina") or 0, a.get("inicio") or 0, a.get("creado") or "")
+    return (a.get("pagina") or 0, _indice_bloque(a), a.get("inicio") or 0, a.get("creado") or "")
+
+
+def _grupo(a: dict) -> str:
+    return "General" if a.get("tipo") == "general" else (a.get("sidTitulo") or "General")
 
 
 def _orden_archivo(a: dict) -> tuple:
@@ -130,7 +143,7 @@ def a_markdown(
     grupos: dict[str, list[dict]] = {}
     if agrupar == "seccion":
         for a in sorted(anots, key=_orden):
-            grupos.setdefault(a.get("sidTitulo") or "General", []).append(a)
+            grupos.setdefault(_grupo(a), []).append(a)
         nombres = _ordenar_grupos(grupos, orden_secciones)
     else:
         for a in sorted(anots, key=_orden_archivo):

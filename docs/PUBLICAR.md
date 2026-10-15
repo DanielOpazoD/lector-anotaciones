@@ -19,7 +19,7 @@ Publicada como artefacto desde una sesión de Claude Code con la capacidad `db`,
 Pasos, desde la sesión de Claude Code:
 
 1. Construir `libro.json` con el PDF, para que las páginas impresas coincidan con las del lector del PDF.
-2. Publicar `web/index.html` con la herramienta de artefactos, adjuntando `libro.json` y las figuras como archivos de apoyo, y declarando las capacidades `db` y `user` (`{"db": {}, "user": {"scopes": ["profile"]}}`): `db` guarda las anotaciones y el respaldo diario (colección `respaldos`); `user` da a cada anotación el id de quien la hizo y resuelve los nombres al mostrar. Sin `user`, todo funciona y `autor` queda en `null`.
+2. Publicar `web/index.html` con la herramienta de artefactos, adjuntando `libro.json` y las figuras como archivos de apoyo, y declarando las capacidades `db` y `user` (`{"db": {}, "user": {"scopes": ["profile"]}}`): `db` guarda las anotaciones y el respaldo diario (colección `respaldos`: un documento índice por fecha, `AAAA-MM-DD`, y una o más partes `AAAA-MM-DD-n` con las anotaciones serializadas, para no pasar del tamaño por documento); `user` da a cada anotación el id de quien la hizo y resuelve los nombres al mostrar. Sin `user`, todo funciona y `autor` queda en `null`.
 3. Tras cada cambio en las fuentes, reconstruir `libro.json` y republicar con la misma URL. Los ids de bloque son estables mientras no cambie el orden de los bloques de una sección; una anotación cuyo bloque se movió sigue siendo localizable por `cita`, `antes` y `despues`.
 
 La página funciona igual sin la base: si `window.claude.use("db")` devuelve `null`, pasa sola al respaldo local y lo dice en la barra de estado.

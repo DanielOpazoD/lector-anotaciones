@@ -127,3 +127,17 @@ def test_expandir_fuentes(tmp_path: Path):
     vacio.mkdir()
     with pytest.raises(FileNotFoundError):
         expandir_fuentes([vacio])
+
+
+def test_un_archivo_con_bom_no_pierde_su_primer_titulo(tmp_path: Path):
+    f = tmp_path / "bom.md"
+    f.write_bytes("\ufeff# Prefacio\n\nTexto.\n".encode("utf-8"))
+    secciones = parse_fuentes([f])
+    assert [s["id"] for s in secciones] == ["prefacio"]
+
+
+def test_el_texto_de_listas_y_tablas_no_lleva_entidades_html():
+    secciones = parse_texto("# A\n\n- Tos & fiebre <38\n\n| x & y | z |\n|---|---|\n| 1 | 2 |\n")
+    ul, tabla = secciones[0]["bloques"]
+    assert ul["texto"] == "Tos & fiebre <38" and ul["html"] == ["Tos &amp; fiebre &lt;38"]
+    assert tabla["texto"] == "x & y z"

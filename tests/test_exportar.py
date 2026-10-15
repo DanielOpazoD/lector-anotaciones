@@ -134,3 +134,12 @@ def test_cli_exportar(tmp_path: Path, capsys):
     assert main(["exportar", str(ruta), "--salida", str(salida), "--solo-abiertas"]) == 0
     assert salida.read_text(encoding="utf-8").count("- [ ]") == 3
     assert main(["exportar", str(tmp_path / "no.json")]) == 2
+
+
+def test_orden_por_bloque_y_las_generales_van_a_general():
+    primero = dict(SUBRAYADO, id="b1", pid="cap-01-b2", inicio=50, cita="del bloque dos", pagina=None)
+    segundo = dict(SUBRAYADO, id="b2", pid="cap-01-b10", inicio=3, cita="del bloque diez", pagina=None)
+    general = dict(GENERAL, id="g1", sid="cap-01", sidTitulo="Capítulo 1. Uno", nota="General con sección")
+    md = a_markdown([segundo, primero, general], ahora=AHORA)
+    assert md.index("«del bloque dos»") < md.index("«del bloque diez»"), "por número de bloque, no por desplazamiento"
+    assert "## General\n\n- [ ] **nota general**: General con sección" in md

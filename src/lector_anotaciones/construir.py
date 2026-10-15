@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import html as html_mod
 import json
@@ -77,12 +78,6 @@ def construir(
     """
     rutas = expandir_fuentes(fuentes)
     secciones = parse_fuentes(rutas, figs=figs)
-    previos: dict[str, dict] = {}
-    if anterior:
-        for s in anterior.get("secciones", []):
-            for b in s.get("bloques", []):
-                previos[b["id"]] = b
-    cambios = 0
     for sec in secciones:
         for b in sec["bloques"]:
             texto = texto_render(b)
@@ -91,10 +86,7 @@ def construir(
                 m = calcular_capas(texto, capas)
                 if m:
                     b["m"] = m
-            prev = previos.get(b["id"])
-            if prev is not None and prev.get("h") and prev["h"] != b["h"]:
-                b["anterior"] = texto_render(prev)
-                cambios += 1
+    cambios = marcar_cambios(secciones, anterior) if anterior else 0
     paginas_fisicas = None
     desfase = 0
     if pdf is not None:
@@ -138,6 +130,31 @@ def construir(
         else {},
         "secciones": secciones,
     }
+
+
+def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
+    """Escribe `anterior` en los bloques cuyo texto cambió respecto de la salida previa; devuelve cuántos.
+
+    Los ids son posicionales, así que no sirven para emparejar: se alinean las dos listas de huellas de
+    cada sección con difflib. Los bloques con la misma huella están intactos; los tramos sustituidos se
+    emparejan en orden; los insertados no tienen versión anterior y los borrados no se marcan.
+    """
+    previas = {s["id"]: s.get("bloques", []) for s in anterior.get("secciones", [])}
+    cambios = 0
+    for sec in secciones:
+        prev = previas.get(sec["id"])
+        if prev is None:
+            continue
+        hp = [b.get("h") or "" for b in prev]
+        hn = [b["h"] for b in sec["bloques"]]
+        for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, hp, hn, autojunk=False).get_opcodes():
+            if op != "replace":
+                continue
+            for pb, b in zip(prev[i1:i2], sec["bloques"][j1:j2], strict=False):
+                if pb.get("h"):
+                    b["anterior"] = texto_render(pb)
+                    cambios += 1
+    return cambios
 
 
 def validar(libro: dict) -> list[str]:

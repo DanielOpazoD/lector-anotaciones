@@ -65,7 +65,7 @@ const conBase = () => {
   const db = {
     collection: (nombre) => ({
       doc: (id) => ({
-        set: (data) => { const docs = coleccion(nombre); const existia = !!docs[id]; docs[id] = JSON.parse(JSON.stringify(data)); setTimeout(() => emitir(nombre, [{ type: existia ? 'modified' : 'added', id }]), 30); return Promise.resolve(); },
+        set: (data) => { if (window.__rechazar) return Promise.reject({ code: window.__rechazar, message: 'simulado' }); const docs = coleccion(nombre); const existia = !!docs[id]; docs[id] = JSON.parse(JSON.stringify(data)); setTimeout(() => emitir(nombre, [{ type: existia ? 'modified' : 'added', id }]), 30); return Promise.resolve(); },
         delete: () => { delete coleccion(nombre)[id]; setTimeout(() => emitir(nombre, [{ type: 'removed', id }]), 30); return Promise.resolve(); },
       }),
       onSnapshot: (cb) => { (oyentes[nombre] = oyentes[nombre] || []).push(cb); cb(snap(nombre, Object.keys(coleccion(nombre)).map((id) => ({ type: 'added', id })))); return () => {}; },
@@ -74,10 +74,11 @@ const conBase = () => {
   const nombres = { u_me: 'Yo Mismo', u_otro: 'Lectora Invitada' };
   const user = {
     id: () => Promise.resolve('u_me'),
-    can: () => Promise.resolve(null),
+    can: () => Promise.resolve(window.__soloLectura ? false : null),
     profiles: (ids) => Promise.resolve(Object.fromEntries((Array.isArray(ids) ? ids : [ids]).map((i) => [i, { id: i, name: nombres[i] || '', color: i === 'u_me' ? '#3d5a6c' : '#8c2f2f', avatarUrl: '', email: null, isMe: i === 'u_me', guest: i === 'u_otro' }]))),
   };
-  window.claude = { use: (n) => Promise.resolve(n === 'db' ? db : n === 'user' ? user : null) };
+  const retraso = window.__retrasoDb || 0;
+  window.claude = { use: (n) => new Promise((res) => setTimeout(() => res(n === 'db' ? db : n === 'user' ? user : null), n === 'db' ? retraso : 0)) };
   window.__docs = coleccion('anotaciones');
   window.__colecciones = cols;
   window.__cambioExterno = (id, parche) => { Object.assign(coleccion('anotaciones')[id], parche); emitir('anotaciones', [{ type: 'modified', id }]); };
@@ -432,17 +433,45 @@ try {
   });
   check(copiaTabla.split('\n')[1] === '«Hecho · ¿Qué vi? · Fiebre de 38,5 °C»', `las celdas copiadas llevan separador (${JSON.stringify(copiaTabla.split('\n')[1])})`);
   await p2.evaluate(() => window.getSelection().removeAllRanges());
+  // selección que termina fuera de los bloques (triple clic en el último párrafo): se subraya y se copia igual
+  const ultimoTexto = await p2.evaluate(() => {
+    const bloques = document.querySelectorAll('#sec-cap-01 .bloque[data-pid]'); const p = bloques[bloques.length - 1];
+    const tn = Array.from(p.childNodes).find((x) => x.nodeType === 3 && x.textContent.trim());
+    const r = document.createRange(); r.setStart(tn, 0); r.setEnd(document.querySelector('#sig'), 0);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    return p.getAttribute('data-pid');
+  });
+  await p2.waitForSelector('#sel-tb', { state: 'visible' });
+  await p2.keyboard.press('1');
+  await p2.waitForSelector(`[data-pid="${ultimoTexto}"] mark.hl.c-revisar`);
+  const subrayadoFinal = await p2.evaluate((pid) => { const k = Object.keys(localStorage).find((x) => x.startsWith('lector-anotaciones:') && !x.endsWith(':ultima') && !/:(visto|leidas|capas|foco|respaldo)$/.test(x)); const a = Object.values(JSON.parse(localStorage.getItem(k))).find((x) => x.pid === pid); return a && { inicio: a.inicio, fin: a.fin, cita: a.cita }; }, ultimoTexto);
+  check(subrayadoFinal && subrayadoFinal.inicio === 0 && subrayadoFinal.fin === subrayadoFinal.cita.length && /separar mejor\.$/.test(subrayadoFinal.cita), 'una selección que sale del último bloque se recorta a ese bloque entero');
+  await p2.evaluate(() => window.getSelection().removeAllRanges());
+  // el contorno de foco se mueve con la ficha enfocada
+  await p2.click('.tab[data-tab="todas"]');
+  const fichas = await p2.$$eval('.ficha', (fs) => fs.map((f) => f.getAttribute('data-id')));
+  await p2.click(`.ficha[data-id="${fichas[0]}"] .cab button.enlace`);
+  await p2.click('.tab[data-tab="todas"]');
+  await p2.click(`.ficha[data-id="${fichas[1]}"] .cab button.enlace`);
+  check((await p2.$$('mark.hl.foco')).length <= 1, 'sólo el subrayado de la ficha enfocada lleva contorno');
+  // la búsqueda no lee los marcadores del margen como texto
   await p2.evaluate(() => { location.hash = '#cap-02'; });
   await p2.waitForSelector('#sec-cap-02:not([hidden])');
+  await p2.fill('#buscar', 'cambió');
+  await p2.press('#buscar', 'Enter');
+  await p2.waitForSelector('.res');
+  const resCambio = await p2.$$eval('.res:not(.anot)', (rs) => rs.map((r) => r.textContent));
+  check(resCambio.length >= 1 && resCambio.every((t) => !/cambióUna/.test(t)), `la búsqueda ignora el marcador «cambió» del margen (${resCambio.length} resultados)`);
   // deshacer un borrado
   await p2.click('.tab[data-tab="todas"]');
+  const antesBorrar = (await p2.$$('.ficha')).length;
   await p2.click('.ficha .acciones button:has-text("Borrar")');
   await p2.click('.ficha .confirmar button:has-text("Sí")');
   await p2.waitForSelector('#deshacer');
-  check((await p2.$$('.ficha')).length === 0, 'borrar quita la ficha y ofrece deshacer');
+  check((await p2.$$('.ficha')).length === antesBorrar - 1, 'borrar quita la ficha y ofrece deshacer');
   await p2.click('#deshacer');
-  await p2.waitForSelector('.ficha');
-  check((await p2.$$('.ficha')).length === 1, 'deshacer la recupera');
+  await p2.waitForFunction((n) => document.querySelectorAll('.ficha').length === n, antesBorrar);
+  check(true, 'deshacer la recupera');
   // figura ampliable y lectura en voz alta
   await p2.goto(base + '#cap-01');
   await p2.waitForSelector('article.seccion:not([hidden]) figure img');
@@ -463,6 +492,7 @@ try {
   const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctx3.addInitScript(() => {
     window.__semilla = {
+      grande: { id: 'grande', tipo: 'general', nota: 'x'.repeat(199500), estado: 'resuelta', creado: '2026-09-30T00:00:00.000Z', autor: 'u_otro' },
       ajena: { id: 'ajena', tipo: 'general', nota: 'Nota de otra lectora', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', autor: 'u_otro' },
       conpregunta: { id: 'conpregunta', tipo: 'general', nota: '¿Conviene mover el caso?', estado: 'abierta', creado: '2026-10-02T00:00:00.000Z', autor: 'u_me', respuesta: '¿Al inicio del capítulo o al final?', cierre: 'pregunta', respondido: '2026-10-03T10:00:00.000Z' },
       atendida: { id: 'atendida', tipo: 'general', nota: 'Quitar el adjetivo', estado: 'resuelta', creado: '2026-10-02T01:00:00.000Z', autor: 'u_me', respuesta: 'Quitado en el párrafo 3.', cierre: 'atendida', commit: 'abc1234', respondido: '2026-10-03T10:00:00.000Z' },
@@ -476,7 +506,7 @@ try {
   await p3.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   await p3.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
   await p3.click('.tab[data-tab="todas"]');
-  await p3.waitForFunction(() => document.querySelectorAll('.ficha').length === 3);
+  await p3.waitForFunction(() => document.querySelectorAll('.ficha').length === 4);
   const fichaPregunta = await p3.$eval('.ficha[data-id="conpregunta"]', (f) => ({ pregunta: f.classList.contains('cierre-pregunta'), cierre: (f.querySelector('.cierre') || {}).textContent, respuesta: (f.querySelector('.respuesta') || {}).textContent, replica: !!f.querySelector('textarea.replica') }));
   check(fichaPregunta.pregunta && fichaPregunta.cierre === 'pregunta' && /Al inicio del capítulo/.test(fichaPregunta.respuesta) && fichaPregunta.replica, 'una respuesta con pregunta se muestra con su cierre y un cuadro para replicar');
   const fichaAtendida = await p3.$eval('.ficha[data-id="atendida"]', (f) => ({ cierre: (f.querySelector('.cierre') || {}).textContent, quien: (f.querySelector('.respuesta .quien') || {}).textContent, resuelta: f.classList.contains('resuelta') }));
@@ -490,11 +520,13 @@ try {
   await p3.click('.filtro[data-f="respondidas"]');
   check((await p3.$$('.ficha')).length === 2, 'el filtro «con respuesta» deja las respondidas');
   await p3.click('.filtro[data-f="todas"]');
+  check(!(await p3.$('.ficha[data-id="ajena"] .cab button.enlace')) && (await p3.$eval('.ficha[data-id="conpregunta"] .acciones button', (b) => b.tagName)) === 'BUTTON', 'las notas generales no llevan «ir al texto» y los controles son botones');
+  await p3.click('.filtro[data-f="todas"]');
   await p3.waitForFunction(() => Array.from(document.querySelectorAll('.ficha[data-id="ajena"] .autor span')).some((s) => s.textContent === 'Lectora Invitada'));
   check(true, 'la ficha de otra lectora lleva su nombre resuelto por la capacidad user');
   check(!(await p3.$eval('#f-autor', (s) => s.hidden)) && (await p3.$$eval('#f-autor option', (os) => os.map((o) => o.textContent))).includes('Lectora Invitada'), 'con varios lectores aparece el selector de lector');
   await p3.selectOption('#f-autor', 'u_otro');
-  check((await p3.$$('.ficha')).length === 1, 'el filtro por lector deja sus anotaciones');
+  check((await p3.$$('.ficha')).length === 2, 'el filtro por lector deja sus anotaciones');
   await p3.selectOption('#f-autor', '');
   const pid3 = await seleccionar(p3, 12);
   await p3.waitForSelector('#sel-tb', { state: 'visible' });
@@ -502,11 +534,19 @@ try {
   await p3.waitForFunction(() => Object.values(window.__docs).some((d) => d.tipo === 'subrayado'));
   const mio = await p3.evaluate(() => Object.values(window.__docs).find((d) => d.tipo === 'subrayado'));
   check(mio.autor === 'u_me' && typeof mio.bh === 'string' && mio.bh.length === 12, 'un subrayado nuevo lleva autor y la huella del bloque');
-  await p3.waitForFunction(() => window.__colecciones.respaldos && Object.keys(window.__colecciones.respaldos).length === 1);
-  const respaldo = await p3.evaluate(() => Object.values(window.__colecciones.respaldos)[0]);
-  check(respaldo.n >= 3 && JSON.parse(respaldo.anotaciones).length === respaldo.n, `se escribió el respaldo diario en la colección «respaldos» (${respaldo.n} anotaciones)`);
+  await p3.waitForFunction(() => window.__colecciones.respaldos && Object.values(window.__colecciones.respaldos).some((d) => d.libro));
+  const respaldo = await p3.evaluate(() => Object.values(window.__colecciones.respaldos).find((d) => d.partes !== undefined && d.libro));
+  check(respaldo.partes >= 2 && respaldo.n >= 4 && (await p3.evaluate(() => Object.keys(window.__colecciones.respaldos).length)) === respaldo.partes + 1, `el respaldo diario se trocea en documentos pequeños (${respaldo.partes} partes, ${respaldo.n} anotaciones)`);
   const copiaResp = await (async () => { await ctx3.grantPermissions(['clipboard-read', 'clipboard-write']); await p3.click('.ficha[data-id="atendida"] .acciones button:has-text("Copiar")'); return p3.evaluate(() => navigator.clipboard.readText()).catch(() => ''); })();
   check(/Respuesta \(atendida, abc1234\): Quitado en el párrafo 3\./.test(copiaResp), 'copiar una ficha incluye la respuesta y su cierre');
+  // una escritura rechazada por la base no deja anotaciones fantasma
+  await p3.evaluate(() => { window.__rechazar = 'quota_exceeded'; });
+  await seleccionar(p3, 8);
+  await p3.waitForSelector('#sel-tb', { state: 'visible' });
+  await p3.click('#sel-tb .col-btn[data-c="cortar"]');
+  await p3.waitForFunction(() => /No se pudo guardar \(quota_exceeded\)/.test(document.querySelector('#estado').textContent));
+  check((await p3.$$('mark.hl.c-cortar')).length === 0 && !(await p3.evaluate(() => Object.values(window.__docs).some((d) => d.color === 'cortar'))) && !(await p3.evaluate(() => document.body.classList.contains('solo-lectura'))), 'si la base rechaza la escritura, la anotación se retira de la memoria y la página sigue editable');
+  await p3.evaluate(() => { window.__rechazar = null; window.getSelection().removeAllRanges(); });
   await p3.click('.ficha[data-id="ajena"] .acciones button:has-text("Borrar")');
   await p3.click('.ficha[data-id="ajena"] .confirmar button:has-text("Sí")');
   await p3.waitForFunction(() => !window.__docs.ajena && /^Conectado/.test(document.querySelector('#estado').textContent));
@@ -517,13 +557,53 @@ try {
   check(errores3.length === 0, `sin errores de página con base y usuario${errores3.length ? ': ' + errores3.join(' | ') : ''}`);
   await ctx3.close();
 
+  // ---------------------------------------------------------------- anotar mientras la base todavía conecta
+  const ctxTarde = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxTarde.addInitScript(() => { window.__retrasoDb = 1500; });
+  await ctxTarde.addInitScript(conBase);
+  const pt = await ctxTarde.newPage();
+  await pt.goto(base);
+  await pt.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pt.waitForFunction(() => /Conectando/.test(document.querySelector('#estado').textContent));
+  const pidTarde = await seleccionar(pt, 10);
+  await pt.waitForSelector('#sel-tb', { state: 'visible' });
+  await pt.click('#sel-tb .col-btn[data-c="revisar"]');
+  await pt.waitForSelector(`[data-pid="${pidTarde}"] mark.hl`);
+  check(/sólo en este navegador/.test(await pt.$eval('#estado', (e) => e.textContent)), 'antes de conectar, la anotación se guarda en el navegador y se dice');
+  await pt.waitForFunction(() => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.autor === 'u_me'), null, { timeout: 10000 });
+  check(true, 'al conectar, lo anotado mientras tanto sube a la base con su autor');
+  const sinLocal = await pt.evaluate(() => !Object.keys(localStorage).some((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k)));
+  check(sinLocal, 'y la copia del navegador se retira para que no vuelva duplicada');
+  await ctxTarde.close();
+
+  // ---------------------------------------------------------------- sólo lectura de verdad
+  const ctxSL = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxSL.addInitScript(() => { window.__soloLectura = true; window.__semilla = { nota1: { id: 'nota1', tipo: 'general', nota: 'Nota visible en sólo lectura', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z', autor: 'u_otro' } }; });
+  await ctxSL.addInitScript(conBase);
+  const psl = await ctxSL.newPage();
+  await psl.goto(base);
+  await psl.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await psl.waitForFunction(() => document.body.classList.contains('solo-lectura'));
+  await psl.click('.tab[data-tab="todas"]');
+  await psl.waitForSelector('.ficha .nota-texto');
+  check((await psl.$eval('.ficha .nota-texto', (n) => n.textContent)) === 'Nota visible en sólo lectura' && !(await psl.$('.ficha textarea')), 'en sólo lectura la nota se ve como texto');
+  await seleccionar(psl, 10);
+  await psl.waitForSelector('#sel-tb', { state: 'visible' });
+  const tbSL = await psl.evaluate(() => ({ color: getComputedStyle(document.querySelector('#sel-tb .col-btn')).display, copiar: getComputedStyle(document.querySelector('#sel-copiar')).display }));
+  check(tbSL.color === 'none' && tbSL.copiar !== 'none', 'la barra de selección sólo ofrece copiar');
+  await psl.keyboard.press('1');
+  await psl.waitForTimeout(200);
+  check((await psl.$$('mark.hl')).length === 0 && !(await psl.evaluate(() => Object.values(window.__docs).some((d) => d.tipo === 'subrayado'))), 'los atajos no anotan en sólo lectura');
+  await ctxSL.close();
+
   // ---------------------------------------------------------------- lectura en voz alta: cambiar de sección mientras suena
   const ctxVoz = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxVoz.addInitScript(sinBase);
   await ctxVoz.addInitScript(() => {
     // Un sintetizador que acepta hablar y nunca termina, para probar el estado sin depender de voces reales.
     window.SpeechSynthesisUtterance = function (t) { this.text = t; };
-    Object.defineProperty(window, 'speechSynthesis', { value: { speak: function (u) { this.actual = u; if (u.onstart) u.onstart(); }, cancel: function () { this.actual = null; }, getVoices: function () { return []; } }, configurable: true });
+    // cancel() dispara «interrupted» en la locución en curso, como hace Chromium
+    Object.defineProperty(window, 'speechSynthesis', { value: { speak: function (u) { this.actual = u; if (u.onstart) u.onstart(); }, cancel: function () { var u = this.actual; this.actual = null; if (u && u.onerror) setTimeout(function () { u.onerror({ error: 'interrupted' }); }, 0); }, getVoices: function () { return []; } }, configurable: true });
   });
   const pv = await ctxVoz.newPage();
   await pv.goto(base + '#cap-01');
@@ -535,8 +615,14 @@ try {
   await pv.click('#sec-cap-02 button[data-escuchar]');
   const botones = await pv.evaluate(() => ({ uno: document.querySelector('#sec-cap-01 button[data-escuchar]').textContent, dos: document.querySelector('#sec-cap-02 button[data-escuchar]').textContent, leyendo: document.querySelectorAll('#sec-cap-02 .bloque.leyendo').length }));
   check(botones.uno === 'Escuchar' && botones.dos === 'Detener' && botones.leyendo === 1, `escuchar otra sección cambia la lectura en vez de sólo detenerla (${botones.uno} / ${botones.dos})`);
+  await pv.waitForTimeout(50);
+  check(!/No se pudo leer/.test(await pv.$eval('#estado', (e) => e.textContent)) && (await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Detener', 'la interrupción que provoca cancelar no se toma por un fallo');
   await pv.click('#sec-cap-02 button[data-escuchar]');
   check((await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar', 'pulsar en la misma sección detiene');
+  await pv.click('#sec-cap-02 button[data-escuchar]');
+  await pv.evaluate(() => { location.hash = '#cap-01'; });
+  await pv.waitForSelector('#sec-cap-01:not([hidden])');
+  check((await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar' && (await pv.$$('.bloque.leyendo')).length === 0, 'cambiar de sección detiene la lectura');
   await ctxVoz.close();
 
   // ---------------------------------------------------------------- ancho de teléfono
@@ -547,6 +633,14 @@ try {
   await pm.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   const anchos = await pm.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   check(anchos[0] <= anchos[1], `sin desborde horizontal a 400 px (${anchos.join(' / ')})`);
+  await pm.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
+  await pm.evaluate(() => { const k = Object.keys(localStorage).find((x) => /^lector-anotaciones:[a-z0-9-]+$/.test(x)) || 'lector-anotaciones:libro-de-ejemplo'; const p = document.querySelector('article.seccion:not([hidden]) p.bloque[data-pid]'); localStorage.setItem(k, JSON.stringify({ m1: { id: 'm1', tipo: 'subrayado', sid: p.closest('article').id.replace(/^sec-/, ''), pid: p.getAttribute('data-pid'), src: p.getAttribute('data-src'), inicio: 0, fin: 10, cita: p.textContent.slice(0, 10), antes: '', despues: p.textContent.slice(10, 40), color: 'duda', nota: '', estado: 'abierta', creado: '2026-10-01T00:00:00.000Z' } })); });
+  await pm.reload();
+  await pm.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pm.click('#b-panel');
+  await pm.waitForSelector('aside.panel.abierta');
+  await pm.click('.ficha .cab button.enlace');
+  check(!(await pm.$eval('aside.panel', (a) => a.classList.contains('abierta'))), 'en móvil, «ir al texto» cierra el panel para dejar ver el pasaje');
   await movil.close();
 } finally {
   await browser.close();

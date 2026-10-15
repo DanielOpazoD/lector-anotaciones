@@ -34,3 +34,13 @@ def test_citas_narrativas():
 
 def test_capas_vacias_no_aparecen():
     assert calcular_capas("Nada que señalar.") == {}
+
+
+def test_los_rangos_salen_en_unidades_utf16():
+    texto = "Un 😀 emoji antes y por eso la capa se corre."
+    capas = calcular_capas(texto)
+    a, b = capas["mu"][0]
+    # en JavaScript el emoji ocupa dos unidades: el rango va una posición más a la derecha que en Python
+    assert texto.index("por eso") == 19 and [a, b] == [20, 27]
+    sin = "Un X emoji antes y por eso la capa no se corre."
+    assert calcular_capas(sin)["mu"] == [[19, 26]]

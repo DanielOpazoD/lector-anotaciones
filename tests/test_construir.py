@@ -189,3 +189,19 @@ def test_cli_anterior_por_defecto_es_la_salida_previa(tmp_path: Path, capsys):
     assert libro["cambios"] == 0 and libro["secciones"][0]["bloques"][0]["m"]["tr"] == [[0, 13]]
     assert main(["construir", str(fuente), "--salida", str(salida), "--sin-capas"]) == 0
     assert "m" not in json.loads(salida.read_text(encoding="utf-8"))["secciones"][0]["bloques"][0]
+
+
+def test_anterior_no_se_confunde_al_insertar_o_borrar_un_parrafo(tmp_path: Path):
+    fuente = tmp_path / "a.md"
+    fuente.write_text("# Uno\n\nA primero.\n\nB segundo.\n\nC tercero.\n", encoding="utf-8")
+    v1 = construir([fuente])
+    # se inserta un párrafo al inicio y se modifica el segundo: sólo ese se marca, con su propio texto anterior
+    fuente.write_text("# Uno\n\nN nuevo.\n\nA primero.\n\nB segundo corregido.\n\nC tercero.\n", encoding="utf-8")
+    v2 = construir([fuente], anterior=v1)
+    bloques = v2["secciones"][0]["bloques"]
+    assert [b.get("anterior") for b in bloques] == [None, None, "B segundo.", None]
+    assert v2["cambios"] == 1
+    # se borra el primero: nada cambió
+    fuente.write_text("# Uno\n\nA primero.\n\nB segundo corregido.\n\nC tercero.\n", encoding="utf-8")
+    v3 = construir([fuente], anterior=v2)
+    assert v3["cambios"] == 0 and all("anterior" not in b for b in v3["secciones"][0]["bloques"])

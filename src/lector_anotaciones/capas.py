@@ -107,8 +107,22 @@ def citas_narrativas(texto: str) -> list[list[int]]:
     return [[m.start(), m.end()] for m in _CITA_NARRATIVA.finditer(texto)]
 
 
+def a_utf16(texto: str, rangos: list[list[int]]) -> list[list[int]]:
+    """Convierte índices de puntos de código (Python) a unidades UTF-16 (lo que mide `String.length` en la página).
+
+    Sólo difieren cuando hay caracteres fuera del plano básico (emoji, símbolos matemáticos), que en
+    JavaScript ocupan dos unidades.
+    """
+    if all(ord(c) < 0x10000 for c in texto):
+        return rangos
+    acumulado = [0]
+    for c in texto:
+        acumulado.append(acumulado[-1] + (2 if ord(c) >= 0x10000 else 1))
+    return [[acumulado[a], acumulado[b]] for a, b in rangos]
+
+
 def calcular_capas(texto: str, config: ConfigCapas | None = None) -> dict[str, list[list[int]]]:
-    """Las capas de un bloque; sólo se incluyen las que tienen algo."""
+    """Las capas de un bloque, en unidades UTF-16; sólo se incluyen las que tienen algo."""
     cfg = config or ConfigCapas()
     capas = {
         "fl": frases_largas(texto, cfg.frase_larga),
@@ -117,12 +131,12 @@ def calcular_capas(texto: str, config: ConfigCapas | None = None) -> dict[str, l
         "rep": repeticiones(texto, cfg.repeticion_min_letras, cfg.repeticion_ventana),
         "cn": citas_narrativas(texto),
     }
-    return {k: v for k, v in capas.items() if v}
+    return {k: a_utf16(texto, v) for k, v in capas.items() if v}
 
 
 def leer_lista(ruta) -> list[str]:
     """Una expresión por línea; se ignoran vacías y las que empiezan con #."""
     from pathlib import Path
 
-    lineas = Path(ruta).read_text(encoding="utf-8").split("\n")
+    lineas = Path(ruta).read_text(encoding="utf-8-sig").split("\n")
     return [x.strip() for x in lineas if x.strip() and not x.strip().startswith("#")]

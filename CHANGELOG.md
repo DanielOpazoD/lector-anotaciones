@@ -2,6 +2,25 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.2.2] - 2026-10-15
+
+Revisión adversarial con agentes independientes (20 hallazgos confirmados) y sus correcciones.
+
+### Corregido
+
+- Lo anotado mientras la base todavía conectaba se guardaba sólo en el navegador y no llegaba a la base; ahora sube al conectar, con su autor, y la copia local se retira.
+- El modo sólo lectura es un estado comprobado (no sólo CSS): muestra las notas como texto, deja únicamente copiar en la barra de selección y bloquea atajos, notas y borrados; una escritura rechazada por falta de permiso lo activa, y cualquier rechazo revierte la memoria para no dejar anotaciones fantasma.
+- Un subrayado que ocupaba un bloque entero (sin contexto) o una cita larga y única se reubica en otro bloque tras una reconstrucción, en vez de darse por perdido.
+- Las capas calculadas en Python llegan en unidades UTF-16, así que no se corren tras un emoji u otro carácter fuera del plano básico.
+- Una selección que termina fuera de los bloques (triple clic en el último párrafo, arrastre hasta debajo del texto) se subraya y se copia recortada al bloque.
+- Al enfocar otra ficha, el subrayado anterior pierde el contorno; la búsqueda ignora los marcadores del margen.
+- La lectura en voz alta no toma por fallo la interrupción que provoca cancelar, cada lectura responde sólo a sus propios eventos, y cambiar de sección o pulsar Esc la detiene.
+- El respaldo diario se escribe tras una escritura propia confirmada, troceado en documentos pequeños, con fecha local, y no insiste cuando la base no puede.
+- «Qué cambió» alinea las versiones por huella con difflib: insertar o borrar un párrafo ya no marca como cambiados todos los siguientes.
+- `exportar` ordena por bloque y no por desplazamiento, y las notas generales van siempre al grupo «General» (la página ya no les asigna sección).
+- Archivos con BOM UTF-8 conservan su primer título; el texto de listas y tablas no lleva entidades HTML, así que su página se encuentra en el PDF.
+- Teclado: «ir al texto» y «Deshacer borrado» son botones, los resultados de búsqueda y las marcas se alcanzan con Tab y responden a Enter, y el foco en un botón de ficha sobrevive al redibujo. En móvil, «ir al texto» cierra el panel; el menú de capas se cierra con Esc o con un clic fuera.
+
 ## [0.2.1] - 2026-10-15
 
 ### Corregido

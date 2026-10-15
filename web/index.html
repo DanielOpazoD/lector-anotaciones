@@ -175,7 +175,11 @@ nav a.sec.leida .n::before { content: "✓ "; color: var(--hl-conservar-ink); }
 #app.foco nav.indice, #app.foco aside.panel, #app.foco #movil-barra { display: none; }
 #app.foco main.mesa { grid-template-columns: 1fr; }
 #app.foco article.seccion { max-width: 70ch; }
-#app.solo-lectura .col-btn, #app.solo-lectura #sel-nota, #app.solo-lectura #b-nota-cap, #app.solo-lectura #b-nota-pg, #app.solo-lectura #b-nota-gen, #app.solo-lectura .ficha textarea, #app.solo-lectura .ficha .acciones .btn:not(.copiar) { display: none; }
+body.solo-lectura #sel-tb .col-btn, body.solo-lectura #sel-tb .etq, body.solo-lectura #sel-nota, body.solo-lectura #b-nota-cap, body.solo-lectura #b-nota-pg, body.solo-lectura #pg-num, body.solo-lectura #b-nota-gen, body.solo-lectura .ficha .acciones .btn:not(.copiar), body.solo-lectura .ficha .colores, body.solo-lectura .pg { display: none; }
+.ficha .nota-texto { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-family: var(--sans); font-size: 13px; min-height: 24px; }
+.ficha .nota-texto:empty::before { content: "(sin nota)"; color: var(--fg-2); }
+.enlace { background: none; border: 0; padding: 0; color: var(--tinta); text-decoration: underline; cursor: pointer; font: inherit; }
+mark.hl:focus-visible, .res:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
 .bloque.leyendo { background: var(--bg-2); }
 #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.84); display: none; align-items: center; justify-content: center; z-index: 40; cursor: zoom-out; padding: 24px; }
 #lightbox.abierto { display: flex; }
@@ -279,6 +283,8 @@ figure img { cursor: zoom-in; }
   var USER = null, ME = null, PERFILES = {}, PERFILES_PEDIDOS = {};
   var CAPAS_ON = {}, VISTO = {}, LEIDAS = {}, filtroAutor = '', filtroEtiqueta = '';
   var ultimoBorrado = null, lectura = null;
+  var SOLO_LECTURA = false, pendientesBase = [], respaldoHoy = null, respaldoBloqueado = false;
+  var RESPALDO_MAX = 200000;  // bytes por documento de respaldo (la base admite 256 KiB)
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var el = function (tag, attrs, kids) {
@@ -377,6 +383,7 @@ figure img { cursor: zoom-in; }
     if (pid) { var n = $('[data-pid="' + pid + '"]'); if (n) { n.scrollIntoView({ block: 'center' }); n.classList.add('flash'); setTimeout(function () { n.classList.remove('flash'); }, 1700); } }
     else lect.scrollTop = 0;
     $('#indice').classList.remove('abierta');
+    if (lectura && lectura.sid !== sid) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); }
     if (tab === 'capitulo') renderPanel();
     registrarVisto(sid);
     var i = SECS.findIndex(function (s) { return s.id === sid; });
@@ -386,21 +393,47 @@ figure img { cursor: zoom-in; }
 
   // ------------------------------------------------------------ anotaciones: persistencia
   function guardar(a) {
+    if (SOLO_LECTURA) { estado('Sólo lectura: en este libro puedes leer y copiar, no anotar', true); return; }
+    var nueva = !anots[a.id], previa = nueva ? null : JSON.parse(JSON.stringify(anots[a.id]));
     a.editado = ahora();
     anots[a.id] = a;
     var u = ubicar(a); if (u) UBIC[a.id] = u;
     pintar(a); renderPanel(); renderCuentas();
     if (col) {
-      col.doc(a.id).set(a).then(function () { estado('Guardado ' + new Date().toLocaleTimeString()); })
-        .catch(function (e) { estado('No se pudo guardar (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
-    } else { guardarLocal(); }
+      col.doc(a.id).set(a).then(function () { estado('Guardado ' + new Date().toLocaleTimeString()); respaldar(); })
+        .catch(function (e) { rechazoEscritura(e, a.id, previa, 'guardar'); });
+    } else {
+      if (modo === 'cargando' && pendientesBase.indexOf(a.id) < 0) pendientesBase.push(a.id);
+      guardarLocal();
+    }
+  }
+  function quitarDeMemoria(id) {
+    var a = anots[id], u = UBIC[id]; delete anots[id]; delete UBIC[id];
+    if (u && u.pid) pintarPid(u.pid); else if (a && a.pid) pintarPid(a.pid);
+    marcasPagina();
+  }
+  function rechazoEscritura(e, id, previa, verbo) {
+    // La base no aceptó la escritura: la memoria vuelve a lo que la base tiene, para que no queden
+    // anotaciones fantasma que se pintan, se cuentan y se exportan.
+    var codigo = (e && e.code) || 'error';
+    if (verbo === 'borrar') { if (previa) { anots[id] = previa; var ub = ubicar(previa); if (ub) UBIC[id] = ub; pintar(previa); } }
+    else if (previa) { anots[id] = previa; var u2 = ubicar(previa); if (u2) UBIC[id] = u2; pintar(previa); }
+    else quitarDeMemoria(id);
+    renderPanel(); renderCuentas();
+    if (codigo === 'not_granted' || codigo === 'revoked' || (codigo === 'invalid_argument' && verbo !== 'respaldo' && JSON.stringify(previa || anots[id] || {}).length < 200000)) activarSoloLectura();
+    estado('No se pudo ' + verbo + ' (' + codigo + '); copia tus anotaciones con el botón', true);
+  }
+  function activarSoloLectura() {
+    if (SOLO_LECTURA) return;
+    SOLO_LECTURA = true; document.body.classList.add('solo-lectura'); ocultarTb(); renderPanel();
+    estado('Sólo lectura: en este libro puedes leer y copiar, no anotar', true);
   }
   function borrar(id) {
+    if (SOLO_LECTURA) return;
     var a = anots[id]; if (!a) return;
-    var u = UBIC[id]; delete anots[id]; delete UBIC[id];
-    if (u && u.pid) pintarPid(u.pid); else if (a.pid) pintarPid(a.pid);
-    renderPanel(); renderCuentas(); marcasPagina();
-    if (col) col.doc(id).delete().catch(function (e) { estado('No se pudo borrar (' + (e && e.code || 'error') + ')', true); });
+    quitarDeMemoria(id);
+    renderPanel(); renderCuentas();
+    if (col) col.doc(id).delete().catch(function (e) { rechazoEscritura(e, id, a, 'borrar'); });
     else guardarLocal();
     ofrecerDeshacer(a);
   }
@@ -436,6 +469,7 @@ figure img { cursor: zoom-in; }
     return { id: uid(), tipo: tipo, sid: sid || null, sidTitulo: s.titulo || null, nota: '', estado: 'abierta', creado: ahora(), editado: ahora(), libro: LIBRO ? LIBRO.generado : null, autor: ME };
   }
   function notaPagina(pg, sid) {
+    if (SOLO_LECTURA) return;
     pg = parseInt(pg, 10); if (!pg) return;
     var ex = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return a.tipo === 'pagina' && a.pagina === pg; })[0];
     if (ex) { enfocar(ex.id); return; }
@@ -443,28 +477,40 @@ figure img { cursor: zoom-in; }
     guardar(a); enfocar(a.id, true);
   }
   function notaSeccion() {
+    if (SOLO_LECTURA) return;
     var ex = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return a.tipo === 'capitulo' && a.sid === secActual; })[0];
     if (ex) { enfocar(ex.id); return; }
     var a = base('capitulo', secActual); guardar(a); enfocar(a.id, true);
   }
-  function notaGeneral() { var a = base('general', secActual); guardar(a); enfocar(a.id, true); }
+  function notaGeneral() { var a = base('general', null); guardar(a); enfocar(a.id, true); }
 
   function offsetEn(para, node, off) {
     var r = document.createRange(); r.setStart(para, 0); r.setEnd(node, off); return r.toString().length;
   }
+  // Un triple clic en el último párrafo, o un arrastre hasta debajo del texto, deja el extremo del rango
+  // fuera de los bloques (en el título, en los botones de navegación…): se recorta al primer o último
+  // bloque que la selección abarca, con el bloque completo por ese lado.
+  function extremosDeRango(r) {
+    var paras = $$('article.seccion:not([hidden]) [data-pid]');
+    var pA = ancestroPid(r.startContainer), pB = ancestroPid(r.endContainer), aFuera = !pA, bFuera = !pB;
+    var dentro = function (p) { try { return r.comparePoint(p, 0); } catch (e) { return 1; } };
+    if (!pA) pA = paras.filter(function (p) { return dentro(p) === 0; })[0] || null;
+    if (!pB) { var antes = paras.filter(function (p) { return dentro(p) <= 0; }); pB = antes.length ? antes[antes.length - 1] : null; }
+    return { paras: paras, pA: pA, pB: pB, aFuera: aFuera, bFuera: bFuera };
+  }
   function crearSubrayado(color, conNota) {
+    if (SOLO_LECTURA) return;
     var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     var range = sel.getRangeAt(0);
-    var pA = ancestroPid(range.startContainer), pB = ancestroPid(range.endContainer);
+    var ex = extremosDeRango(range), pA = ex.pA, pB = ex.pB, paras = ex.paras;
     if (!pA || !pB) return;
-    var paras = $$('article.seccion:not([hidden]) [data-pid]');
     var iA = paras.indexOf(pA), iB = paras.indexOf(pB); if (iA < 0 || iB < 0) return;
     if (iA > iB) { var tmp = pA; pA = pB; pB = tmp; var ti = iA; iA = iB; iB = ti; }
     var grupo = iA !== iB ? uid() : null, primero = null;
     for (var i = iA; i <= iB; i++) {
       var p = paras[i], txt = p.textContent, ini = 0, fin = txt.length;
-      if (i === iA) ini = offsetEn(p, range.startContainer, range.startOffset);
-      if (i === iB) fin = offsetEn(p, range.endContainer, range.endOffset);
+      if (i === iA && !ex.aFuera) ini = offsetEn(p, range.startContainer, range.startOffset);
+      if (i === iB && !ex.bFuera) fin = offsetEn(p, range.endContainer, range.endOffset);
       var lp = 0, c = p.firstChild;
       while (c && c.classList && (c.classList.contains('pg') || c.classList.contains('marca-cambio'))) { lp += c.textContent.length; c = c.nextSibling; }
       if (lp) { if (i === iA) ini = Math.max(0, ini - lp); if (i === iB) fin = Math.max(0, fin - lp); txt = txt.slice(lp); fin = Math.min(fin, txt.length); }
@@ -514,11 +560,18 @@ figure img { cursor: zoom-in; }
     var sec = SEC_BY_ID[BLOQUE_SEC[a.pid] || a.sid];
     var candidatos = sec ? sec.bloques.map(function (b) { return b.id; }) : [];
     candidatos = candidatos.concat(Object.keys(ORIG).filter(function (p) { return candidatos.indexOf(p) < 0; }));
+    // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque
+    // entero, o es larga) vale sólo si es la única en todo el libro.
+    var sinContexto = !a.antes && !a.despues, hallazgos = [];
     for (var c = 0; c < candidatos.length; c++) {
       var p = candidatos[c]; if (p === a.pid) continue;
       var m2 = buscarCita(textoPlano(p), a);
-      if (m2 && m2.puntos > 0) return { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, estado: 'reubicado' };
+      if (!m2) continue;
+      if (m2.puntos > 0) return { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, estado: 'reubicado' };
+      hallazgos.push({ pid: p, inicio: m2.i, fin: m2.i + a.cita.length, estado: 'reubicado' });
+      if (hallazgos.length > 1) break;
     }
+    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40)) return hallazgos[0];
     return { pid: null, inicio: 0, fin: 0, estado: 'perdido' };
   }
   function reubicarTodo() { UBIC = {}; Object.keys(anots).forEach(function (k) { var u = ubicar(anots[k]); if (u) UBIC[k] = u; }); }
@@ -556,8 +609,9 @@ figure img { cursor: zoom-in; }
         if (cubren.length) {
           cubren.sort(function (x, y) { return (x.creado < y.creado) ? -1 : 1; });
           var top = cubren[cubren.length - 1];
-          nodo = el('mark', { 'class': 'hl c-' + top.color + (top.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === top.id ? ' foco' : ''), 'data-aids': cubren.map(function (a) { return a.id; }).join(' '), text: seg });
+          nodo = el('mark', { 'class': 'hl c-' + top.color + (top.estado === 'resuelta' ? ' resuelta' : '') + (fichaFoco === top.id ? ' foco' : ''), 'data-aids': cubren.map(function (a) { return a.id; }).join(' '), text: seg, tabindex: '0', role: 'button' });
           nodo.addEventListener('click', function (ev) { ev.stopPropagation(); enfocar(top.id); });
+          nodo.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); enfocar(top.id); } });
         } else nodo = document.createTextNode(seg);
         if (ks.length) { var sp = el('span', { 'class': 'capa ' + ks.map(function (k) { return 'k-' + k; }).join(' '), title: ks.map(function (k) { return (LIBRO.capas || {})[k] || k; }).join(' · ') }); sp.appendChild(nodo); nodo = sp; }
         frag.appendChild(nodo);
@@ -608,8 +662,9 @@ figure img { cursor: zoom-in; }
     if (tab === 'buscar') return;
     // Si el autor está escribiendo una nota, el redibujo no debe quitarle el editor: se recuerda el
     // borrador, el foco y la selección, y se restauran sobre la ficha nueva.
-    var act = document.activeElement, foco = null;
+    var act = document.activeElement, foco = null, focoBoton = null;
     if (act && act.tagName === 'TEXTAREA' && act.id.indexOf('nota-') === 0) foco = { id: act.id, valor: act.value, ini: act.selectionStart, fin: act.selectionEnd, scroll: act.scrollTop };
+    else if (act && act.tagName === 'BUTTON' && act.closest('.ficha')) focoBoton = { id: act.closest('.ficha').getAttribute('data-id'), texto: act.textContent, clase: act.className };
     var box = $('#lista'), desplaz = box.scrollTop; box.innerHTML = '';
     renderSelectores();
     var L = lista();
@@ -621,6 +676,10 @@ figure img { cursor: zoom-in; }
     if (foco) {
       var ta = document.getElementById(foco.id);
       if (ta) { if (ta.value !== foco.valor) ta.value = foco.valor; ta.focus({ preventScroll: true }); try { ta.setSelectionRange(foco.ini, foco.fin); } catch (e) {} ta.scrollTop = foco.scroll; }
+    } else if (focoBoton) {
+      var fb = $('.ficha[data-id="' + focoBoton.id + '"]');
+      var bt = fb ? $$('button', fb).filter(function (b) { return b.className === focoBoton.clase && b.textContent === focoBoton.texto; })[0] || $$('button', fb).filter(function (b) { return b.className === focoBoton.clase; })[0] : null;
+      if (bt) bt.focus({ preventScroll: true });
     }
   }
   function etiqueta(a) {
@@ -636,7 +695,7 @@ figure img { cursor: zoom-in; }
     if (a.cierre) cab.firstChild.appendChild(el('span', { 'class': 'cierre ' + a.cierre, text: a.cierre === 'atendida' ? 'atendida' : a.cierre === 'descartada' ? 'descartada' : 'pregunta' }));
     var u = UBIC[a.id];
     if ((a.pid && !(u && u.estado === 'perdido')) || (a.tipo === 'pagina' && a.pagina) || a.tipo === 'capitulo') {
-      var ir = el('a', { text: 'ir al texto', role: 'button', tabindex: '0' });
+      var ir = el('button', { 'class': 'enlace', type: 'button', text: 'ir al texto' });
       ir.addEventListener('click', function () { irAAnot(a); });
       cab.appendChild(ir);
     }
@@ -647,6 +706,16 @@ figure img { cursor: zoom-in; }
     if (a.tipo === 'subrayado' && a.bh && BLOQUES[pe] && BLOQUES[pe].h && BLOQUES[pe].h !== a.bh && !(u && u.estado === 'perdido')) f.appendChild(el('div', { 'class': 'aviso-cambio', text: 'El bloque cambió desde que anotaste' + (a.libro ? ' (fuentes del ' + a.libro + ')' : '') + '.' }));
     if (a.cierre === 'pregunta') f.classList.add('cierre-pregunta');
     if (a.tipo === 'subrayado') f.appendChild(el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
+    if (SOLO_LECTURA) {
+      f.appendChild(el('div', { 'class': 'nota-texto', text: a.nota || '' }));
+      if (a.respuesta || a.cierre) { var rs = el('div', { 'class': 'respuesta' }); rs.appendChild(el('div', { 'class': 'quien', text: 'Respuesta' + (a.commit ? ' · ' + a.commit : '') })); rs.appendChild(document.createTextNode(a.respuesta || '')); f.appendChild(rs); }
+      if (a.replica) f.appendChild(el('div', { 'class': 'nota-texto', text: a.replica }));
+      var accSL = el('div', { 'class': 'acciones' });
+      var copSL = el('button', { 'class': 'btn peq copiar', type: 'button', text: 'Copiar', title: 'Copiar esta anotación como texto' });
+      copSL.addEventListener('click', function () { copiar(textoAnotacion(a), copSL); });
+      accSL.appendChild(copSL); f.appendChild(accSL);
+      return f;
+    }
     var ta = el('textarea', { placeholder: a.tipo === 'subrayado' ? 'Nota sobre este subrayado…' : 'Escribe la nota…', 'aria-label': 'Nota', id: 'nota-' + a.id });
     ta.value = a.nota || '';
     var timer = null;
@@ -700,11 +769,14 @@ figure img { cursor: zoom-in; }
     else if (a.pid) { if (a.sid) irA(a.sid); }
     else if (a.tipo === 'pagina') { var n = $('[data-pg="' + a.pagina + '"][data-pid]'); if (n) irA(BLOQUE_SEC[n.getAttribute('data-pid')], n.getAttribute('data-pid')); }
     else if (a.sid) irA(a.sid);
+    if (window.innerWidth <= 1000) $('#panel').classList.remove('abierta');
     enfocar(a.id);
   }
   function enfocar(id, editar) {
+    var previo = fichaFoco && fichaFoco !== id && anots[fichaFoco] ? pidEfectivo(anots[fichaFoco]) : null;
     fichaFoco = id;
     var a = anots[id]; if (!a) return;
+    if (previo) pintarPid(previo);
     if (tab === 'buscar') tab = 'todas';
     if (tab === 'capitulo' && a.sid !== secActual && !(a.tipo === 'pagina')) tab = 'todas';
     if (lista().indexOf(a) < 0) { filtro = 'todas'; filtroAutor = ''; filtroEtiqueta = ''; $$('.filtro').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-f') === 'todas'); }); }
@@ -747,7 +819,7 @@ figure img { cursor: zoom-in; }
   }
   function copiarSeleccion(boton) {
     var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    var r = sel.getRangeAt(0), pA = ancestroPid(r.startContainer), pB = ancestroPid(r.endContainer); if (!pA) return;
+    var r = sel.getRangeAt(0), ex = extremosDeRango(r), pA = ex.pA, pB = ex.pB; if (!pA) return;
     var s = SEC_BY_ID[BLOQUE_SEC[pA.getAttribute('data-pid')]] || {};
     var ref = (s.titulo || '') + (pA.getAttribute('data-pg') ? ' · p. ' + pA.getAttribute('data-pg') : '') + ' · ' + pA.getAttribute('data-src')
       + (pB && pB !== pA ? ' → ' + pB.getAttribute('data-src') : '');
@@ -794,17 +866,19 @@ figure img { cursor: zoom-in; }
     var enAnots = Object.keys(anots).map(function (k) { return anots[k]; }).filter(function (a) { return norm((a.nota || '') + ' ' + (a.cita || '') + ' ' + (a.respuesta || '') + ' ' + (a.replica || '')).indexOf(nq) >= 0; });
     enAnots.sort(function (x, y) { return ordenKey(x) < ordenKey(y) ? -1 : 1; });
     enAnots.forEach(function (a) {
-      var r = el('div', { 'class': 'res anot' }, [el('div', { 'class': 'donde', text: 'En tus anotaciones · ' + etiqueta(a) }), el('div', { text: (a.nota || a.cita || '').slice(0, 160) })]);
+      var r = el('div', { 'class': 'res anot', role: 'button', tabindex: '0' }, [el('div', { 'class': 'donde', text: 'En tus anotaciones · ' + etiqueta(a) }), el('div', { text: (a.nota || a.cita || '').slice(0, 160) })]);
+      r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
       r.addEventListener('click', function () { irAAnot(a); if (window.innerWidth <= 1000) $('#panel').classList.add('abierta'); });
       box.appendChild(r);
     });
     SECS.forEach(function (s) {
       s.bloques.forEach(function (b) {
-        var txt = $('[data-pid="' + b.id + '"]'); if (!txt) return;
-        var t = txt.textContent, nt = norm(t), i = nt.indexOf(nq); if (i < 0) return;
+        if (!$('[data-pid="' + b.id + '"]')) return;
+        var t = textoPlano(b.id), nt = norm(t), i = nt.indexOf(nq); if (i < 0) return;
         n++; if (n > 200) return;
         var ini = Math.max(0, i - 60), fin = Math.min(t.length, i + nq.length + 80);
-        var r = el('div', { 'class': 'res' }, [el('div', { 'class': 'donde', text: s.titulo + (b.pagina ? ' · p. ' + b.pagina : '') })]);
+        var r = el('div', { 'class': 'res', role: 'button', tabindex: '0' }, [el('div', { 'class': 'donde', text: s.titulo + (b.pagina ? ' · p. ' + b.pagina : '') })]);
+        r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); r.click(); } });
         var frag = el('div'); frag.appendChild(document.createTextNode((ini ? '…' : '') + t.slice(ini, i))); frag.appendChild(el('b', { text: t.slice(i, i + nq.length) })); frag.appendChild(document.createTextNode(t.slice(i + nq.length, fin) + (fin < t.length ? '…' : '')));
         r.appendChild(frag);
         r.addEventListener('click', function () { irA(s.id, b.id); if (window.innerWidth <= 1000) $('#panel').classList.remove('abierta'); });
@@ -820,7 +894,7 @@ figure img { cursor: zoom-in; }
   function ocultarTb() { tb.style.display = 'none'; }
   function mostrarTb() {
     var sel = window.getSelection(); if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { ocultarTb(); return; }
-    var r = sel.getRangeAt(0); if (!ancestroPid(r.startContainer) || !ancestroPid(r.endContainer)) { ocultarTb(); return; }
+    var r = sel.getRangeAt(0), ex = extremosDeRango(r); if (!ex.pA || !ex.pB) { ocultarTb(); return; }
     var rect = r.getBoundingClientRect(); if (!rect.width && !rect.height) { ocultarTb(); return; }
     tb.style.display = 'flex';
     var w = tb.offsetWidth || 220, h = tb.offsetHeight || 40;
@@ -861,7 +935,7 @@ figure img { cursor: zoom-in; }
     if (ev.metaKey || ev.ctrlKey) return;
     var sel = window.getSelection(), haySel = sel && sel.rangeCount && !sel.isCollapsed && ancestroPid(sel.getRangeAt(0).startContainer);
     if (ev.key === 'ArrowRight' && ev.altKey) mover(1); else if (ev.key === 'ArrowLeft' && ev.altKey) mover(-1);
-    else if (ev.key === 'Escape') { ocultarTb(); $('#indice').classList.remove('abierta'); $('#panel').classList.remove('abierta'); $('#lightbox').classList.remove('abierto'); $('#atajos').classList.remove('abierto'); if ($('#app').classList.contains('foco')) alternarFoco(); }
+    else if (ev.key === 'Escape') { ocultarTb(); $('#indice').classList.remove('abierta'); $('#panel').classList.remove('abierta'); $('#lightbox').classList.remove('abierto'); $('#atajos').classList.remove('abierto'); $('#capas').open = false; if (lectura) { try { window.speechSynthesis.cancel(); } catch (e) {} detenerLectura(); } if ($('#app').classList.contains('foco')) alternarFoco(); }
     else if (COLOR_TECLA[ev.key] && haySel) { ev.preventDefault(); crearSubrayado(COLOR_TECLA[ev.key], false); }
     else if ((ev.key === 'n' || ev.key === 'N') && haySel) { ev.preventDefault(); crearSubrayado('revisar', true); }
     else if ((ev.key === 'c' || ev.key === 'C') && haySel) { ev.preventDefault(); copiarSeleccion($('#sel-copiar')); }
@@ -871,7 +945,7 @@ figure img { cursor: zoom-in; }
     else if (ev.key === 'f' || ev.key === 'F') alternarFoco();
     else if (ev.key === '?') $('#atajos').classList.toggle('abierto');
   });
-  document.addEventListener('click', function (ev) { if (!tb.contains(ev.target)) { var s = window.getSelection(); if (!s || s.isCollapsed) ocultarTb(); } });
+  document.addEventListener('click', function (ev) { if (!tb.contains(ev.target)) { var s = window.getSelection(); if (!s || s.isCollapsed) ocultarTb(); } if (!$('#capas').contains(ev.target)) $('#capas').open = false; });
   window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (SEC_BY_ID[h] && h !== secActual) irA(h); });
 
   // ------------------------------------------------------------ lectores con identidad
@@ -1006,16 +1080,24 @@ figure img { cursor: zoom-in; }
     if (lectura) { var misma = lectura.sid === sid; window.speechSynthesis.cancel(); detenerLectura(); if (misma) return; }
     var s = SEC_BY_ID[sid]; if (!s) return;
     var cola = s.bloques.filter(function (b) { return b.t !== 'figure' && textoPlano(b.id).trim(); });
-    lectura = { sid: sid, boton: boton, i: 0 };
+    var mia = { sid: sid, boton: boton, i: 0 };
+    lectura = mia;
     boton.textContent = 'Detener';
     var siguiente = function () {
-      if (!lectura || lectura.i >= cola.length) { detenerLectura(); return; }
-      var b = cola[lectura.i++], n = $('[data-pid="' + b.id + '"]');
+      if (lectura !== mia) return;  // una lectura cancelada no sigue hablando sobre la nueva
+      if (mia.i >= cola.length) { detenerLectura(); return; }
+      var b = cola[mia.i++], n = $('[data-pid="' + b.id + '"]');
       var u = new SpeechSynthesisUtterance(textoPlano(b.id)); u.lang = 'es';
       var voces = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); }) : [];
       if (voces.length) u.voice = voces[0];
-      u.onstart = function () { $$('.bloque.leyendo').forEach(function (x) { x.classList.remove('leyendo'); }); if (n) { n.classList.add('leyendo'); n.scrollIntoView({ block: 'center', behavior: 'smooth' }); } };
-      u.onend = siguiente; u.onerror = function () { detenerLectura(); estado('No se pudo leer en voz alta en este navegador', true); };
+      u.onstart = function () { if (lectura !== mia) return; $$('.bloque.leyendo').forEach(function (x) { x.classList.remove('leyendo'); }); if (n) { n.classList.add('leyendo'); n.scrollIntoView({ block: 'center', behavior: 'smooth' }); } };
+      u.onend = siguiente;
+      u.onerror = function (ev) {
+        if (lectura !== mia) return;
+        var motivo = ev && ev.error;
+        if (motivo === 'interrupted' || motivo === 'canceled') return;  // lo canceló la propia página
+        detenerLectura(); estado('No se pudo leer en voz alta en este navegador', true);
+      };
       window.speechSynthesis.speak(u);
     };
     siguiente();
@@ -1033,19 +1115,31 @@ figure img { cursor: zoom-in; }
     ultimoBorrado = a;
     estado('Anotación borrada', true);
     var z = $('#deshacer-zona'); z.innerHTML = '';
-    var u = el('span', { id: 'deshacer', text: 'Deshacer borrado', role: 'button', tabindex: '0', title: 'Recuperar la anotación borrada' });
+    var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: 'Deshacer borrado', title: 'Recuperar la anotación borrada' });
     u.addEventListener('click', function () { if (ultimoBorrado) { guardar(ultimoBorrado); ultimoBorrado = null; estado('Anotación recuperada'); } z.innerHTML = ''; });
     z.appendChild(u);
     setTimeout(function () { if (ultimoBorrado === a) ultimoBorrado = null; if (z.firstChild === u) z.innerHTML = ''; }, 8000);
   }
   function respaldar() {
-    // Una copia diaria de todas las anotaciones en la colección «respaldos», por si alguna vez hay que volver atrás.
-    if (!db || !LIBRO) return;
-    var hoy = new Date().toISOString().slice(0, 10), clave = LOCAL_KEY + ':respaldo';
-    if (lsGet(clave) === hoy || !Object.keys(anots).length) return;
-    lsSet(clave, hoy);
-    var todas = Object.keys(anots).map(function (k) { return anots[k]; });
-    db.collection('respaldos').doc(hoy).set({ fecha: hoy, libro: LIBRO.generado, n: todas.length, anotaciones: JSON.stringify(todas) }).catch(function () { lsSet(clave, ''); });
+    // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura
+    // propia confirmada (nunca desde el eco de la base). Se trocea para no pasar del tamaño por documento,
+    // recuerda en memoria que ya se hizo hoy y no insiste cuando la base dijo que no puede.
+    if (!db || !LIBRO || SOLO_LECTURA || respaldoBloqueado) return;
+    var hoy = new Date().toLocaleDateString('sv-SE'), clave = LOCAL_KEY + ':respaldo';
+    if (respaldoHoy === hoy || lsGet(clave) === hoy || !Object.keys(anots).length) return;
+    respaldoHoy = hoy; lsSet(clave, hoy);
+    var todas = Object.keys(anots).map(function (k) { return anots[k]; }), partes = [], actual = [], tam = 2;
+    todas.forEach(function (a) { var t = JSON.stringify(a).length + 1; if (actual.length && tam + t > RESPALDO_MAX) { partes.push(actual); actual = []; tam = 2; } actual.push(a); tam += t; });
+    if (actual.length) partes.push(actual);
+    var colR = db.collection('respaldos');
+    var escrituras = partes.map(function (parte, i) { return colR.doc(hoy + '-' + (i + 1)).set({ fecha: hoy, parte: i + 1, partes: partes.length, n: parte.length, anotaciones: JSON.stringify(parte) }); });
+    Promise.all(escrituras).then(function () { return colR.doc(hoy).set({ fecha: hoy, libro: LIBRO.generado, n: todas.length, partes: partes.length }); })
+      .catch(function (e) {
+        var codigo = (e && e.code) || 'error';
+        respaldoHoy = null; lsSet(clave, '');
+        if (codigo !== 'unavailable') respaldoBloqueado = true;
+        estado('No se pudo escribir el respaldo diario (' + codigo + '); las anotaciones siguen guardadas una a una', true);
+      });
   }
 
   // ------------------------------------------------------------ arranque
@@ -1075,8 +1169,14 @@ figure img { cursor: zoom-in; }
     Promise.all([libroListo, use, useUser]).then(function (r) {
       var d = r[1];
       USER = r[2] || null;
-      var listoUsuario = USER ? Promise.all([USER.id(), USER.can('data.write')]).then(function (u) { ME = u[0] || null; if (u[1] === false) { $('#app').classList.add('solo-lectura'); estado('Sólo lectura: puedes leer y copiar, pero no anotar en este libro', true); } }).catch(function () {}) : Promise.resolve();
-      listoUsuario.then(function () { if (col) { renderPanel(); } });
+      var listoUsuario = USER ? Promise.all([USER.id(), USER.can('data.write')]).then(function (u) { ME = u[0] || null; if (u[1] === false) activarSoloLectura(); }).catch(function () {}) : Promise.resolve();
+      listoUsuario.then(function () {
+        if (!col) return;
+        // Lo anotado mientras la base conectaba se guardó sólo en el navegador: ahora va a la base, con su autor.
+        var subidas = pendientesBase.splice(0).map(function (id) { var a = anots[id]; if (!a || SOLO_LECTURA) return Promise.resolve(); if (!a.autor && ME) a.autor = ME; return col.doc(id).set(a).catch(function (e) { rechazoEscritura(e, id, null, 'guardar'); }); });
+        if (subidas.length) Promise.all(subidas).then(function () { try { localStorage.removeItem(LOCAL_KEY); } catch (e) {} respaldar(); });
+        renderPanel();
+      });
       if (!d) {
         modo = 'local'; var mig = cargarLocal(); pintarTodo(); renderPanel(); renderCuentas();
         var aviso = 'Sin base compartida: las anotaciones se guardan sólo en este navegador. Usa «Copiar todo» para enviarlas.';
@@ -1094,7 +1194,7 @@ figure img { cursor: zoom-in; }
           else if (d2) { var nuevo = Object.assign({}, d2, { id: ch.doc.id }); if (!igual(anots[ch.doc.id], nuevo)) { anots[ch.doc.id] = nuevo; cambio = true; } }
         });
         if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }
-        if (!snap.metadata.fromCache) { estado('Conectado · ' + Object.keys(anots).length + ' anotaciones'); respaldar(); }
+        if (!snap.metadata.fromCache) estado('Conectado · ' + Object.keys(anots).length + ' anotaciones');
       }, function (e) { estado('La base dejó de responder (' + (e && e.code || 'error') + '); copia tus anotaciones con el botón', true); });
     }).catch(function () { /* el error del libro ya se mostró */ });
   }

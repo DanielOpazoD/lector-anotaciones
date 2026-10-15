@@ -149,14 +149,14 @@ def _parse_lineas(lines: list[str], nombre: str, st: _Estado) -> None:
             while i < len(lines) and lines[i].startswith("- "):
                 items.append(inline(lines[i][2:].strip()))
                 i += 1
-            st.bloque("ul", items, src, " ".join(texto_plano(x) for x in items))
+            st.bloque("ul", items, src, " ".join(html.unescape(texto_plano(x)) for x in items))
             continue
         if _ITEM_NUMERADO.match(linea):
             items = []
             while i < len(lines) and _ITEM_NUMERADO.match(lines[i]):
                 items.append(inline(_ITEM_NUMERADO.sub("", lines[i]).strip()))
                 i += 1
-            st.bloque("ol", items, src, " ".join(texto_plano(x) for x in items))
+            st.bloque("ol", items, src, " ".join(html.unescape(texto_plano(x)) for x in items))
             continue
         if linea.startswith("|"):
             filas = []
@@ -164,7 +164,7 @@ def _parse_lineas(lines: list[str], nombre: str, st: _Estado) -> None:
                 if not _SEPARADOR_TABLA.match(lines[i]):
                     filas.append([inline(c.strip()) for c in lines[i].strip().strip("|").split("|")])
                 i += 1
-            st.bloque("table", filas, src, " ".join(texto_plano(c) for c in filas[0]) if filas else "")
+            st.bloque("table", filas, src, " ".join(html.unescape(texto_plano(c)) for c in filas[0]) if filas else "")
             continue
         if linea.startswith("> "):
             buf = []
@@ -200,7 +200,7 @@ def parse_fuentes(rutas: Iterable[Path], figs: str = "figs/") -> list[dict]:
     st = _Estado(figs)
     for ruta in rutas:
         ruta = Path(ruta)
-        _parse_lineas(ruta.read_text(encoding="utf-8").split("\n"), ruta.name, st)
+        _parse_lineas(ruta.read_text(encoding="utf-8-sig").split("\n"), ruta.name, st)
     return st.secciones
 
 
