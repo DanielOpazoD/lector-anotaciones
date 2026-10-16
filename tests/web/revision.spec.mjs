@@ -2,82 +2,57 @@
 import fs from 'node:fs';
 
 import {
-  LIBRO,
-  servir,
   check,
   esperar,
-  sinBase,
-  conBase,
   abrirDe,
   pulsar,
   enFicha,
   seleccionarTexto,
-  seleccionar,
   libroAlterado,
-  paginar,
   conCambio,
-  conRepetidos,
-  activo,
   CLAVE_LOCAL,
-  guardadoLocal,
+  TELEFONO,
+  sinErrores,
+  tocar,
   test,
 } from './ayudas.mjs';
 
-let srv, base;
-test.beforeAll(async () => {
-  srv = await servir();
-  base = `http://127.0.0.1:${srv.address().port}/`;
-});
-test.afterAll(() => srv.close());
-
-test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escritorio)', async ({ browser }) => {
-  // Cuatro subrayados (dos en un mismo párrafo, uno en la lista, uno en el párrafo del capítulo 2 que cambió) con
-  // respuestas de quien edita: atendida, pregunta, descartada y atendida con el pasaje reescrito.
-  const ctxV = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctxV.addInitScript(sinBase);
-  await ctxV.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const pv4 = await ctxV.newPage();
-  const erroresV = [];
-  pv4.on('pageerror', (e) => erroresV.push(String(e)));
-  pv4.on('console', (m) => {
-    if (m.type() === 'error') erroresV.push(m.text());
+// ------------------------------------------------------------ cuatro respuestas por revisar
+// Cuatro subrayados (dos en un mismo párrafo, uno en la lista, uno en el párrafo del capítulo 2 que cambió) con
+// respuestas de quien edita: atendida, pregunta, descartada y atendida con el pasaje reescrito. Sin base. Con
+// `revisadas`, las cuatro ya revisadas en una visita anterior.
+async function cuatroRespondidas(abrir, base, { revisadas = false } = {}) {
+  const p = await abrir({
+    permisos: ['clipboard-read', 'clipboard-write'],
+    preparar: (p) => libroAlterado(p, conCambio),
   });
-  await libroAlterado(pv4, conCambio);
-  await pv4.goto(base + '#cap-01');
-  await pv4.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
-  // lo que la versión anterior no tenga no detiene el resto: el clic que no encuentra su botón se anota y sigue
-  const tocar = (sel) =>
-    pv4.click(sel, { timeout: 2000 }).then(
-      () => true,
-      () => false
-    );
   for (const [t, k] of [
     ['Un hecho es lo que se observó', '1'],
     ['se lee una ficha escrita con prisa', '3'],
     ['Dar por hecho lo que se infirió de una cifra', '2'],
   ]) {
-    await seleccionarTexto(pv4, t);
-    await pv4.keyboard.press(k);
-    await pv4.keyboard.press('Escape');
+    await seleccionarTexto(p, t);
+    await p.keyboard.press(k);
+    await p.keyboard.press('Escape');
   }
-  await pv4.evaluate(() => {
+  await p.evaluate(() => {
     location.hash = '#cap-02';
   });
-  await esperar(pv4, () => !document.querySelector('#sec-cap-02').hidden);
-  await seleccionarTexto(pv4, 'un paso desde lo observado');
-  await pv4.keyboard.press('4');
-  await pv4.keyboard.press('Escape');
-  const clave = await pv4.evaluate(() =>
+  await esperar(p, () => !document.querySelector('#sec-cap-02').hidden);
+  await seleccionarTexto(p, 'un paso desde lo observado');
+  await p.keyboard.press('4');
+  await p.keyboard.press('Escape');
+  const clave = await p.evaluate(() =>
     Object.keys(localStorage).find((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k))
   );
   const leer = () =>
-    pv4.evaluate((k) => {
+    p.evaluate((k) => {
       const j = JSON.parse(localStorage.getItem(k) || '{}');
       return Object.values(j).sort((a, b) => (a.creado < b.creado ? -1 : 1));
     }, clave);
   const [vA, vB, vC, vD] = (await leer()).map((a) => a.id);
-  await pv4.evaluate(
-    ({ k, ids }) => {
+  await p.evaluate(
+    ({ k, ids, revisadas }) => {
       const j = JSON.parse(localStorage.getItem(k));
       const [a, b, c, d] = ids;
       Object.assign(j[a], {
@@ -106,21 +81,31 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
         respondido: new Date(Date.now() + 120000).toISOString(),
         bh: 'viejo0000000',
       });
+      if (revisadas) ids.forEach((id) => (j[id].revisado = j[id].respondido));
       localStorage.setItem(k, JSON.stringify(j));
     },
-    { k: clave, ids: [vA, vB, vC, vD] }
+    { k: clave, ids: [vA, vB, vC, vD], revisadas }
   );
-  await pv4.goto(base + '#cap-01');
-  await pv4.reload();
-  await pv4.waitForSelector('article.seccion:not([hidden]) mark.hl');
-  // cada marca abre su anotación, aunque el párrafo tenga dos
-  await pv4.click(`article.seccion:not([hidden]) mark.hl[data-aids~="${vA}"]`);
+  await p.goto(base + '#cap-01');
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  return { p, vA, vB, vC, vD, clave, leer };
+}
+const fichaActiva = (p) =>
+  p.evaluate(() => (document.querySelector('.ficha.foco') || { getAttribute: () => null }).getAttribute('data-id'));
+const cuentaRevisar = (p) => p.evaluate(() => (document.querySelector('#n-revisar') || {}).textContent ?? null);
+
+test('Ficha compacta: cada marca abre la suya; en reposo es texto; tocar la nota la activa', async ({
+  abrir,
+  base,
+}) => {
+  const { p, vA, vC } = await cuatroRespondidas(abrir, base);
+  await p.click(`article.seccion:not([hidden]) mark.hl[data-aids~="${vA}"]`);
   check(
-    (await pv4.evaluate(() => (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'))) === vA,
+    (await fichaActiva(p)) === vA,
     'en un párrafo con dos subrayados, el clic en el primero abre su ficha y no la del otro'
   );
-  // ficha compacta: en reposo la nota se lee como texto, sin marco ni botones; activa, con ellos
-  const compacta = await pv4.evaluate(
+  const compacta = await p.evaluate(
     (ids) => {
       const f = (id) => document.querySelector(`.ficha[data-id="${id}"]`);
       const ta = (id) => f(id) && f(id).querySelector('textarea.nota');
@@ -137,81 +122,76 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
       compacta.activaAcc > 0,
     `en reposo la ficha es texto (nota sin marco, sin botones); activa muestra el cuadro y las acciones (${JSON.stringify(compacta)})`
   );
-  await tocar(`.ficha[data-id="${vC}"] textarea.nota`);
-  const tocada = await pv4.evaluate(
-    (id) => ({
-      foco: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'),
-      cursor: document.activeElement.id,
-    }),
-    vC
-  );
+  await tocar(p, `.ficha[data-id="${vC}"] textarea.nota`);
+  const tocada = { foco: await fichaActiva(p), cursor: await p.evaluate(() => document.activeElement.id) };
   check(
     tocada.foco === vC && tocada.cursor === `nota-${vC}`,
     `tocar la nota de una ficha en reposo la activa con el cursor en la nota (${JSON.stringify(tocada)})`
   );
-  await pv4.keyboard.press('Escape');
-  // al margen: la ficha a la altura de su pasaje, sin encimarse, y acompaña al texto cuando se desplaza
-  const alMargen = () =>
-    pv4.evaluate((a) => {
-      const capa = document.querySelector('#lista.al-margen .capa-margen');
-      if (!capa) return { capa: false };
-      const fs = Array.from(capa.querySelectorAll('.ficha'))
-        .map((f) => {
-          const r = f.getBoundingClientRect();
-          return { id: f.getAttribute('data-id'), top: r.top, bottom: r.bottom };
-        })
-        .sort((x, y) => x.top - y.top);
-      const m = document.querySelector(`mark.hl[data-aids~="${a}"]`).getBoundingClientRect();
-      const fa = fs.find((x) => x.id === a);
-      return {
-        capa: true,
-        n: fs.length,
-        desfase: fa ? Math.round(fa.top - m.top) : null,
-        encimadas: fs.some((x, i) => i > 0 && x.top < fs[i - 1].bottom + 6),
-        tops: fs.map((x) => Math.round(x.top)),
-      };
-    }, vA);
-  await pv4.waitForTimeout(120);
-  const m0 = await alMargen();
+  sinErrores(p, 'en las fichas compactas', { consola: true });
+});
+
+// Las fichas al margen de la sección visible: su posición respecto del pasaje de `a`, si se enciman y sus alturas.
+const alMargen = (p, a) =>
+  p.evaluate((a) => {
+    const capa = document.querySelector('#lista.al-margen .capa-margen');
+    if (!capa) return { capa: false };
+    const fs = Array.from(capa.querySelectorAll('.ficha'))
+      .map((f) => {
+        const r = f.getBoundingClientRect();
+        return { id: f.getAttribute('data-id'), top: r.top, bottom: r.bottom };
+      })
+      .sort((x, y) => x.top - y.top);
+    const m = document.querySelector(`mark.hl[data-aids~="${a}"]`).getBoundingClientRect();
+    const fa = fs.find((x) => x.id === a);
+    return {
+      capa: true,
+      n: fs.length,
+      desfase: fa ? Math.round(fa.top - m.top) : null,
+      encimadas: fs.some((x, i) => i > 0 && x.top < fs[i - 1].bottom + 6),
+      tops: fs.map((x) => Math.round(x.top)),
+    };
+  }, a);
+
+test('Al margen: cada ficha a la altura de su pasaje, sin encimarse, con el texto que se desplaza o crece', async ({
+  abrir,
+  base,
+}) => {
+  const { p, vA, vC } = await cuatroRespondidas(abrir, base);
+  await p.waitForTimeout(120);
+  const m0 = await alMargen(p, vA);
   check(
     m0.capa && m0.n === 3 && Math.abs(m0.desfase) <= 3 && !m0.encimadas,
     `en «Sección», las fichas van al margen a la altura de su pasaje y sin encimarse (${JSON.stringify(m0)})`
   );
-  await pv4.evaluate(() => {
+  await p.evaluate(() => {
     document.querySelector('#lectura').scrollTop += 90;
   });
-  await pv4.waitForTimeout(120);
-  const m1 = await alMargen();
+  await p.waitForTimeout(120);
+  const m1 = await alMargen(p, vA);
   check(
     m1.capa && Math.abs(m1.desfase) <= 3 && m1.tops.every((t, i) => Math.abs(t - (m0.tops[i] - 90)) <= 3),
     `al desplazar el texto, las fichas lo acompañan (${JSON.stringify({ antes: m0.tops, despues: m1.tops })})`
   );
-  await pv4.evaluate(() => {
+  await p.evaluate(() => {
     document.querySelector('#lectura').scrollTop = 0;
   });
   // el texto cambia de tamaño (o de letra) sin que cambie la ventana: las fichas siguen a su pasaje
-  await pulsar(pv4, '#aj-mas');
-  await pulsar(pv4, '#aj-mas');
-  await pulsar(pv4, '#aj-mas');
-  await pv4.waitForTimeout(250);
-  const mAa = await alMargen();
-  await pv4.evaluate(() => {
-    document.querySelector('#ajustes').open = false;
-  });
+  for (let i = 0; i < 3; i++) await pulsar(p, '#aj-mas');
+  await p.waitForTimeout(250);
+  const mAa = await alMargen(p, vA);
   check(
     mAa.capa && Math.abs(mAa.desfase) <= 3 && !mAa.encimadas,
     `al agrandar el texto con «Aa», las fichas siguen alineadas con su pasaje (${JSON.stringify(mAa)})`
   );
-  await pulsar(pv4, '#aj-menos');
-  await pulsar(pv4, '#aj-menos');
-  await pulsar(pv4, '#aj-menos');
-  await pv4.evaluate(() => {
+  for (let i = 0; i < 3; i++) await pulsar(p, '#aj-menos');
+  await p.evaluate(() => {
     document.querySelector('#ajustes').open = false;
     document.querySelector('#lectura').scrollTop = 0;
   });
-  await pv4.waitForTimeout(150);
-  await pv4.click(`article.seccion:not([hidden]) mark.hl[data-aids~="${vC}"]`);
-  const visible = await pv4.evaluate((id) => {
+  await p.waitForTimeout(150);
+  await p.click(`article.seccion:not([hidden]) mark.hl[data-aids~="${vC}"]`);
+  const visible = await p.evaluate((id) => {
     const f = document.querySelector(`.ficha[data-id="${id}"]`),
       l = document.querySelector('#lista').getBoundingClientRect();
     if (!f) return null;
@@ -222,17 +202,21 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     visible && visible.foco && visible.dentro,
     `la ficha activa al margen queda a la vista (${JSON.stringify(visible)})`
   );
-  await pv4.keyboard.press('Escape');
+  sinErrores(p, 'al margen', { consola: true });
+});
+
+test('«Al margen» se apaga, vuelve a la lista y se recuerda al recargar', async ({ abrir, base }) => {
+  const { p } = await cuatroRespondidas(abrir, base);
   const sinMargen =
-    (await tocar('#b-margen')) &&
-    (await pv4.evaluate(() => ({
+    (await tocar(p, '#b-margen')) &&
+    (await p.evaluate(() => ({
       pulsado: document.querySelector('#b-margen').getAttribute('aria-pressed'),
       margen: !!document.querySelector('#lista.al-margen'),
       guardado: localStorage.getItem('lector-anotaciones.margen'),
     })));
-  await pv4.reload();
-  await pv4.waitForSelector('article.seccion:not([hidden]) mark.hl');
-  const margenRecarga = await pv4.evaluate(() => ({
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  const margenRecarga = await p.evaluate(() => ({
     margen: !!document.querySelector('#lista.al-margen'),
     fichas: document.querySelectorAll('#lista .ficha').length,
   }));
@@ -245,13 +229,19 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
       margenRecarga.fichas === 3,
     `«Al margen» se apaga, vuelve a la lista y se recuerda al recargar (${JSON.stringify({ sinMargen, margenRecarga })})`
   );
-  await tocar('#b-margen');
-  await tocar('.tab[data-tab="todas"]');
-  const enTodas = await pv4.evaluate(() => !!document.querySelector('#lista.al-margen'));
+});
+
+test('«Todas» es una lista, Shift+Tab llega a la ficha anterior, y buscar desde el margen da una lista', async ({
+  abrir,
+  base,
+}) => {
+  const { p, vA, vB } = await cuatroRespondidas(abrir, base);
+  await tocar(p, '.tab[data-tab="todas"]');
+  const enTodas = await p.evaluate(() => !!document.querySelector('#lista.al-margen'));
   // hacia atrás con Tab se llega a las acciones de la ficha anterior, aunque esté en reposo
-  await pv4.focus(`.ficha[data-id="${vB}"] .cab button[data-accion="ir"]`).catch(() => {});
-  await pv4.keyboard.press('Shift+Tab');
-  const atras = await pv4.evaluate(() => ({
+  await p.focus(`.ficha[data-id="${vB}"] .cab button[data-accion="ir"]`).catch(() => {});
+  await p.keyboard.press('Shift+Tab');
+  const atras = await p.evaluate(() => ({
     accion: document.activeElement.getAttribute('data-accion'),
     ficha: (document.activeElement.closest('.ficha') || { getAttribute: () => null }).getAttribute('data-id'),
     alto: Math.round(document.activeElement.getBoundingClientRect().height),
@@ -260,17 +250,17 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     atras.accion === 'borrar' && atras.ficha === vA && atras.alto > 0,
     `Shift+Tab desde una ficha llega a «Borrar» de la anterior, que se muestra al recibir el foco (${JSON.stringify(atras)})`
   );
-  await pv4.keyboard.press('Escape');
-  await tocar('.tab[data-tab="capitulo"]');
+  await p.keyboard.press('Escape');
+  await tocar(p, '.tab[data-tab="capitulo"]');
   // buscar desde «Sección» al margen: los resultados son una lista que se desplaza
-  await pv4.fill('#buscar', 'de');
-  await pv4.press('#buscar', 'Enter');
-  await pv4.waitForTimeout(100);
-  const rBusq = await pv4.$eval('#lista', (l) => l.getBoundingClientRect());
-  await pv4.mouse.move(rBusq.x + rBusq.width / 2, rBusq.y + 40);
-  for (let i = 0; i < 6; i++) await pv4.mouse.wheel(0, 300);
-  await pv4.waitForTimeout(150);
-  const busq = await pv4.evaluate(() => ({
+  await p.fill('#buscar', 'de');
+  await p.press('#buscar', 'Enter');
+  await p.waitForTimeout(100);
+  const rBusq = await p.$eval('#lista', (l) => l.getBoundingClientRect());
+  await p.mouse.move(rBusq.x + rBusq.width / 2, rBusq.y + 40);
+  for (let i = 0; i < 6; i++) await p.mouse.wheel(0, 300);
+  await p.waitForTimeout(150);
+  const busq = await p.evaluate(() => ({
     res: document.querySelectorAll('#lista .res').length,
     margen: !!document.querySelector('#lista.al-margen, #panel.margen'),
     desplazado: document.querySelector('#panel').scrollTop + document.querySelector('#lista').scrollTop,
@@ -279,16 +269,19 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     busq.res > 8 && !busq.margen && busq.desplazado > 0,
     `buscar desde «Sección» con las notas al margen deja una lista de resultados que se desplaza (${JSON.stringify(busq)})`
   );
-  await pv4.fill('#buscar', '');
-  await tocar('.tab[data-tab="capitulo"]');
+  await p.fill('#buscar', '');
+  await tocar(p, '.tab[data-tab="capitulo"]');
   check(
-    !enTodas && (await pv4.evaluate(() => !!document.querySelector('#lista.al-margen'))),
+    !enTodas && (await p.evaluate(() => !!document.querySelector('#lista.al-margen'))),
     '«Todas» es una lista; al volver a «Sección» las fichas vuelven al margen'
   );
-  // recorrer con . y , en el orden del libro, de una sección a otra
-  await pv4.focus('#lectura');
+});
+
+test('Recorrer con . y , (y ‹ ›) en el orden del libro, de una sección a otra', async ({ abrir, base }) => {
+  const { p, vA, vB, vC, vD } = await cuatroRespondidas(abrir, base);
+  await p.focus('#lectura');
   const pos = () =>
-    pv4.evaluate(() => ({
+    p.evaluate(() => ({
       ff: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id') || null,
       pos: (document.querySelector('#anot-pos') || {}).textContent || '',
       sec: Array.from(document.querySelectorAll('article.seccion'))
@@ -296,18 +289,16 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
         .map((a) => a.id)
         .join(),
     }));
-  await pv4.keyboard.press('.');
+  await p.keyboard.press('.');
   const r1 = await pos();
-  await pv4.keyboard.press('.');
-  await pv4.keyboard.press('.');
-  await pv4.keyboard.press('.');
+  for (let i = 0; i < 3; i++) await p.keyboard.press('.');
   const r4 = await pos();
-  await pv4.keyboard.press('.');
-  await pv4.waitForTimeout(150);
-  const fin = { ...(await pos()), anuncio: await pv4.$eval('#anuncio', (n) => n.textContent) };
-  await pv4.keyboard.press(',');
+  await p.keyboard.press('.');
+  await p.waitForTimeout(150);
+  const fin = { ...(await pos()), anuncio: await p.$eval('#anuncio', (n) => n.textContent) };
+  await p.keyboard.press(',');
   const r3 = await pos();
-  await tocar('#anot-ant');
+  await tocar(p, '#anot-ant');
   const r2 = await pos();
   check(
     r1.ff === vA &&
@@ -322,78 +313,84 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
       r2.ff === vB,
     `. y , (y ‹ ›) recorren las anotaciones en orden, cambian de sección y avisan al llegar al final (${JSON.stringify({ r1, r4, fin, r3, r2 })})`
   );
-  await pv4.keyboard.press('Escape');
-  // bandeja «Por revisar»: cuenta, A atendida, contestar la pregunta, R reabrir, ver el cambio
-  const cuenta = () => pv4.evaluate(() => (document.querySelector('#n-revisar') || {}).textContent ?? null);
-  const enBandeja = await tocar('#tab-revisar');
-  const bandeja = await pv4.evaluate(() => ({
+  sinErrores(p, 'al recorrer', { consola: true });
+});
+
+test('«Por revisar»: cuenta, A atendida (sin repetir ni a ciegas) y pasa a la siguiente', async ({ abrir, base }) => {
+  const { p, vA, vB, leer } = await cuatroRespondidas(abrir, base);
+  const enBandeja = await tocar(p, '#tab-revisar');
+  const bandeja = await p.evaluate(() => ({
     cab: (document.querySelector('.bandeja-cab') || {}).textContent || '',
     fichas: document.querySelectorAll('#lista .ficha.por-revisar').length,
   }));
   check(
-    enBandeja && (await cuenta()) === '4' && /4 respuestas por revisar/.test(bandeja.cab) && bandeja.fichas === 4,
+    enBandeja &&
+      (await cuentaRevisar(p)) === '4' &&
+      /4 respuestas por revisar/.test(bandeja.cab) &&
+      bandeja.fichas === 4,
     `«Por revisar» cuenta y lista las respuestas nuevas (${JSON.stringify(bandeja)})`
   );
-  await pv4.keyboard.press('.');
+  await p.keyboard.press('.');
   // A mantenida: la repetición del teclado no resuelve las siguientes sin verlas
-  await pv4.keyboard.down('a');
-  await pv4.keyboard.down('a');
-  await pv4.keyboard.down('a');
-  await pv4.keyboard.up('a');
+  for (let i = 0; i < 3; i++) await p.keyboard.down('a');
+  await p.keyboard.up('a');
   const trasRepetir = await leer();
   check(
     !trasRepetir[1].revisado && !trasRepetir[2].revisado,
     `mantener A pulsada resuelve sólo la respuesta a la vista (${JSON.stringify(trasRepetir.map((a) => !!a.revisado))})`
   );
   // en concentración el panel no se ve: A no resuelve a ciegas
-  await pv4.keyboard.press('f');
-  await pv4.keyboard.press('a');
+  await p.keyboard.press('f');
+  await p.keyboard.press('a');
   const aCiegas = (await leer())[1];
-  await pv4.keyboard.press('f');
+  await p.keyboard.press('f');
   check(
     !aCiegas.revisado && aCiegas.estado !== 'resuelta',
     'en concentración, con el panel oculto, A no resuelve nada'
   );
   const trasA = (await leer())[0];
-  const despuesA = await pv4.evaluate(
-    (id) => ({
-      ff: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'),
-      revisada: !!document.querySelector(`#lista .ficha.revisada[data-id="${id}"]`),
-    }),
-    vA
-  );
+  const despuesA = {
+    ff: await fichaActiva(p),
+    revisada: await p.evaluate((id) => !!document.querySelector(`#lista .ficha.revisada[data-id="${id}"]`), vA),
+  };
   check(
     trasA.estado === 'resuelta' &&
       !!trasA.revisado &&
       despuesA.ff === vB &&
       despuesA.revisada &&
-      (await cuenta()) === '3',
+      (await cuentaRevisar(p)) === '3',
     `A deja la respuesta atendida (resuelta y revisada), la mantiene a la vista marcada y pasa a la siguiente (${JSON.stringify({ estado: trasA.estado, revisado: trasA.revisado, ...despuesA })})`
   );
-  await tocar(`.ficha[data-id="${vB}"] textarea.replica`);
-  await pv4.keyboard.type('Al final del turno');
-  await pv4.keyboard.press('Escape');
-  await pv4.waitForTimeout(100);
+  sinErrores(p, 'al revisar', { consola: true });
+});
+
+test('«Por revisar»: contestar la pregunta la revisa; R reabre y «Copiar» lo dice', async ({ abrir, base }) => {
+  const { p, vB, vC, leer } = await cuatroRespondidas(abrir, base);
+  await tocar(p, '#tab-revisar');
+  await tocar(p, `.ficha[data-id="${vB}"] textarea.replica`);
+  await p.keyboard.type('Al final del turno');
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(100);
   const trasB = (await leer())[1];
   check(
-    trasB.replica === 'Al final del turno' && !!trasB.revisado && (await cuenta()) === '2',
+    trasB.replica === 'Al final del turno' && !!trasB.revisado && (await cuentaRevisar(p)) === '3',
     `contestar la pregunta la da por revisada (${JSON.stringify({ replica: trasB.replica, revisado: trasB.revisado })})`
   );
-  await pv4.focus(`.ficha[data-id="${vB}"]`).catch(() => {});
-  await pv4.keyboard.press('.');
-  await pv4.keyboard.press('r');
+  await p.focus(`.ficha[data-id="${vB}"]`).catch(() => {});
+  await p.keyboard.press('.');
+  await p.keyboard.press('r');
   const trasR = (await leer())[2];
-  const cursorR = await pv4.evaluate(() => document.activeElement.id);
+  const cursorR = await p.evaluate(() => document.activeElement.id);
   check(
     trasR.estado === 'abierta' && !!trasR.revisado && cursorR === `nota-${vC}`,
     `R reabre la respuesta descartada, la da por revisada y deja el cursor en la nota (${JSON.stringify({ estado: trasR.estado, cursorR })})`
   );
-  await pv4.keyboard.type(' Mejor quitarla.');
-  await pv4.keyboard.press('Escape');
+  await p.keyboard.type(' Mejor quitarla.');
+  await p.keyboard.press('Escape');
   // quien vuelca las anotaciones ve que el autor la devolvió
-  const copiaR = await enFicha(pv4, `.ficha[data-id="${vC}"]`, 'button[data-accion="copiar"]')
+  const copiaR = await enFicha(p, `.ficha[data-id="${vC}"]`, 'button[data-accion="copiar"]')
     .then(
-      () => pv4.evaluate(() => navigator.clipboard.readText()),
+      () => p.evaluate(() => navigator.clipboard.readText()),
       () => ''
     )
     .catch(() => '');
@@ -401,10 +398,25 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     /Respuesta \(descartada\): .*\nReabierta por el autor tras la respuesta\./.test(copiaR),
     `«Copiar» en una respuesta reabierta lo dice (${JSON.stringify(copiaR.split('\n').slice(-2))})`
   );
-  await pv4.focus(`.ficha[data-id="${vC}"]`).catch(() => {});
-  await pv4.keyboard.press('.');
-  await pv4.waitForTimeout(150);
-  const enD = await pv4.evaluate(
+  sinErrores(p, 'al contestar y reabrir', { consola: true });
+});
+
+test('«Por revisar»: el pasaje que cambió se abre con el antes y el después, y al terminar lo avisa', async ({
+  abrir,
+  base,
+}) => {
+  const { p, vC, vD } = await cuatroRespondidas(abrir, base);
+  await tocar(p, '#tab-revisar');
+  // atendidas las dos primeras con A, reabierta la tercera con R, y a la cuarta con .
+  await p.keyboard.press('.');
+  await p.keyboard.press('a');
+  await p.keyboard.press('a');
+  await p.keyboard.press('r');
+  await p.keyboard.press('Escape');
+  await p.focus(`.ficha[data-id="${vC}"]`).catch(() => {});
+  await p.keyboard.press('.');
+  await p.waitForTimeout(150);
+  const enD = await p.evaluate(
     (id) => ({
       ff: (document.querySelector('.ficha.foco') || {}).getAttribute?.('data-id'),
       sec: !document.querySelector('#sec-cap-02').hidden,
@@ -413,36 +425,36 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     }),
     vD
   );
-  await pv4.evaluate(() => {
+  await p.evaluate(() => {
     const d = document.querySelector('#sec-cap-02 .diff');
     if (d) d.remove();
   });
-  await pv4.keyboard.press('v');
-  await pv4.waitForTimeout(100);
-  const conV = await pv4.evaluate(() => !!document.querySelector('#sec-cap-02 .diff'));
+  await p.keyboard.press('v');
+  await p.waitForTimeout(100);
+  const conV = await p.evaluate(() => !!document.querySelector('#sec-cap-02 .diff'));
   check(
     enD.ff === vD && enD.sec && enD.diff && enD.boton && conV,
     `llegar a una respuesta cuyo pasaje cambió lleva a él con el antes y el después abiertos; V los vuelve a mostrar (${JSON.stringify({ ...enD, conV })})`
   );
-  await pv4.keyboard.press('a');
-  await pv4.waitForTimeout(150);
-  const vacia = await pv4.evaluate(() => ({
+  await p.keyboard.press('a');
+  await p.waitForTimeout(150);
+  const vacia = await p.evaluate(() => ({
     anuncio: document.querySelector('#anuncio').textContent,
     fichas: document.querySelectorAll('#lista .ficha').length,
     revisadas: document.querySelectorAll('#lista .ficha.revisada').length,
   }));
-  const opacidad = await pv4.evaluate(() => {
+  const opacidad = await p.evaluate(() => {
     const f = document.querySelector('#lista .ficha.revisada');
     return f ? getComputedStyle(f).opacity : null;
   });
   check(opacidad === '1', `lo revisado se marca sin apagar el texto (opacidad ${opacidad})`);
   check(
-    (await cuenta()) === '' && /No quedan/.test(vacia.anuncio) && vacia.fichas === 4 && vacia.revisadas === 4,
+    (await cuentaRevisar(p)) === '' && /No quedan/.test(vacia.anuncio) && vacia.fichas === 4 && vacia.revisadas === 4,
     `al terminar lo avisa, y lo revisado sigue a la vista hasta salir de la pestaña (${JSON.stringify(vacia)})`
   );
-  await tocar('.tab[data-tab="todas"]');
-  await tocar('#tab-revisar');
-  const vuelta = await pv4.evaluate(() => ({
+  await tocar(p, '.tab[data-tab="todas"]');
+  await tocar(p, '#tab-revisar');
+  const vuelta = await p.evaluate(() => ({
     fichas: document.querySelectorAll('#lista .ficha').length,
     vacio: (document.querySelector('#lista .vacio') || {}).textContent || '',
   }));
@@ -450,8 +462,16 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     vuelta.fichas === 0 && /No hay respuestas por revisar/.test(vuelta.vacio),
     `al volver, la bandeja está vacía (${JSON.stringify(vuelta)})`
   );
-  // una respuesta posterior a la revisión vuelve a la bandeja
-  await pv4.evaluate(
+  sinErrores(p, 'al terminar la bandeja', { consola: true });
+});
+
+test('Lo revisado se recuerda; una respuesta nueva vuelve a la bandeja; en el teléfono no hay margen', async ({
+  abrir,
+  base,
+}) => {
+  const { p, vA, clave } = await cuatroRespondidas(abrir, base, { revisadas: true });
+  check((await cuentaRevisar(p)) === '', 'lo revisado se recuerda al recargar');
+  await p.evaluate(
     ({ k, id }) => {
       const j = JSON.parse(localStorage.getItem(k));
       j[id].respondido = new Date(Date.now() + 60000).toISOString();
@@ -460,21 +480,18 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     },
     { k: clave, id: vA }
   );
-  await pv4.reload();
-  await pv4.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  check((await cuentaRevisar(p)) === '1', 'una respuesta nueva a lo ya revisado vuelve a la bandeja');
   check(
-    (await cuenta()) === '1',
-    'lo revisado se recuerda al recargar, y una respuesta nueva a lo ya revisado vuelve a la bandeja'
-  );
-  check(
-    (await pv4.evaluate(() => document.querySelector('#b-panel').textContent.replace(/\s+/g, ' ').trim())) ===
+    (await p.evaluate(() => document.querySelector('#b-panel').textContent.replace(/\s+/g, ' ').trim())) ===
       'Anotaciones (4), 1 respuesta por revisar',
     'el botón del panel en el teléfono dice qué cuenta su número'
   );
   // en el teléfono no hay margen: la lista de siempre, en la hoja
-  await pv4.setViewportSize({ width: 400, height: 800 });
-  await pv4.waitForTimeout(150);
-  const movilMargen = await pv4.evaluate(() => ({
+  await p.setViewportSize(TELEFONO.viewport);
+  await p.waitForTimeout(150);
+  const movilMargen = await p.evaluate(() => ({
     boton: getComputedStyle(document.querySelector('#b-margen') || document.body).display,
     margen: !!document.querySelector('#lista.al-margen'),
   }));
@@ -482,35 +499,24 @@ test('Fichas compactas, recorrido, bandeja de revisión y notas al margen (escri
     movilMargen.boton === 'none' && !movilMargen.margen,
     `en pantalla estrecha no hay notas al margen (${JSON.stringify(movilMargen)})`
   );
-  check(
-    erroresV.length === 0,
-    `sin errores de consola al revisar y recorrer${erroresV.length ? ': ' + erroresV.join(' | ') : ''}`
-  );
-  await ctxV.close();
 });
 
-test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
-  // Dos bloques del capítulo 2 cuyo texto anterior tenía la misma cita; una nota de sección, una de página (en un libro
-  // sin páginas) y una general; dos subrayados con respuesta en el capítulo 1 y cinco más en su último párrafo (el que
-  // cierra el artículo: la pila de fichas pasa de su final).
-  const conDosAnteriores = (L) => {
-    const cap2 = L.secciones.find((s) => /^Capítulo 2/.test(s.titulo));
-    const b1 = cap2.bloques.find((b) => b.id === 'cap-02-b1'),
-      b3 = cap2.bloques.find((b) => b.id === 'cap-02-b3');
-    b1.anterior = b1.html + ' Lo que importa realmente es otra cosa.';
-    b3.anterior = b3.html.replace('que importa es', 'que importa realmente es');
-    L.anterior_generado = '2026-01-01';
-    L.cambios = 2;
-  };
-  const ctxL = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctxL.addInitScript(sinBase);
-  const pl = await ctxL.newPage();
-  const erroresL = [];
-  pl.on('pageerror', (e) => erroresL.push(String(e)));
-  await libroAlterado(pl, conDosAnteriores);
-  await pl.goto(base + '#cap-01');
-  await pl.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
-  const citasL = [
+// ------------------------------------------------------------ casos límite de revisar y recorrer
+// Dos bloques del capítulo 2 cuyo texto anterior tenía la misma cita; una nota de sección, una de página (en un libro
+// sin páginas) y una general; dos subrayados con respuesta en el capítulo 1 y cinco más en su último párrafo (el que
+// cierra el artículo: la pila de fichas pasa de su final). Sin base.
+const conDosAnteriores = (L) => {
+  const cap2 = L.secciones.find((s) => /^Capítulo 2/.test(s.titulo));
+  const b1 = cap2.bloques.find((b) => b.id === 'cap-02-b1'),
+    b3 = cap2.bloques.find((b) => b.id === 'cap-02-b3');
+  b1.anterior = b1.html + ' Lo que importa realmente es otra cosa.';
+  b3.anterior = b3.html.replace('que importa es', 'que importa realmente es');
+  L.anterior_generado = '2026-01-01';
+  L.cambios = 2;
+};
+async function casosLimite(abrir) {
+  const p = await abrir({ preparar: (p) => libroAlterado(p, conDosAnteriores) });
+  for (const [t, k] of [
     ['Un hecho es lo que se observó', '1'],
     ['Dar por hecho lo que se infirió de una cifra', '2'],
     ['Este párrafo', '4'],
@@ -518,21 +524,19 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
     ['una idea sencilla', '4'],
     ['escribir mejor', '4'],
     ['separar mejor', '4'],
-  ];
-  for (const [t, k] of citasL) {
-    await seleccionarTexto(pl, t);
-    await pl.keyboard.press(k);
-    await pl.keyboard.press('Escape');
+  ]) {
+    await seleccionarTexto(p, t);
+    await p.keyboard.press(k);
+    await p.keyboard.press('Escape');
   }
-  const claveCL = await pl.evaluate(() =>
+  const clave = await p.evaluate(() =>
     Object.keys(localStorage).find((k) => /^lector-anotaciones:[a-z0-9-]+$/.test(k))
   );
-  const leerL = () => pl.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), claveCL);
-  const creadas = Object.values(await leerL())
+  const leer = () => p.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), clave);
+  const creadas = Object.values(await leer())
     .sort((a, b) => (a.creado < b.creado ? -1 : 1))
     .map((a) => a.id);
-  const [h1, h2, q1, q2, q3] = creadas;
-  await pl.evaluate(
+  await p.evaluate(
     ({ k, ids }) => {
       const j = JSON.parse(localStorage.getItem(k));
       const [h1, h2, ...qs] = ids;
@@ -553,92 +557,83 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
       qs.forEach((id, i) => {
         j[id].nota = `Nota ${i + 1}: un texto de prueba con palabras suficientes para poner el cursor en medio.`;
       });
-      j.s1 = {
-        id: 's1',
-        tipo: 'capitulo',
-        sid: 'cap-01',
-        sidTitulo: cap1,
-        nota: 'Nota de la sección',
-        estado: 'abierta',
-        creado: '2026-10-01T00:00:00.000Z',
-        autor: null,
-      };
+      const nota = (id, extra, creado) =>
+        Object.assign(
+          { id, nota: '', estado: 'abierta', creado: `2026-10-01T00:0${creado}:00.000Z`, autor: null },
+          extra
+        );
+      j.s1 = nota('s1', { tipo: 'capitulo', sid: 'cap-01', sidTitulo: cap1, nota: 'Nota de la sección' }, 0);
       // de otra sección (el prefacio), y antes en el orden: la primera a la que se llega con el filtro «notas»
-      j.pg = {
-        id: 'pg',
-        tipo: 'pagina',
-        pagina: 5,
-        sid: 'prefacio',
-        sidTitulo: 'Prefacio',
-        nota: 'Nota de la página 5',
-        estado: 'abierta',
-        creado: '2026-10-01T00:01:00.000Z',
-        autor: null,
-      };
-      j.g = {
-        id: 'g',
-        tipo: 'general',
-        nota: 'Nota general',
-        estado: 'abierta',
-        creado: '2026-10-01T00:02:00.000Z',
-        autor: null,
-      };
-      j.p = {
-        id: 'p',
-        tipo: 'subrayado',
-        sid: 'cap-02',
-        sidTitulo: cap2,
-        pid: 'cap-02-b3',
-        src: 'cap2.md:5',
-        inicio: 21,
-        fin: 38,
-        cita: 'importa realmente',
-        antes: 'La incertidumbre que ',
-        despues: ' es la que cambiaría',
-        color: 'duda',
-        nota: '',
-        estado: 'abierta',
-        creado: '2026-10-01T00:03:00.000Z',
-        bh: 'viejo0000000',
-        autor: null,
-        respuesta: 'Quité «realmente».',
-        cierre: 'atendida',
-        respondido: '2026-10-15T10:02:00.000Z',
-      };
+      j.pg = nota(
+        'pg',
+        { tipo: 'pagina', pagina: 5, sid: 'prefacio', sidTitulo: 'Prefacio', nota: 'Nota de la página 5' },
+        1
+      );
+      j.g = nota('g', { tipo: 'general', nota: 'Nota general' }, 2);
+      j.p = nota(
+        'p',
+        {
+          tipo: 'subrayado',
+          sid: 'cap-02',
+          sidTitulo: cap2,
+          pid: 'cap-02-b3',
+          src: 'cap2.md:5',
+          inicio: 21,
+          fin: 38,
+          cita: 'importa realmente',
+          antes: 'La incertidumbre que ',
+          despues: ' es la que cambiaría',
+          color: 'duda',
+          bh: 'viejo0000000',
+          respuesta: 'Quité «realmente».',
+          cierre: 'atendida',
+          respondido: '2026-10-15T10:02:00.000Z',
+        },
+        3
+      );
       localStorage.setItem(k, JSON.stringify(j));
     },
-    { k: claveCL, ids: creadas }
+    { k: clave, ids: creadas }
   );
-  await pl.reload();
-  await pl.waitForSelector('article.seccion:not([hidden]) mark.hl');
-  await pl.waitForTimeout(150);
-  const caja = (sel) =>
-    pl.evaluate((s) => {
-      const n = document.querySelector(s),
-        l = document.querySelector('#lista').getBoundingClientRect();
-      if (!n) return null;
-      const r = n.getBoundingClientRect();
-      return {
-        top: Math.round(r.top),
-        bottom: Math.round(r.bottom),
-        lTop: Math.round(l.top),
-        lBottom: Math.round(l.bottom),
-        dentro: r.top >= l.top - 1 && r.bottom <= l.bottom + 1,
-      };
-    }, sel);
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  await p.waitForTimeout(150);
+  const [h1, , , , q3] = creadas;
+  return { p, h1, q3, leer };
+}
+// Dónde está un elemento respecto de la lista del panel.
+const enLista = (p, sel) =>
+  p.evaluate((s) => {
+    const n = document.querySelector(s),
+      l = document.querySelector('#lista').getBoundingClientRect();
+    if (!n) return null;
+    const r = n.getBoundingClientRect();
+    return {
+      top: Math.round(r.top),
+      bottom: Math.round(r.bottom),
+      lTop: Math.round(l.top),
+      lBottom: Math.round(l.bottom),
+      dentro: r.top >= l.top - 1 && r.bottom <= l.bottom + 1,
+    };
+  }, sel);
+
+test('Al margen con la pila llena: la nota de la sección y la última ficha se ven, y el cursor queda donde se tocó', async ({
+  abrir,
+}) => {
+  const { p, q3 } = await casosLimite(abrir);
   // con el texto arriba del todo, la nota de la sección (anclada al título) se ve entera bajo la cabecera del panel
-  const sec = await caja('#lista.al-margen .ficha[data-id="s1"]');
+  const sec = await enLista(p, '#lista.al-margen .ficha[data-id="s1"]');
   check(
     sec && sec.dentro,
     `al margen, la nota de la sección se ve entera con el texto al principio (${JSON.stringify(sec)})`
   );
   // las fichas apiladas más allá del final del artículo se alcanzan desplazando el texto hasta abajo
-  await pl.evaluate(() => {
+  await p.evaluate(() => {
     const l = document.querySelector('#lectura');
     l.scrollTop = l.scrollHeight;
   });
-  await pl.waitForTimeout(150);
-  const ultima = await pl.evaluate(() => {
+  await p.waitForTimeout(150);
+  const ultima = await p.evaluate(() => {
     const fs = Array.from(document.querySelectorAll('.capa-margen .ficha'))
       .map((f) => f.getBoundingClientRect())
       .sort((a, b) => a.top - b.top);
@@ -650,30 +645,30 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
     ultima && ultima.n === 8 && ultima.bottom <= ultima.lBottom + 1,
     `con el texto al final, la última ficha apilada se ve (${JSON.stringify(ultima)})`
   );
-  await pl.evaluate(() => {
+  await p.evaluate(() => {
     document.querySelector('#lectura').scrollTop = 0;
   });
-  await pl.waitForTimeout(100);
+  await p.waitForTimeout(100);
   // tocar la nota de una ficha que la pila empujó hacia abajo: el cursor queda donde se tocó
   // el texto se desplaza hasta que la ficha queda a media altura (la capa se sincroniza en el cuadro siguiente)
   for (let i = 0; i < 2; i++) {
-    await pl.evaluate((id) => {
+    await p.evaluate((id) => {
       document.querySelector('#lectura').scrollTop +=
         document.querySelector(`.ficha[data-id="${id}"]`).getBoundingClientRect().top - 400;
     }, q3);
-    await pl.waitForTimeout(100);
+    await p.waitForTimeout(100);
   }
-  const rq = await pl.$eval(`.ficha[data-id="${q3}"] textarea.nota`, (t) => {
+  const rq = await p.$eval(`.ficha[data-id="${q3}"] textarea.nota`, (t) => {
     const r = t.getBoundingClientRect();
     return { x: r.left + 60, y: r.top + 9 };
   });
-  await pl.mouse.move(rq.x, rq.y);
-  await pl.mouse.down();
-  const cursor0 = await pl.$eval(`.ficha[data-id="${q3}"] textarea.nota`, (t) => t.selectionStart);
-  await pl.mouse.move(rq.x + 1, rq.y);
-  await pl.mouse.up();
-  await pl.waitForTimeout(120);
-  const cursor1 = await pl.evaluate((id) => {
+  await p.mouse.move(rq.x, rq.y);
+  await p.mouse.down();
+  const cursor0 = await p.$eval(`.ficha[data-id="${q3}"] textarea.nota`, (t) => t.selectionStart);
+  await p.mouse.move(rq.x + 1, rq.y);
+  await p.mouse.up();
+  await p.waitForTimeout(120);
+  const cursor1 = await p.evaluate((id) => {
     const t = document.querySelector(`.ficha[data-id="${id}"] textarea.nota`);
     return { fin: t.selectionStart, finSel: t.selectionEnd, foco: document.activeElement === t };
   }, q3);
@@ -681,32 +676,34 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
     cursor1.foco && Math.abs(cursor1.fin - cursor0) <= 1 && cursor1.finSel === cursor1.fin,
     `tocar la nota de una ficha empujada deja el cursor donde se tocó (${cursor0} → ${JSON.stringify(cursor1)})`
   );
-  await pl.keyboard.press('Escape');
-  // ventana baja y una ficha más alta que la lista: con Tab, cada control que recibe el foco se ve
-  await pl.setViewportSize({ width: 1280, height: 520 });
-  await pl.waitForTimeout(150);
-  await pl.focus(`.ficha[data-id="${h1}"] textarea.nota`);
+  sinErrores(p, 'con la pila llena');
+});
+
+test('En una ficha más alta que la lista, «Borrar» queda a la vista al llegar con Tab', async ({ abrir }) => {
+  const { p, h1 } = await casosLimite(abrir);
+  await p.setViewportSize({ width: 1280, height: 520 });
+  await p.waitForTimeout(150);
+  await p.focus(`.ficha[data-id="${h1}"] textarea.nota`);
   let alBorrar = null;
   // se mide un momento después: el navegador desplaza la lista para mostrar el foco y la página lo corrige en el cuadro siguiente
   for (let i = 0; i < 14 && !alBorrar; i++) {
-    await pl.keyboard.press('Tab');
-    if ((await pl.evaluate(() => document.activeElement.getAttribute('data-accion'))) === 'borrar') {
-      await pl.waitForTimeout(150);
-      alBorrar = await caja(':focus');
+    await p.keyboard.press('Tab');
+    if ((await p.evaluate(() => document.activeElement.getAttribute('data-accion'))) === 'borrar') {
+      await p.waitForTimeout(150);
+      alBorrar = await enLista(p, ':focus');
     }
   }
   check(
     alBorrar && alBorrar.dentro,
     `en una ficha más alta que la lista, «Borrar» queda a la vista al llegar con Tab (${JSON.stringify(alBorrar)})`
   );
-  await pl.keyboard.press('Escape');
-  await pl.setViewportSize({ width: 1280, height: 900 });
-  await pl.waitForTimeout(150);
-  // «✓ Atendida» fuera de la bandeja deja la ficha donde está
-  const cuentaL = () => pl.evaluate(() => document.querySelector('#n-revisar').textContent);
-  await enFicha(pl, `.ficha[data-id="${h1}"]`, 'button[data-accion="atendida"]');
-  await pl.waitForTimeout(100);
-  const enSitio = await pl.evaluate(
+});
+
+test('«✓ Atendida» fuera de la bandeja la deja en su sitio; una cita perdida lleva a su bloque', async ({ abrir }) => {
+  const { p, h1, leer } = await casosLimite(abrir);
+  await enFicha(p, `.ficha[data-id="${h1}"]`, 'button[data-accion="atendida"]');
+  await p.waitForTimeout(100);
+  const enSitio = await p.evaluate(
     (id) => ({
       tab: document.querySelector('.tab.activa').getAttribute('data-tab'),
       sec: !document.querySelector('#sec-cap-01').hidden,
@@ -715,20 +712,20 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
     h1
   );
   check(
-    (await leerL())[h1].estado === 'resuelta' &&
+    (await leer())[h1].estado === 'resuelta' &&
       enSitio.tab === 'capitulo' &&
       enSitio.sec &&
       enSitio.foco &&
-      (await cuentaL()) === '2',
+      (await cuentaRevisar(p)) === '2',
     `«✓ Atendida» en «Sección» la resuelve y deja la ficha donde está, con el foco en ella (${JSON.stringify(enSitio)})`
   );
   // en la bandeja: de una cita perdida se va al bloque donde estaba (por su contexto), no al primero que la tenía
-  await pl.click('#tab-revisar');
-  await pl.focus('#lectura');
-  await pl.keyboard.press('.');
-  await pl.keyboard.press('a');
-  await pl.waitForTimeout(150);
-  const perdida = await pl.evaluate(() => ({
+  await p.click('#tab-revisar');
+  await p.focus('#lectura');
+  await p.keyboard.press('.');
+  await p.keyboard.press('a');
+  await p.waitForTimeout(150);
+  const perdida = await p.evaluate(() => ({
     ff: (document.querySelector('.ficha.foco') || { getAttribute: () => null }).getAttribute('data-id'),
     b3: !!document.querySelector('.diff[data-de="cap-02-b3"]'),
     b1: !!document.querySelector('.diff[data-de="cap-02-b1"]'),
@@ -738,25 +735,29 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
     `una cita que ya no está lleva al bloque donde estaba según su contexto (${JSON.stringify(perdida)})`
   );
   // salir de la bandeja por la búsqueda también la vacía de lo revisado
-  await pl.fill('#buscar', 'hecho');
-  await pl.press('#buscar', 'Enter');
-  await pl.click('#tab-revisar');
-  const trasBuscar = await pl.$$eval('#lista .ficha', (fs) => fs.map((f) => f.getAttribute('data-id')));
+  await p.fill('#buscar', 'hecho');
+  await p.press('#buscar', 'Enter');
+  await p.click('#tab-revisar');
+  const trasBuscar = await p.$$eval('#lista .ficha', (fs) => fs.map((f) => f.getAttribute('data-id')));
   check(
     trasBuscar.length === 1 && trasBuscar[0] === 'p',
     `salir de «Por revisar» por la búsqueda saca lo revisado de la bandeja (${JSON.stringify(trasBuscar)})`
   );
-  await pl.fill('#buscar', '');
+  sinErrores(p, 'al revisar fuera de la bandeja');
+});
+
+test('. con un filtro: recorre las notas sin quitarlo, y sigue desde donde estaba la que salió de la lista', async ({
+  abrir,
+}) => {
+  const { p } = await casosLimite(abrir);
   // . con el filtro «notas» en «Sección»: una nota de página sin su página en el texto no quita el filtro
-  await pl.click('.tab[data-tab="capitulo"]');
-  await pl.keyboard.press('Escape');
-  await pulsar(pl, '.filtro[data-f="notas"]');
-  await pl.focus('#lectura');
+  await pulsar(p, '.filtro[data-f="notas"]');
+  await p.focus('#lectura');
   const pasos = [];
   for (let i = 0; i < 3; i++) {
-    await pl.keyboard.press('.');
+    await p.keyboard.press('.');
     pasos.push(
-      await pl.evaluate(() => ({
+      await p.evaluate(() => ({
         f: document.querySelector('.filtro.on').getAttribute('data-f'),
         ff: (document.querySelector('#lista .ficha.foco') || { getAttribute: () => null }).getAttribute('data-id'),
       }))
@@ -771,62 +772,49 @@ test('Revisar y recorrer: casos límite (escritorio)', async ({ browser }) => {
     `. recorre las notas sin quitar el filtro y cada ficha a la que llega se ve (${JSON.stringify(pasos)})`
   );
   // . después de que la actual salió de la lista: sigue desde donde estaba, no desde el principio
-  await pl.click('.tab[data-tab="todas"]');
-  await pulsar(pl, '.filtro[data-f="abiertas"]');
-  await enFicha(pl, '.ficha[data-id="p"]', 'button[data-accion="atendida"]');
-  await pl.waitForTimeout(100);
-  await pl.keyboard.press('.');
-  const sigue = await pl.evaluate(() =>
-    (document.querySelector('#lista .ficha.foco') || { getAttribute: () => null }).getAttribute('data-id')
-  );
+  await p.click('.tab[data-tab="todas"]');
+  await pulsar(p, '.filtro[data-f="abiertas"]');
+  await enFicha(p, '.ficha[data-id="p"]', 'button[data-accion="atendida"]');
+  await p.waitForTimeout(100);
+  await p.keyboard.press('.');
+  const sigue = await fichaActiva(p);
   check(sigue === 'g', `si la actual sale de la lista filtrada, . pasa a la que le seguía (${sigue})`);
-  check(
-    erroresL.length === 0,
-    `sin errores de consola en los casos límite${erroresL.length ? ': ' + erroresL.join(' | ') : ''}`
-  );
-  await ctxL.close();
+  sinErrores(p, 'al recorrer con filtros');
 });
 
-test('Por revisar: sólo lo propio, y sin identidad, sólo lo sin autor', async ({ browser }) => {
-  const semillaRevisar = () => {
-    window.__semilla = {
-      mia: {
-        id: 'mia',
-        tipo: 'general',
-        nota: 'Mía',
-        estado: 'abierta',
-        creado: '2026-10-02T00:00:00.000Z',
-        autor: 'u_me',
-        respuesta: 'Hecho.',
-        cierre: 'atendida',
-        respondido: '2026-10-03T10:00:00.000Z',
+// ------------------------------------------------------------ con la base: lo propio, fichas por id
+const respondida = (id, nota, autor, creado) => ({
+  id,
+  tipo: 'general',
+  nota,
+  estado: 'abierta',
+  creado,
+  autor,
+  respuesta: 'Hecho.',
+  cierre: 'atendida',
+  respondido: '2026-10-03T10:00:00.000Z',
+});
+for (const sinId of [false, true])
+  test(`Por revisar: ${sinId ? 'sin identidad, sólo lo sin autor' : 'sólo las respuestas propias'}`, async ({
+    abrir,
+  }) => {
+    const p = await abrir({
+      hash: '',
+      modo: 'con-base',
+      semilla: {
+        mia: respondida('mia', 'Mía', 'u_me', '2026-10-02T00:00:00.000Z'),
+        suya: respondida('suya', 'De otra lectora', 'u_otro', '2026-10-02T01:00:00.000Z'),
       },
-      suya: {
-        id: 'suya',
-        tipo: 'general',
-        nota: 'De otra lectora',
-        estado: 'abierta',
-        creado: '2026-10-02T01:00:00.000Z',
-        autor: 'u_otro',
-        respuesta: 'Hecho también.',
-        cierre: 'atendida',
-        respondido: '2026-10-03T10:00:00.000Z',
-      },
-    };
-  };
-  for (const sinId of [false, true]) {
-    const cx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    await cx.addInitScript(semillaRevisar);
-    if (sinId)
-      await cx.addInitScript(() => {
-        window.__sinUsuario = true;
-      });
-    await cx.addInitScript(conBase);
-    const px = await cx.newPage();
-    await px.goto(base);
-    await px.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
-    await px.waitForTimeout(250);
-    const r = await px.evaluate(() => ({
+      previo: sinId
+        ? [
+            () => {
+              window.__sinUsuario = true;
+            },
+          ]
+        : [],
+    });
+    await p.waitForTimeout(250);
+    const r = await p.evaluate(() => ({
       estado: document.querySelector('#estado').textContent,
       cuenta: document.querySelector('#n-revisar').textContent,
       anuncio: document.querySelector('#anuncio').textContent,
@@ -841,47 +829,41 @@ test('Por revisar: sólo lo propio, y sin identidad, sólo lo sin autor', async 
         !/por revisar/.test(r.estado) && r.cuenta === '' && !/por revisar/.test(r.anuncio),
         `sin identidad no se ofrece revisar las respuestas de anotaciones con autor (${JSON.stringify(r)})`
       );
-    await cx.close();
-  }
-});
-
-test('Fichas por id: el panel reutiliza las que no cambiaron y conserva el cuadro que se edita', async ({
-  browser,
-}) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(() => {
-    const g = (id, nota, creado) => ({ id, tipo: 'general', nota, estado: 'abierta', creado, autor: 'u_me' });
-    window.__semilla = {
-      g1: g('g1', 'Primera nota general', '2026-10-01T00:00:00.000Z'),
-      g2: g('g2', 'Segunda nota general', '2026-10-01T00:01:00.000Z'),
-      g3: g('g3', 'Tercera nota general', '2026-10-01T00:02:00.000Z'),
-    };
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  const errores = [];
-  p.on('pageerror', (e) => errores.push(String(e)));
-  await p.goto(base);
-  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+
+const general = (id, nota, creado, extra) =>
+  Object.assign({ id, tipo: 'general', nota, estado: 'abierta', creado, autor: 'u_me' }, extra);
+// Marca los nodos de las fichas dibujadas; `marcadas` dice cuáles siguen siendo los mismos tras un redibujo.
+const marcar = (p) =>
+  p.evaluate(() =>
+    document.querySelectorAll('#lista .ficha').forEach((f) => {
+      f.__marca = 1;
+    })
+  );
+const marcadas = (p) =>
+  p.evaluate(() =>
+    Object.fromEntries(Array.from(document.querySelectorAll('#lista .ficha')).map((f) => [f.dataset.id, !!f.__marca]))
+  );
+
+test('Fichas por id: el panel reutiliza las que no cambiaron y conserva el cuadro que se edita', async ({ abrir }) => {
+  const p = await abrir({
+    hash: '',
+    modo: 'con-base',
+    semilla: {
+      g1: general('g1', 'Primera nota general', '2026-10-01T00:00:00.000Z'),
+      g2: general('g2', 'Segunda nota general', '2026-10-01T00:01:00.000Z'),
+      g3: general('g3', 'Tercera nota general', '2026-10-01T00:02:00.000Z'),
+    },
+  });
   await p.click('.tab[data-tab="todas"]');
   await p.waitForSelector('.ficha[data-id="g3"]');
   // se marcan los nodos dibujados; un redibujo que no cambia nada los deja como están
-  const marcar = () =>
-    p.evaluate(() =>
-      document.querySelectorAll('#lista .ficha').forEach((f) => {
-        f.__marca = 1;
-      })
-    );
-  const marcadas = () =>
-    p.evaluate(() =>
-      Object.fromEntries(Array.from(document.querySelectorAll('#lista .ficha')).map((f) => [f.dataset.id, !!f.__marca]))
-    );
-  await marcar();
+  await marcar(p);
   await p.evaluate(() =>
     window.__cambioExterno('g2', { respuesta: 'Hecho.', cierre: 'atendida', respondido: '2026-10-02T00:00:00.000Z' })
   );
   await esperar(p, () => !!document.querySelector('.ficha[data-id="g2"] .respuesta'));
-  const tras = await marcadas();
+  const tras = await marcadas(p);
   check(
     tras.g1 && !tras.g2 && tras.g3,
     `un cambio en una anotación rehace sólo su ficha; las demás son los mismos nodos (${JSON.stringify(tras)})`
@@ -905,22 +887,12 @@ test('Fichas por id: el panel reutiliza las que no cambiaron y conserva el cuadr
     enEdicion.mismo && enEdicion.foco && enEdicion.cursor === cuadro && /\(sigo\)$/.test(enEdicion.valor),
     `el cuadro que se edita sigue siendo el mismo, con el foco y el cursor, cuando llega el cambio de otra anotación (${JSON.stringify(enEdicion)})`
   );
-  check(
-    errores.length === 0,
-    `sin errores de página al reutilizar fichas${errores.length ? ': ' + errores.join(' | ') : ''}`
-  );
-  await ctx.close();
+  sinErrores(p, 'al reutilizar fichas');
 });
 
-test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el formato 2', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const p = await ctx.newPage();
-  const errores = [];
-  p.on('pageerror', (e) => errores.push(String(e)));
-  await p.goto(base + '#cap-01');
-  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+// ------------------------------------------------------------ conversación anterior y propuestas
+test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el formato 2', async ({ abrir }) => {
+  const p = await abrir({ permisos: ['clipboard-read', 'clipboard-write'] });
   // un subrayado, una nota de la sección, una de página y una general
   await seleccionarTexto(p, 'Un hecho es lo que se observó');
   await p.keyboard.press('3');
@@ -936,7 +908,6 @@ test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el
   await pulsar(p, '#b-nota-gen');
   await p.keyboard.type('Nota general');
   await p.keyboard.press('Escape');
-  const clave = CLAVE_LOCAL;
   await p.evaluate((k) => {
     const j = JSON.parse(localStorage.getItem(k));
     const s = Object.values(j).find((a) => a.tipo === 'subrayado');
@@ -959,7 +930,7 @@ test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el
       respondido: '2026-10-05T09:00:00.000Z',
     });
     localStorage.setItem(k, JSON.stringify(j));
-  }, clave);
+  }, CLAVE_LOCAL);
   await p.reload();
   await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
   await p.click('.tab[data-tab="todas"]');
@@ -995,8 +966,7 @@ test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el
   );
   await p.keyboard.press('Escape');
   await pulsar(p, '#b-copiar');
-  const json = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '{}');
-  const datos = JSON.parse(json);
+  const datos = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()).catch(() => '{}'));
   const conHilo = (datos.anotaciones || []).find((a) => a.hilo);
   const notaPg = (datos.anotaciones || []).find((a) => a.tipo === 'pagina');
   check(
@@ -1010,25 +980,15 @@ test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el
   // con GUARDAR_EXPORTACION=ruta, esta exportación queda como muestra para tests/test_esquemas.py
   if (process.env.GUARDAR_EXPORTACION)
     fs.writeFileSync(process.env.GUARDAR_EXPORTACION, JSON.stringify(datos, null, 2) + '\n');
-  check(
-    errores.length === 0,
-    `sin errores de página con la conversación anterior${errores.length ? ': ' + errores.join(' | ') : ''}`
-  );
-  await ctx.close();
+  sinErrores(p, 'con la conversación anterior');
 });
 
-test('Proponer otro texto: P con la selección, el botón de la ficha, la diferencia y lo que se copia', async ({
-  browser,
+const local = (p) => p.evaluate((k) => Object.values(JSON.parse(localStorage.getItem(k) || '{}')), CLAVE_LOCAL);
+
+test('Proponer otro texto con P: la diferencia, lo que se guarda, la ficha en reposo, lo que se copia', async ({
+  abrir,
 }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const p = await ctx.newPage();
-  const errores = [];
-  p.on('pageerror', (e) => errores.push(String(e)));
-  await p.goto(base + '#cap-01');
-  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
-  const local = () => p.evaluate((k) => Object.values(JSON.parse(localStorage.getItem(k) || '{}')), CLAVE_LOCAL);
+  const p = await abrir({ permisos: ['clipboard-read', 'clipboard-write'] });
   // P con texto seleccionado: subraya (revisar) y abre la propuesta con la cita, con el cursor en ella
   await seleccionarTexto(p, 'Un hecho es lo que se observó');
   await p.keyboard.press('p');
@@ -1058,7 +1018,7 @@ test('Proponer otro texto: P con la selección, el botón de la ficha, la difere
     `la diferencia con la cita se ve palabra por palabra mientras se escribe (${JSON.stringify(dif)})`
   );
   await p.keyboard.press('Escape');
-  const guardada = (await local()).find((a) => a.tipo === 'subrayado');
+  const guardada = (await local(p)).find((a) => a.tipo === 'subrayado');
   check(
     guardada && guardada.sugerencia === 'Un hecho es lo observado',
     `Esc guarda la propuesta (${JSON.stringify(guardada && guardada.sugerencia)})`
@@ -1088,7 +1048,21 @@ test('Proponer otro texto: P con la selección, el botón de la ficha, la difere
     md.includes('«Un hecho es lo que se observó»\n  - Propuesta: «Un hecho es lo observado»'),
     '«Copiar todo (Markdown)» lleva la propuesta'
   );
-  // «Proponer texto» en la ficha de un subrayado sin propuesta: abrirla y salir sin cambiar nada no propone nada
+  // al recargar, la propuesta sigue en la ficha
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  const tras = await p.evaluate(() => {
+    const f = document.querySelector('.ficha.c-revisar');
+    return f && f.querySelector('.dif-propuesta') ? f.querySelector('.dif-propuesta').textContent : null;
+  });
+  check(tras === 'Un hecho es lo que se observóobservado', `la propuesta se conserva al recargar (${tras})`);
+  sinErrores(p, 'al proponer con P');
+});
+
+test('«Proponer texto» en la ficha: abrirla y salir sin cambios no guarda nada; P con la ficha activa la abre', async ({
+  abrir,
+}) => {
+  const p = await abrir();
   await seleccionarTexto(p, 'escrita con prisa');
   await p.keyboard.press('3');
   await p.keyboard.press('Escape');
@@ -1107,7 +1081,7 @@ test('Proponer otro texto: P con la selección, el botón de la ficha, la difere
     `«Proponer texto» abre la propuesta con la cita y deja de ofrecerse (${JSON.stringify(boton)})`
   );
   await p.keyboard.press('Escape');
-  const duda = (await local()).find((a) => a.color === 'duda');
+  const duda = (await local(p)).find((a) => a.color === 'duda');
   check(duda && !('sugerencia' in duda), 'abrir la propuesta y salir sin cambios no guarda nada');
   // P con una ficha activa abre su propuesta
   await p.evaluate(() => document.querySelector('.ficha.c-duda .cab > span').click());
@@ -1117,41 +1091,29 @@ test('Proponer otro texto: P con la selección, el botón de la ficha, la difere
     await p.evaluate(() => document.activeElement && document.activeElement.classList.contains('sugerencia')),
     'P en una ficha activa abre su propuesta'
   );
-  await p.keyboard.press('Escape');
-  // al recargar, la propuesta sigue en la ficha
-  await p.reload();
-  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
-  const tras = await p.evaluate(() => {
-    const f = document.querySelector('.ficha.c-revisar');
-    return f && f.querySelector('.dif-propuesta') ? f.querySelector('.dif-propuesta').textContent : null;
-  });
-  check(tras === 'Un hecho es lo que se observóobservado', `la propuesta se conserva al recargar (${tras})`);
-  check(errores.length === 0, `sin errores de página al proponer${errores.length ? ': ' + errores.join(' | ') : ''}`);
-  await ctx.close();
+  sinErrores(p, 'al proponer desde la ficha');
 });
 
-// Lo que la revisión independiente de la 0.5 encontró en las fichas reutilizadas: cada caso falla sin su arreglo.
-test('Fichas reutilizadas: sin la posición del margen, con lo que muestran al día, notas medidas y «Copiar»', async ({
-  browser,
+// ------------------------------------------------------------ lo que la revisión de la 0.5 encontró en las fichas reutilizadas
+// Cada caso falla sin su arreglo.
+const tresGenerales = {
+  gA: general('gA', 'Nota gA', '2026-10-01T00:00:00.000Z', {
+    respuesta: '¿Qué quieres decir?',
+    cierre: 'pregunta',
+    respondido: '2026-10-02T00:00:00.000Z',
+  }),
+  gB: general('gB', 'Nota gB', '2026-10-01T00:01:00.000Z', {
+    respuesta: 'Hecho.',
+    cierre: 'atendida',
+    respondido: '2026-10-02T00:00:00.000Z',
+  }),
+  gC: general('gC', 'Nota gC', '2026-10-01T00:02:00.000Z'),
+};
+
+test('Fichas reutilizadas: sin la posición del margen en la lista, y revisadas aunque se haya salido de ellas', async ({
+  abrir,
 }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await ctx.addInitScript(() => {
-    const g = (id, extra, creado) =>
-      Object.assign({ id, tipo: 'general', nota: 'Nota ' + id, estado: 'abierta', creado, autor: 'u_me' }, extra);
-    const t = '2026-10-02T00:00:00.000Z';
-    window.__semilla = {
-      gA: g('gA', { respuesta: '¿Qué quieres decir?', cierre: 'pregunta', respondido: t }, '2026-10-01T00:00:00.000Z'),
-      gB: g('gB', { respuesta: 'Hecho.', cierre: 'atendida', respondido: t }, '2026-10-01T00:01:00.000Z'),
-      gC: g('gC', {}, '2026-10-01T00:02:00.000Z'),
-    };
-  });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  const errores = [];
-  p.on('pageerror', (e) => errores.push(String(e)));
-  await p.goto(base + '#cap-01');
-  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  const p = await abrir({ modo: 'con-base', semilla: tresGenerales });
   // 1. dibujadas al margen (pestaña «Sección») y reutilizadas en la lista («Todas»): sin el `top` del margen
   for (const [texto, tecla] of [
     ['Un hecho es lo que se observó', '1'],
@@ -1195,6 +1157,13 @@ test('Fichas reutilizadas: sin la posición del margen, con lo que muestran al d
     gA.revisada && gA.insignia === '✓ revisada' && !gA.atendida,
     `la pregunta contestada se redibuja revisada aunque se haya salido de su ficha (${JSON.stringify(gA)})`
   );
+  sinErrores(p, 'al reutilizar fichas del margen y de la bandeja');
+});
+
+test('Fichas reutilizadas: la nota cambiada en concentración se mide; «Copiar» dos veces vuelve a su texto', async ({
+  abrir,
+}) => {
+  const p = await abrir({ modo: 'con-base', semilla: tresGenerales, permisos: ['clipboard-read', 'clipboard-write'] });
   // 3. una nota que cambia mientras el panel no se ve (concentración) se mide al volver a verse
   await p.click('.tab[data-tab="todas"]');
   await p.click('#lectura');
@@ -1220,17 +1189,13 @@ test('Fichas reutilizadas: sin la posición del margen, con lo que muestran al d
     (await p.textContent('.ficha[data-id="gC"] [data-accion="copiar"]')) === 'Copiar',
     '«Copiar» vuelve a su texto tras dos pulsaciones seguidas'
   );
-  check(errores.length === 0, `sin errores de página${errores.length ? ': ' + errores.join(' | ') : ''}`);
-  await ctx.close();
+  sinErrores(p, 'al medir y copiar');
 });
 
-test('Fichas reutilizadas: el autor que se pone al subir aparece aunque se toque la ficha antes', async ({
-  browser,
-}) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(() => {
-    window.__retenerDb = true;
-    window.__semilla = {
+test('Fichas reutilizadas: el autor que se pone al subir aparece aunque se toque la ficha antes', async ({ abrir }) => {
+  const p = await abrir({
+    modo: 'con-base',
+    semilla: {
       o1: {
         id: 'o1',
         tipo: 'general',
@@ -1240,12 +1205,14 @@ test('Fichas reutilizadas: el autor que se pone al subir aparece aunque se toque
         autor: 'u_otro',
       },
       m1: { id: 'm1', tipo: 'general', nota: 'Mía', estado: 'abierta', creado: '2026-10-01T00:00:01Z', autor: 'u_me' },
-    };
+    },
+    previo: [
+      () => {
+        window.__retenerDb = true;
+      },
+    ],
+    esperar: 'bloques',
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
-  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   await seleccionarTexto(p, 'Un hecho es lo que se observó');
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -1258,51 +1225,52 @@ test('Fichas reutilizadas: el autor que se pone al subir aparece aunque se toque
   await p.evaluate(() => window.__cambioExterno('o1', { nota: 'De otra (editada)' }));
   const chip = await esperar(p, (id) => !!document.querySelector(`.ficha[data-id="${id}"] .autor`), id, 2000);
   check(chip, 'con dos lectores, la ficha subida al conectar lleva el nombre de quien la hizo');
-  await ctx.close();
 });
 
-test('Deshacer un cambio de color, de estado o una revisión', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(() => {
-    const t = '2026-10-02T00:00:00.000Z';
-    window.__semilla = {
-      gB: {
-        id: 'gB',
-        tipo: 'general',
-        nota: 'Nota gB',
-        estado: 'abierta',
-        creado: '2026-10-01T00:00:00.000Z',
-        autor: 'u_me',
+// ------------------------------------------------------------ deshacer
+// Con la base: un subrayado recién hecho y una respuesta por revisar.
+async function paraDeshacer(abrir) {
+  const p = await abrir({
+    modo: 'con-base',
+    semilla: {
+      gB: general('gB', 'Nota gB', '2026-10-01T00:00:00.000Z', {
         respuesta: 'Hecho.',
         cierre: 'atendida',
-        respondido: t,
-      },
-    };
+        respondido: '2026-10-02T00:00:00.000Z',
+      }),
+    },
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
-  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
   await seleccionarTexto(p, 'Un hecho es lo que se observó');
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
   const id = await p.evaluate(() => Object.keys(window.__docs).find((k) => k !== 'gB'));
-  const doc = () => p.evaluate((id) => window.__docs[id], id);
-  const zona = () => p.evaluate(() => document.querySelector('#deshacer-zona').textContent);
-  // el color
+  return {
+    p,
+    id,
+    doc: () => p.evaluate((id) => window.__docs[id], id),
+    zona: () => p.evaluate(() => document.querySelector('#deshacer-zona').textContent),
+  };
+}
+
+test('Deshacer un cambio de color o de estado', async ({ abrir }) => {
+  const { p, id, doc, zona } = await paraDeshacer(abrir);
   await enFicha(p, `.ficha[data-id="${id}"]`, 'button[data-c="cortar"]');
   check((await zona()) === 'Color: cortar.Deshacer', `cambiar el color ofrece deshacerlo (${await zona()})`);
   await p.click('#deshacer');
   await esperar(p, (id) => window.__docs[id].color === 'revisar', id, 2000);
   check((await doc()).color === 'revisar', 'deshacer vuelve al color de antes, también en la base');
   check((await zona()) === '', 'y el aviso se va');
-  // el estado
   await enFicha(p, `.ficha[data-id="${id}"]`, 'button[data-accion="estado"]');
   check((await zona()) === 'Marcada resuelta.Deshacer', `marcarla resuelta ofrece deshacerlo (${await zona()})`);
   await p.click('#deshacer');
   await esperar(p, (id) => window.__docs[id].estado === 'abierta', id, 2000);
   check((await doc()).estado === 'abierta', 'deshacer la vuelve a abrir');
-  // «Atendida» en la bandeja: deshacer la devuelve a «por revisar»
+});
+
+test('Deshacer «Atendida» la devuelve a la bandeja; un cambio después de un borrado reemplaza su aviso', async ({
+  abrir,
+}) => {
+  const { p, id, zona } = await paraDeshacer(abrir);
   await p.click('.tab[data-tab="revisar"]');
   await p.click('.ficha[data-id="gB"] .cab > span');
   await p.keyboard.press('a');
@@ -1316,12 +1284,10 @@ test('Deshacer un cambio de color, de estado o una revisión', async ({ browser 
   );
   check(vuelta, 'deshacer «Atendida» la deja otra vez por revisar, abierta');
   check((await p.evaluate(() => window.__docs.gB.revisado)) === '', 'sin la revisión que se deshizo');
-  // un cambio después de un borrado: el aviso nuevo reemplaza al del borrado
   await p.click('.tab[data-tab="todas"]');
   await enFicha(p, `.ficha[data-id="${id}"]`, 'button[data-accion="borrar"]');
   await p.click(`.ficha[data-id="${id}"] .confirmar button:has-text("Sí")`);
   check((await zona()) === 'Anotación borrada.Deshacer borrado', 'el borrado ofrece deshacerse');
   await enFicha(p, '.ficha[data-id="gB"]', 'button[data-accion="atendida"]');
   check((await zona()) === 'Atendida.Deshacer', 'un cambio posterior reemplaza el aviso del borrado');
-  await ctx.close();
 });

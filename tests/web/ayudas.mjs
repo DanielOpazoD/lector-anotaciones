@@ -92,7 +92,76 @@ export const test = base.extend({
     },
     { auto: true },
   ],
+  // La dirección de la página servida con el libro de ejemplo: un servidor por proceso de pruebas.
+  base: [
+    async ({}, use) => {
+      const srv = await servir();
+      await use(`http://127.0.0.1:${srv.address().port}/`);
+      await new Promise((r) => srv.close(r));
+    },
+    { scope: 'worker' },
+  ],
+  // `abrir(opciones)`: un contexto nuevo con la página abierta y lista; todos se cierran solos al terminar la prueba.
+  // La página trae su contexto (`p.context()`) para abrir otra pestaña o cambiar permisos. Opciones:
+  //   hash        dónde se abre ('#cap-01'); null: no navega (la prueba lo hace)
+  //   contexto    tamaño y lo demás de `browser.newContext` (ESCRITORIO; TELEFONO)
+  //   modo        'sin-base' (por omisión), 'con-base' (la base simulada) o 'ninguno' (la prueba pone `window.claude`)
+  //   semilla     anotaciones que la base simulada ya tiene al conectar
+  //   previo      guiones de inicio que corren antes que la base: funciones, o [función, argumento]
+  //   permisos    los que se conceden al contexto (portapapeles…)
+  //   preparar    `async (p) => …` antes de navegar: rutas, reloj, oyentes
+  //   esperar     'conectado' (por omisión con base), 'bloques' (sin ella) o null
+  abrir: async ({ browser, base }, use) => {
+    const abiertos = [];
+    await use(async (op = {}) => {
+      const ctx = await browser.newContext(op.contexto || ESCRITORIO);
+      abiertos.push(ctx);
+      if (op.permisos) await ctx.grantPermissions(op.permisos);
+      if (op.semilla)
+        await ctx.addInitScript((s) => {
+          window.__semilla = s;
+        }, op.semilla);
+      for (const g of op.previo || []) await (Array.isArray(g) ? ctx.addInitScript(g[0], g[1]) : ctx.addInitScript(g));
+      const modo = op.modo || 'sin-base';
+      if (modo !== 'ninguno') await ctx.addInitScript(modo === 'con-base' ? conBase : sinBase);
+      const p = await ctx.newPage();
+      // lo que la página deja escapar, para las pruebas que lo comprueban: errores sin capturar y errores de consola
+      p.errores = [];
+      p.consola = [];
+      p.on('pageerror', (e) => p.errores.push(String(e)));
+      p.on('console', (m) => {
+        if (m.type() === 'error') p.consola.push(m.text());
+      });
+      if (op.preparar) await op.preparar(p);
+      if (op.hash === null) return p;
+      await p.goto(base + (op.hash === undefined ? '#cap-01' : op.hash));
+      const espera = op.esperar !== undefined ? op.esperar : modo === 'con-base' ? 'conectado' : 'bloques';
+      if (espera === 'conectado') await conectado(p);
+      else if (espera === 'bloques') await p.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+      return p;
+    });
+    for (const c of abiertos) await c.close().catch(() => {});
+  },
 });
+export const ESCRITORIO = { viewport: { width: 1280, height: 900 } };
+export const TELEFONO = { viewport: { width: 400, height: 800 }, hasTouch: true };
+// Sin errores de página (ni de consola, con `consola`) en lo que la prueba hizo con `p`.
+export function sinErrores(p, que, { consola = false } = {}) {
+  const e = consola ? p.errores.concat(p.consola) : p.errores;
+  check(
+    e.length === 0,
+    `sin errores ${consola ? 'de consola' : 'de página'} ${que}${e.length ? ': ' + e.join(' | ') : ''}`
+  );
+}
+// Un clic que no detiene la prueba si el elemento no aparece en dos segundos: dice si ocurrió.
+export const tocar = (p, sel) =>
+  p.click(sel, { timeout: 2000 }).then(
+    () => true,
+    () => false
+  );
+// La base simulada ya conectó (y la página lo dice).
+export const conectado = (p) =>
+  p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
 export const LIBRO = process.env.LIBRO_JSON || path.join(RAIZ, 'ejemplo', 'salida', 'libro.json');
 const FIGS = process.env.FIGS_DIR || path.join(RAIZ, 'ejemplo', 'figs');
 const TIPOS = {
