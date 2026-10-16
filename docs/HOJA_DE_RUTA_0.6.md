@@ -68,5 +68,5 @@ dentro de una función guardada o de un `forEach`, llamar a una acción, leer `d
 módulo) y no con dos lecturas legítimas dentro de manejadores. De paso, las etiquetas de la nota se dibujan con una
 función pura y los selectores de lector y etiqueta se rehacen una vez por redibujo, no una por ficha. Prueba nueva: una
 ficha activa, dejada o con la propuesta abierta no se rehace en un redibujo, y la rehecha vuelve con el cuadro abierto;
-cae al quitar cualquiera de las cuatro llamadas a `vistaEnSitio`, y las pruebas existentes caen al vaciar `perfil`,
-`sinGuardar` o `revisada` de la vista. Las 64 pruebas de navegador pasan.
+cae al quitar cualquiera de las cuatro llamadas a `vistaEnSitio` o al vaciar `perfil` de la vista, y las pruebas
+existentes caen al vaciar `sinGuardar` o `revisada`. Las 64 pruebas de navegador pasan.
