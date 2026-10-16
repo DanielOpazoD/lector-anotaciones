@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2020",
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noUnusedLocals": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/lector_anotaciones/web/nucleo/*.js",
+    "src/lector_anotaciones/web/pagina/*.js",
+    "src/lector_anotaciones/web/tipos/*.d.ts"
+  ]
+}

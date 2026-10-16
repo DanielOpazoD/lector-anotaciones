@@ -133,7 +133,7 @@ function renderPanel() {
   // Si el autor está escribiendo una nota, el redibujo no debe quitarle el editor: se recuerda el
   // borrador, el foco y la selección, y se restauran sobre la ficha nueva.
   // Un botón se reconoce por su acción (y su color), no por su clase ni su texto, que cambian con el propio clic.
-  var act = document.activeElement,
+  var act = /** @type {HTMLTextAreaElement} */ (document.activeElement),
     foco = null,
     focoBoton = null;
   if (act && act.tagName === 'TEXTAREA' && act.id.indexOf('nota-') === 0)
@@ -215,7 +215,7 @@ function renderPanel() {
   // si el elemento enfocado sigue en la página (su ficha se reutilizó), no hay nada que restaurar
   if (act && act.isConnected && document.activeElement === act) foco = focoBoton = null;
   if (foco) {
-    var ta = document.getElementById(foco.id);
+    var ta = /** @type {HTMLTextAreaElement} */ (document.getElementById(foco.id));
     if (ta) {
       if (ta.value !== foco.valor) {
         ta.value = foco.valor;
@@ -591,7 +591,7 @@ function fichaEdicion(ctx) {
   var timer = null;
   var guardarNota = function () {
     if (anots[a.id] && ta.value !== anots[a.id].nota) {
-      guardarSilencioso(a.id, { nota: ta.value }, ta.id);
+      guardarSilencioso(a.id, { nota: ta.value });
       pintarEtiquetas(f, anots[a.id]);
     }
   };
@@ -648,7 +648,7 @@ function fichaEdicion(ctx) {
         parche.revisado = N.marcaRevision(vivo, ahora());
         if (V.tab === 'revisar') VISTA.revisada(a.id);
       }
-      guardarSilencioso(a.id, parche, rp.id);
+      guardarSilencioso(a.id, parche);
       if (parche.revisado) renderCuentaRevisar();
     };
     rp.addEventListener('input', function () {

@@ -6,7 +6,7 @@
   Object.keys(m).forEach(function (k) {
     N[k] = m[k];
   });
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   var INICIAL = {
     secActual: null,

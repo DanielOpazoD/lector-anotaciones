@@ -105,7 +105,7 @@ function arrancar() {
           }
           var ids = SINC.tomarPendientes(ME);
           if (!ids.length) return;
-          var escritas = {};
+          var escritas = /** @type {Record<string, Anotacion>} */ ({});
           Promise.all(
             ids.map(function (id) {
               escritas[id] = anots[id];

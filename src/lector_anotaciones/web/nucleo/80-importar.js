@@ -273,7 +273,7 @@
           var dentroImgs = n.getElementsByTagName ? n.getElementsByTagName('img') : [];
           if (dentroImgs.length && !textoLibre(n)) {
             soltar();
-            for (var q = 0; q < dentroImgs.length; q++) figura(dentroImgs[q], '');
+            for (var k = 0; k < dentroImgs.length; k++) figura(dentroImgs[k], '');
             return;
           }
           ctx.imagenes.enTexto += dentroImgs.length;
@@ -912,10 +912,10 @@
     archivos.forEach(function (a) {
       tipos[grupo(extension(a.nombre))] = 1;
     });
-    var tipo = Object.keys(tipos);
-    if (tipo.length > 1)
-      return Promise.reject(new Error('importa un solo tipo de archivo a la vez (' + tipo.join(', ') + ')'));
-    tipo = tipo[0];
+    var vistos = Object.keys(tipos);
+    if (vistos.length > 1)
+      return Promise.reject(new Error('importa un solo tipo de archivo a la vez (' + vistos.join(', ') + ')'));
+    var tipo = vistos[0];
     if ((tipo === 'epub' || tipo === 'docx' || tipo === 'json') && archivos.length > 1)
       return Promise.reject(new Error('importa un solo archivo .' + tipo + ' a la vez'));
     var trabajo;

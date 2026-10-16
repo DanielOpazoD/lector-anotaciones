@@ -178,7 +178,9 @@ $('#buscar').addEventListener('keydown', function (ev) {
 // Son cajones que se deslizan sobre el texto. Cerrados quedan fuera de la vista e inertes (fuera del orden de Tab y
 // del árbol de accesibilidad). Abierto uno, el resto de la página queda detrás de un velo: tocar fuera lo cierra, el
 // teclado no se escapa a lo que no se ve, y al cerrarlo el foco vuelve a donde estaba.
-var mqMovil = window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false };
+var mqMovil = /** @type {MediaQueryList} */ (
+  window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false }
+);
 var volverA = null;
 // Un destino de foco que de verdad se puede enfocar: en el documento, visible (no en una sección oculta ni en un panel
 // escondido por la concentración) y fuera de lo inerte.
@@ -446,7 +448,7 @@ function escapar() {
   salirDeFicha();
 }
 document.addEventListener('keydown', function (ev) {
-  var tg = ev.target || {},
+  var tg = /** @type {any} */ (ev.target || {}),
     tagName = tg.tagName || '';
   if ($('dialog[open]')) return; // el diálogo abierto atiende su propio Esc
   if (ev.key === 'Escape') {
@@ -501,7 +503,7 @@ document.addEventListener(
   true
 );
 document.addEventListener('click', function (ev) {
-  var t = ev.target,
+  var t = /** @type {Element} */ (ev.target),
     origen = pulsadoEn;
   pulsadoEn = null;
   if (!tb.contains(t)) {
@@ -523,7 +525,7 @@ document.addEventListener('click', function (ev) {
 });
 // Al salir de la página (recargar, cerrar, pasar a otra pestaña), la nota en edición se guarda sin esperar la pausa.
 var soltarNota = function () {
-  var a = document.activeElement;
+  var a = /** @type {HTMLElement} */ (document.activeElement);
   if (a && a.tagName === 'TEXTAREA' && a.closest('.ficha')) a.blur();
 };
 window.addEventListener('pagehide', soltarNota);

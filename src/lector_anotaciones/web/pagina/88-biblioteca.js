@@ -363,7 +363,8 @@ function abrirLibro(tipo, id) {
     return false;
   }
   estadoBib('Abriendo…');
-  if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); // guarda la nota en edición
+  var activo = /** @type {HTMLElement} */ (document.activeElement);
+  if (activo && activo.blur) activo.blur(); // guarda la nota en edición
   var inicio = Date.now();
   (function esperar() {
     var vuelo = Object.keys(SINC.enVuelo).filter(function (k) {
@@ -826,10 +827,13 @@ $('#biblioteca').addEventListener('click', function (ev) {
 $('#bib-elegir').addEventListener('click', function () {
   $('#bib-archivo').click();
 });
-$('#bib-archivo').addEventListener('change', function () {
-  prepararImportacion(this.files);
-  this.value = '';
-});
+$('#bib-archivo').addEventListener(
+  'change',
+  /** @this {HTMLInputElement} */ function () {
+    prepararImportacion(this.files);
+    this.value = '';
+  }
+);
 $('#bib-previa').addEventListener('submit', confirmarImportacion);
 $('#bib-cancelar').addEventListener('click', function () {
   PREVIA = null;

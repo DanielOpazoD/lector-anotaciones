@@ -189,13 +189,16 @@ $('#lectura').addEventListener(
   { passive: true }
 );
 // el foco no desplaza la lista al margen (eso desalinearía las fichas): se corrige y se desplaza el texto
-$('#lista').addEventListener('scroll', function () {
-  if (!$('.capa-margen', this) || !this.scrollTop) return;
-  this.scrollTop = 0;
-  var a = document.activeElement;
-  if (a && this.contains(a) && a !== this) asegurarVisible(a, false);
-  else if (V.fichaFoco) asegurarVisibleMargen(V.fichaFoco);
-});
+$('#lista').addEventListener(
+  'scroll',
+  /** @this {HTMLElement} */ function () {
+    if (!$('.capa-margen', this) || !this.scrollTop) return;
+    this.scrollTop = 0;
+    var a = document.activeElement;
+    if (a && this.contains(a) && a !== this) asegurarVisible(a, false);
+    else if (V.fichaFoco) asegurarVisibleMargen(V.fichaFoco);
+  }
+);
 // con el teclado, el control que recibe el foco (el cuadro de la respuesta, «Borrar»…) se ve aunque la ficha sea más
 // alta que la lista
 $('#lista').addEventListener('focusin', function (ev) {
@@ -205,9 +208,12 @@ $('#lista').addEventListener('focusin', function (ev) {
     if (document.activeElement === t && t.isConnected) asegurarVisible(t, false);
   });
 });
-$('#panel').addEventListener('scroll', function () {
-  if (this.classList.contains('margen') && this.scrollTop) this.scrollTop = 0;
-});
+$('#panel').addEventListener(
+  'scroll',
+  /** @this {HTMLElement} */ function () {
+    if (this.classList.contains('margen') && this.scrollTop) this.scrollTop = 0;
+  }
+);
 $('#lectura').addEventListener(
   'load',
   function (ev) {

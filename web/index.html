@@ -788,7 +788,7 @@
   Object.keys(m).forEach(function (k) {
     N[k] = m[k];
   });
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Una respuesta (de Claude o de quien edita las fuentes) está por revisar si es de una anotación propia —o sin autor,
   // como las de un navegador sin identidad— y el autor no revisó todavía esa respuesta. `respondido` lo escribe quien
@@ -1054,7 +1054,7 @@
   Object.keys(m).forEach(function (k) {
     N[k] = m[k];
   });
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // items: [{ id, y, h }] (y: altura del pasaje, h: alto de la ficha; y = null si no tiene pasaje a la vista). Como los
   // comentarios de un procesador de texto: cada ficha va a la altura de su pasaje; si choca con la anterior, baja. La
@@ -1126,7 +1126,7 @@
   Object.keys(m).forEach(function (k) {
     N[k] = m[k];
   });
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   var INICIAL = {
     secActual: null,
@@ -1783,7 +1783,7 @@
   Object.keys(m).forEach(function (k) {
     N[k] = m[k];
   });
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   var FIN_DIRECTORIO = 0x06054b50,
     ENTRADA_CENTRAL = 0x02014b50,
@@ -2138,7 +2138,7 @@
           var dentroImgs = n.getElementsByTagName ? n.getElementsByTagName('img') : [];
           if (dentroImgs.length && !textoLibre(n)) {
             soltar();
-            for (var q = 0; q < dentroImgs.length; q++) figura(dentroImgs[q], '');
+            for (var k = 0; k < dentroImgs.length; k++) figura(dentroImgs[k], '');
             return;
           }
           ctx.imagenes.enTexto += dentroImgs.length;
@@ -2777,10 +2777,10 @@
     archivos.forEach(function (a) {
       tipos[grupo(extension(a.nombre))] = 1;
     });
-    var tipo = Object.keys(tipos);
-    if (tipo.length > 1)
-      return Promise.reject(new Error('importa un solo tipo de archivo a la vez (' + tipo.join(', ') + ')'));
-    tipo = tipo[0];
+    var vistos = Object.keys(tipos);
+    if (vistos.length > 1)
+      return Promise.reject(new Error('importa un solo tipo de archivo a la vez (' + vistos.join(', ') + ')'));
+    var tipo = vistos[0];
     if ((tipo === 'epub' || tipo === 'docx' || tipo === 'json') && archivos.length > 1)
       return Promise.reject(new Error('importa un solo archivo .' + tipo + ' a la vez'));
     var trabajo;
@@ -2885,9 +2885,11 @@ var anots = SINC.anots;
 // «Por revisar» se vacía lo revisado) y avisa a quien escucha.
 var VISTA = N.crearVista();
 var V = VISTA.estado;
+/** @returns {any} */
 var $ = function (s, r) {
   return (r || document).querySelector(s);
 };
+/** @returns {any[]} */
 var $$ = function (s, r) {
   return Array.prototype.slice.call((r || document).querySelectorAll(s));
 };
@@ -3389,7 +3391,7 @@ function cargarLocal(filtro) {
     var anteriores = ((LIBRO && LIBRO.claves_anteriores) || []).filter(function (k) {
         return k !== LOCAL_KEY;
       }),
-      viejas = {};
+      viejas = /** @type {Record<string, Record<string, Anotacion>>} */ ({});
     anteriores.forEach(function (k) {
       try {
         viejas[k] = JSON.parse(lsGet(k) || '{}');
@@ -3945,7 +3947,7 @@ function renderPanel() {
   // Si el autor está escribiendo una nota, el redibujo no debe quitarle el editor: se recuerda el
   // borrador, el foco y la selección, y se restauran sobre la ficha nueva.
   // Un botón se reconoce por su acción (y su color), no por su clase ni su texto, que cambian con el propio clic.
-  var act = document.activeElement,
+  var act = /** @type {HTMLTextAreaElement} */ (document.activeElement),
     foco = null,
     focoBoton = null;
   if (act && act.tagName === 'TEXTAREA' && act.id.indexOf('nota-') === 0)
@@ -4027,7 +4029,7 @@ function renderPanel() {
   // si el elemento enfocado sigue en la página (su ficha se reutilizó), no hay nada que restaurar
   if (act && act.isConnected && document.activeElement === act) foco = focoBoton = null;
   if (foco) {
-    var ta = document.getElementById(foco.id);
+    var ta = /** @type {HTMLTextAreaElement} */ (document.getElementById(foco.id));
     if (ta) {
       if (ta.value !== foco.valor) {
         ta.value = foco.valor;
@@ -4403,7 +4405,7 @@ function fichaEdicion(ctx) {
   var timer = null;
   var guardarNota = function () {
     if (anots[a.id] && ta.value !== anots[a.id].nota) {
-      guardarSilencioso(a.id, { nota: ta.value }, ta.id);
+      guardarSilencioso(a.id, { nota: ta.value });
       pintarEtiquetas(f, anots[a.id]);
     }
   };
@@ -4460,7 +4462,7 @@ function fichaEdicion(ctx) {
         parche.revisado = N.marcaRevision(vivo, ahora());
         if (V.tab === 'revisar') VISTA.revisada(a.id);
       }
-      guardarSilencioso(a.id, parche, rp.id);
+      guardarSilencioso(a.id, parche);
       if (parche.revisado) renderCuentaRevisar();
     };
     rp.addEventListener('input', function () {
@@ -5021,13 +5023,16 @@ $('#lectura').addEventListener(
   { passive: true }
 );
 // el foco no desplaza la lista al margen (eso desalinearía las fichas): se corrige y se desplaza el texto
-$('#lista').addEventListener('scroll', function () {
-  if (!$('.capa-margen', this) || !this.scrollTop) return;
-  this.scrollTop = 0;
-  var a = document.activeElement;
-  if (a && this.contains(a) && a !== this) asegurarVisible(a, false);
-  else if (V.fichaFoco) asegurarVisibleMargen(V.fichaFoco);
-});
+$('#lista').addEventListener(
+  'scroll',
+  /** @this {HTMLElement} */ function () {
+    if (!$('.capa-margen', this) || !this.scrollTop) return;
+    this.scrollTop = 0;
+    var a = document.activeElement;
+    if (a && this.contains(a) && a !== this) asegurarVisible(a, false);
+    else if (V.fichaFoco) asegurarVisibleMargen(V.fichaFoco);
+  }
+);
 // con el teclado, el control que recibe el foco (el cuadro de la respuesta, «Borrar»…) se ve aunque la ficha sea más
 // alta que la lista
 $('#lista').addEventListener('focusin', function (ev) {
@@ -5037,9 +5042,12 @@ $('#lista').addEventListener('focusin', function (ev) {
     if (document.activeElement === t && t.isConnected) asegurarVisible(t, false);
   });
 });
-$('#panel').addEventListener('scroll', function () {
-  if (this.classList.contains('margen') && this.scrollTop) this.scrollTop = 0;
-});
+$('#panel').addEventListener(
+  'scroll',
+  /** @this {HTMLElement} */ function () {
+    if (this.classList.contains('margen') && this.scrollTop) this.scrollTop = 0;
+  }
+);
 $('#lectura').addEventListener(
   'load',
   function (ev) {
@@ -5576,7 +5584,9 @@ $('#buscar').addEventListener('keydown', function (ev) {
 // Son cajones que se deslizan sobre el texto. Cerrados quedan fuera de la vista e inertes (fuera del orden de Tab y
 // del árbol de accesibilidad). Abierto uno, el resto de la página queda detrás de un velo: tocar fuera lo cierra, el
 // teclado no se escapa a lo que no se ve, y al cerrarlo el foco vuelve a donde estaba.
-var mqMovil = window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false };
+var mqMovil = /** @type {MediaQueryList} */ (
+  window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false }
+);
 var volverA = null;
 // Un destino de foco que de verdad se puede enfocar: en el documento, visible (no en una sección oculta ni en un panel
 // escondido por la concentración) y fuera de lo inerte.
@@ -5844,7 +5854,7 @@ function escapar() {
   salirDeFicha();
 }
 document.addEventListener('keydown', function (ev) {
-  var tg = ev.target || {},
+  var tg = /** @type {any} */ (ev.target || {}),
     tagName = tg.tagName || '';
   if ($('dialog[open]')) return; // el diálogo abierto atiende su propio Esc
   if (ev.key === 'Escape') {
@@ -5899,7 +5909,7 @@ document.addEventListener(
   true
 );
 document.addEventListener('click', function (ev) {
-  var t = ev.target,
+  var t = /** @type {Element} */ (ev.target),
     origen = pulsadoEn;
   pulsadoEn = null;
   if (!tb.contains(t)) {
@@ -5921,7 +5931,7 @@ document.addEventListener('click', function (ev) {
 });
 // Al salir de la página (recargar, cerrar, pasar a otra pestaña), la nota en edición se guarda sin esperar la pausa.
 var soltarNota = function () {
-  var a = document.activeElement;
+  var a = /** @type {HTMLElement} */ (document.activeElement);
   if (a && a.tagName === 'TEXTAREA' && a.closest('.ficha')) a.blur();
 };
 window.addEventListener('pagehide', soltarNota);
@@ -6820,7 +6830,8 @@ function abrirLibro(tipo, id) {
     return false;
   }
   estadoBib('Abriendo…');
-  if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); // guarda la nota en edición
+  var activo = /** @type {HTMLElement} */ (document.activeElement);
+  if (activo && activo.blur) activo.blur(); // guarda la nota en edición
   var inicio = Date.now();
   (function esperar() {
     var vuelo = Object.keys(SINC.enVuelo).filter(function (k) {
@@ -7283,10 +7294,13 @@ $('#biblioteca').addEventListener('click', function (ev) {
 $('#bib-elegir').addEventListener('click', function () {
   $('#bib-archivo').click();
 });
-$('#bib-archivo').addEventListener('change', function () {
-  prepararImportacion(this.files);
-  this.value = '';
-});
+$('#bib-archivo').addEventListener(
+  'change',
+  /** @this {HTMLInputElement} */ function () {
+    prepararImportacion(this.files);
+    this.value = '';
+  }
+);
 $('#bib-previa').addEventListener('submit', confirmarImportacion);
 $('#bib-cancelar').addEventListener('click', function () {
   PREVIA = null;
@@ -7442,7 +7456,7 @@ function arrancar() {
           }
           var ids = SINC.tomarPendientes(ME);
           if (!ids.length) return;
-          var escritas = {};
+          var escritas = /** @type {Record<string, Anotacion>} */ ({});
           Promise.all(
             ids.map(function (id) {
               escritas[id] = anots[id];

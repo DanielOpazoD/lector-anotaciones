@@ -5,7 +5,7 @@
   Object.keys(m).forEach(function (k) {
     N[k] = m[k];
   });
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+})(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Una respuesta (de Claude o de quien edita las fuentes) está por revisar si es de una anotación propia —o sin autor,
   // como las de un navegador sin identidad— y el autor no revisó todavía esa respuesta. `respondido` lo escribe quien

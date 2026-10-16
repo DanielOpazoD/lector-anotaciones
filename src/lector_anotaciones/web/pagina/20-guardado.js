@@ -258,7 +258,7 @@ function cargarLocal(filtro) {
     var anteriores = ((LIBRO && LIBRO.claves_anteriores) || []).filter(function (k) {
         return k !== LOCAL_KEY;
       }),
-      viejas = {};
+      viejas = /** @type {Record<string, Record<string, Anotacion>>} */ ({});
     anteriores.forEach(function (k) {
       try {
         viejas[k] = JSON.parse(lsGet(k) || '{}');

@@ -6,9 +6,10 @@
   "scripts": {
     "test:js": "node --test 'tests/js/**/*.test.js'",
     "test:web": "playwright test",
-    "formato": "prettier --check 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js'",
-    "formatear": "prettier --write 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js'",
-    "estilos": "node tests/web/herramientas/comparar-estilos.mjs"
+    "formato": "prettier --check 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js' 'src/lector_anotaciones/web/tipos/*.d.ts'",
+    "formatear": "prettier --write 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js' 'src/lector_anotaciones/web/tipos/*.d.ts'",
+    "estilos": "node tests/web/herramientas/comparar-estilos.mjs",
+    "tipos": "tsc -p tsconfig.json"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

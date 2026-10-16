@@ -34,9 +34,11 @@ var anots = SINC.anots;
 // «Por revisar» se vacía lo revisado) y avisa a quien escucha.
 var VISTA = N.crearVista();
 var V = VISTA.estado;
+/** @returns {any} */
 var $ = function (s, r) {
   return (r || document).querySelector(s);
 };
+/** @returns {any[]} */
 var $$ = function (s, r) {
   return Array.prototype.slice.call((r || document).querySelectorAll(s));
 };

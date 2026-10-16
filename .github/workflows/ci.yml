@@ -78,6 +78,8 @@ jobs:
       - run: npm install
       # formato del JavaScript (Prettier, con la configuración de .prettierrc.json)
       - run: npm run formato
+      # tipos (JSDoc y tipos/globales.d.ts) con tsc --checkJs sobre el núcleo y la página
+      - run: npm run tipos
       # web/index.html se genera desde src/lector_anotaciones/web/: tiene que estar al día con sus fuentes
       - run: lector-anotaciones pagina --salida web/index.html --comprobar
       - name: Núcleo de la página (node --test)

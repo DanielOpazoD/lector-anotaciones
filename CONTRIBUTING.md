@@ -22,6 +22,7 @@ ruff check . && ruff format --check .
 pytest
 lector-anotaciones pagina --salida web/index.html --comprobar
 npm run formato              # Prettier sobre el JavaScript (npm run formatear lo corrige)
+npm run tipos                # tsc --checkJs: núcleo y página contra src/lector_anotaciones/web/tipos/globales.d.ts
 npm run test:js
 python -m tests.pdf_minimo ejemplo/fuentes --salida ejemplo/salida/libro.pdf
 lector-anotaciones construir ejemplo/fuentes --pdf ejemplo/salida/libro.pdf --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
@@ -37,6 +38,9 @@ y sigue con las demás comprobaciones; `LISTAR=1 npx playwright test` escribe to
 ## Reglas de la casa
 
 - Español en código, pruebas y documentación; nombres de funciones y variables en español, como el resto.
+- Lo que la página llama del núcleo, y la forma de una anotación, de la sincronía y de la vista, está tipado en
+  `src/lector_anotaciones/web/tipos/globales.d.ts` (no se empaqueta); `npm run tipos` lo revisa. Una función nueva del
+  núcleo que la página use se agrega ahí.
 - Los estilos van por capas (`@layer tokens, base, componentes, pantallas, preferencias`): lo del teléfono y las pantallas
   táctiles gana a los componentes, y las preferencias del sistema (movimiento reducido, alto contraste) a todo. Para
   reorganizar `estilos.css` sin cambiar lo que se ve, `npm run estilos -- antes.html despues.html` compara los estilos
