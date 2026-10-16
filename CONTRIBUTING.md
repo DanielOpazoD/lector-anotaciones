@@ -51,6 +51,22 @@ y sigue con las demás comprobaciones; `LISTAR=1 npx playwright test` escribe to
 después de recargar), para probar lo que pasa mientras conecta sin depender de un plazo. En la CI, un `test.only`
 olvidado es un error; lo que falla deja captura y traza en `test-results/`. `tests/pdf_minimo.py` escribe un PDF de texto plano, sin maquetador y siempre con los mismos bytes; `tests/fixtures/libro_min.pdf` sale de él (`python -m tests.pdf_minimo tests/fixtures/libro_min.md --salida tests/fixtures/libro_min.pdf`) y una prueba comprueba que sigue siendo el mismo. Las pruebas que leen un PDF de verdad se saltan si falta `poppler-utils`.
 
+### Verificar que las pruebas prueban
+
+Una prueba que pasa no dice que mire lo que afirma. `herramientas/mutar.py` rompe el código donde el fallo
+ocurriría, corre la sonda que debería notarlo y lo deja como estaba, pase lo que pase:
+
+```bash
+CHROMIUM=… python herramientas/mutar.py herramientas/mutantes/*.json      # unos 15 min; -k para unos pocos
+python herramientas/mutar.py --solo-comprobar herramientas/mutantes/*.json # ¿sigue entrando cada mutante?
+```
+
+`herramientas/mutantes/` reúne los casos de cada cambio que importa: `pagina.json` (pruebas del navegador),
+`dibujo.json` (la regla de que la ficha se dibuje sólo con la anotación y su vista) y `nucleo.json` (el núcleo contra
+su declaración). Cada caso dice qué protege y si debe caer; los que no deben caer son controles o mutantes
+equivalentes, anotados como tales. Al agregar una prueba por un fallo, agrega su mutante; si al cambiar el código
+un mutante deja de entrar, se actualiza o se retira diciendo por qué.
+
 ## Reglas de la casa
 
 - Español en código, pruebas y documentación; nombres de funciones y variables en español, como el resto.

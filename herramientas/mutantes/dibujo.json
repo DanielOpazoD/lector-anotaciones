@@ -1,0 +1,173 @@
+[
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "(v.foco ? ' foco' : '')",
+  "nuevo": "(P.V.fichaFoco === a.id ? ' foco' : '')",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "P.V"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "if (!v.soloLectura) {",
+  "nuevo": "if (!E.SOLO_LECTURA) {",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "E.SOLO_LECTURA"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "var s = P.N.propuesta(",
+  "nuevo": "var s = E.ME && P.N.propuesta(",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "E en función guardada"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "P.irAAnot(vigente(a));",
+  "nuevo": "P.irAAnot(vigente(a), E.SOLO_LECTURA);",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "no cae",
+  "que": "E en manejador (control)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    cursorAlFinal(null);",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "llamar a una acción"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "var pendiente = v.pendiente;",
+  "nuevo": "var pendiente = v.pendiente || !!document.activeElement;",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "document.activeElement"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "  P.abrirPropuesta = abrirPropuesta;\n",
+  "nuevo": "  P.abrirPropuesta = abrirPropuesta;\n  var CACHE = {};\n",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "variable del módulo"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "      v = ctx.v;\n    var cab",
+  "nuevo": "      v = ctx.v;\n    var titulo = P.etiqueta(vigente(a));\n    var cab",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H1: vigente al dibujar"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    function leer() {\n      return E.ME;\n    }\n    leer();",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H2: función declarada dentro"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    var poner = function () {\n      return E.ME;\n    };\n    [1].forEach(poner);",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H25: guardada pasada a forEach"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    'x'.replace(/x/, function () {\n      return E.ME;\n    });",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H7: callback de replace"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    Array.from([1], function () {\n      return E.ME;\n    });",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H7: Array.from"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    var est = E;",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "alias de E"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    var x = E['ME'];",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "E['ME']"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "    var ctx = { a: a, v: v };",
+  "nuevo": "    var ctx = { a: a, v: v };\n    var x = this;",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "this"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "  function difRecortada(antes, ahora) {",
+  "nuevo": "  function difRecortada(antes, ahora, f) {\n    if (f) f();",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "llamar a un parámetro"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/75-lectores.js",
+  "viejo": "      var b = P.el('button', { type: 'button', text: '#' + t, title: 'Filtrar por #' + t });",
+  "nuevo": "      var b = P.el('button', { type: 'button', text: '#' + t, title: 'Filtrar por #' + t, 'aria-pressed': String(P.V.filtroEtiqueta === t) });",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H10: un puro que lee estado"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/75-lectores.js",
+  "viejo": "      P.el('span', { text: (perfil && perfil.name) || (yo ? 'yo' : 'otro lector') }),",
+  "nuevo": "      P.el('span', { text: (perfil && perfil.name) || (yo ? 'yo' : E.USER ? 'otro' : 'otro lector') }),",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "cae",
+  "que": "H10: chipAutor lee E.USER"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/75-lectores.js",
+  "viejo": "        P.VISTA.cambiar({ filtroEtiqueta: t });",
+  "nuevo": "        P.VISTA.cambiar({ filtroEtiqueta: t, x: E.ME });",
+  "sonda": "modulos",
+  "mensaje": "anotación, vista",
+  "espera": "no cae",
+  "que": "manejador de un puro (control)"
+ }
+]

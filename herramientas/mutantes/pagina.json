@@ -1,0 +1,262 @@
+[
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/50-panel.js",
+  "viejo": "    vistaEnSitio(antes, { foco: false });",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "Activar, dejar y abrir la propuesta",
+  "espera": "cae",
+  "que": "dejar una ficha la marca inactiva sin rehacerla (50-panel)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/70-interfaz.js",
+  "viejo": "    P.vistaEnSitio(antes, { foco: false });",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "Activar, dejar y abrir la propuesta",
+  "espera": "cae",
+  "que": "cambiar de ficha activa deja la anterior sin rehacerla (70-interfaz)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "#sel-tb.abajo { left: 50% !important; right: auto;",
+  "nuevo": "#sel-tb.abajo { left: 90% !important; right: auto;",
+  "sonda": "web",
+  "pruebas": "S19 barra",
+  "espera": "cae",
+  "que": "la barra de subrayado del teléfono no se sale de la pantalla (corrida a la derecha)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/90-arranque.js",
+  "viejo": "P.retirarDeshacer(ch.id, true)",
+  "nuevo": "P.retirarDeshacer(ch.id, false)",
+  "sonda": "web",
+  "pruebas": "Deshacer un borrado: el enlace",
+  "espera": "cae",
+  "que": "el aviso de «Deshacer» de un borrado se retira cuando el eco de la base lo confirma"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "    } catch (e) {\n      P.fallo('historial', e);\n    }",
+  "nuevo": "    } catch (e) {}",
+  "sonda": "web",
+  "pruebas": "Copiar diagnóstico",
+  "espera": "cae",
+  "que": "un fallo del historial queda en el diagnóstico, no callado"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/80-importar.js",
+  "viejo": "          if (!id) return;",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "fantasma",
+  "espera": "no cae",
+  "que": "equivalente: sin esta guarda, la de idref (|| '') sigue evitando el capítulo fantasma"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/80-importar.js",
+  "cambios": [
+   [
+    "          if (!id) return;\n",
+    ""
+   ],
+   [
+    "manifiesto[r.getAttribute('idref') || '']",
+    "manifiesto[String(r.getAttribute('idref'))]"
+   ]
+  ],
+  "sonda": "web",
+  "pruebas": "fantasma",
+  "espera": "cae",
+  "que": "sin las dos guardas (ítem sin id, referencia sin idref) un EPUB mal formado suma un capítulo fantasma"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/50-panel.js",
+  "viejo": "    if (c && c.a === a && c.firma === firma) return { nodo: c.nodo, nueva: false };",
+  "nuevo": "    if (c && (c.a === a || c.vista.propuestaAbierta) && c.firma === firma) return { nodo: c.nodo, nueva: false };",
+  "sonda": "web",
+  "pruebas": "Activar, dejar y abrir la propuesta",
+  "espera": "cae",
+  "que": "la ficha cacheada se reutiliza sólo si su firma (anotación y vista) es la misma"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/50-panel.js",
+  "viejo": "        return P.etiquetasDe(a).indexOf(P.V.filtroEtiqueta) >= 0;",
+  "nuevo": "        return P.etiquetasDe(a).indexOf(P.V.filtroEtiqueta) >= 0 || true;",
+  "sonda": "web",
+  "pruebas": "#etiquetas de la nota",
+  "espera": "cae",
+  "que": "el filtro por #etiqueta deja sólo las anotaciones que la llevan"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/90-arranque.js",
+  "viejo": "              return { tipo: ch.type, id: ch.doc.id, datos: datos };",
+  "nuevo": "              return { tipo: ch.type, id: ch.doc.id, datos: mal ? null : datos };",
+  "sonda": "web",
+  "pruebas": "no se pisa con una copia local",
+  "espera": "cae",
+  "que": "lo que llega de la base entra tal cual: una copia local más vieja no lo pisa"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/52-ficha.js",
+  "viejo": "      var cita = P.N.comoTexto(a.cita);",
+  "nuevo": "      var cita = a.cita;",
+  "sonda": "web",
+  "pruebas": "Documentos raros de la base",
+  "espera": "cae",
+  "que": "una cita que no es texto se muestra sin romper la ficha"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/00-base.js",
+  "viejo": "    if (e && e.name === 'SyntaxError') error = 'SyntaxError (sin su mensaje, que puede citar lo leído)';",
+  "nuevo": "    if (false) error = '';",
+  "sonda": "web",
+  "pruebas": "texto de una nota",
+  "espera": "cae",
+  "que": "un SyntaxError llega al diagnóstico sin su mensaje (podría traer texto de una nota)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "max-width: calc(100vw - 16px); flex-wrap: wrap;",
+  "nuevo": "flex-wrap: nowrap;",
+  "sonda": "web",
+  "pruebas": "S19 barra",
+  "espera": "cae",
+  "que": "la barra de subrayado del teléfono no se sale de la pantalla"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "    #sel-tb.abajo .col-btn { width: 40px; height: 40px; }",
+  "nuevo": "    #sel-tb.abajo .col-btn { width: 32px; height: 32px; }",
+  "sonda": "web",
+  "pruebas": "S19 barra",
+  "espera": "cae",
+  "que": "los botones de color de la barra del teléfono miden 40 px"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "overflow: auto; overscroll-behavior: contain; scroll-padding-block",
+  "nuevo": "scroll-padding-block",
+  "sonda": "web",
+  "pruebas": "se recorre hasta la última en escritorio",
+  "espera": "cae",
+  "que": "el índice se desplaza solo hasta el final, sin mover la página (escritorio)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "overflow: auto; overscroll-behavior: contain; scroll-padding-block",
+  "nuevo": "scroll-padding-block",
+  "sonda": "web",
+  "pruebas": "se recorre hasta la última en el teléfono",
+  "espera": "cae",
+  "que": "el índice se desplaza solo hasta el final, sin mover la página (teléfono)"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "    nav.indice { scroll-padding-top: calc(max(12px, env(safe-area-inset-top, 0px)) + 56px); }\n",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "se recorre hasta la última en el teléfono",
+  "espera": "cae",
+  "que": "la cabecera fija del cajón no tapa la entrada a la que se llega"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "min-height: 0; }\n  /* El índice",
+  "nuevo": "}\n  /* El índice",
+  "sonda": "web",
+  "pruebas": "se recorre hasta la última en escritorio",
+  "espera": "no cae",
+  "que": "equivalente: la fila minmax(0, 1fr) de #app ya acota la altura del índice"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "    if (oculta) plegarParte(oculta.parentNode.getAttribute('data-parte'), false);\n",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "Una parte se pliega",
+  "espera": "cae",
+  "que": "llegar a un capítulo de una parte plegada la despliega"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "    P.lsSet(E.LOCAL_KEY + ':plegadas', JSON.stringify(PLEGADAS));\n",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "Una parte se pliega",
+  "espera": "cae",
+  "que": "lo plegado se recuerda al volver a abrir la página"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "    P.$('.capitulos', g).hidden = plegada;",
+  "nuevo": "    P.$('.capitulos', g).hidden = false;",
+  "sonda": "web",
+  "pruebas": "Una parte se pliega",
+  "espera": "cae",
+  "que": "plegar oculta los capítulos de la parte"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/54-revisar.js",
+  "viejo": "      if (n) {\n        if (!c) {\n          c = P.el",
+  "nuevo": "      if (false) {\n        if (!c) {\n          c = P.el",
+  "sonda": "web",
+  "pruebas": "Una parte se pliega",
+  "espera": "cae",
+  "que": "la cabecera de una parte plegada cuenta sus anotaciones"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "  nav .parte:not(.plegada) button.grupo .cuenta { display: none; }\n",
+  "nuevo": "",
+  "sonda": "web",
+  "pruebas": "Una parte se pliega",
+  "espera": "cae",
+  "que": "la cuenta de la cabecera sólo se ve con la parte plegada"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "        var plegar = P.$$('nav .parte').some(",
+  "nuevo": "        var plegar = true || P.$$('nav .parte').some(",
+  "sonda": "web",
+  "pruebas": "Plegar todas las partes",
+  "espera": "cae",
+  "que": "«Plegar todas» despliega todas cuando ya están plegadas"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "    P.lsSet(E.LOCAL_KEY + ':plegadas', JSON.stringify(PLEGADAS));\n    rotularTodas();",
+  "nuevo": "    P.lsSet(E.LOCAL_KEY + ':plegadas', JSON.stringify(PLEGADAS));",
+  "sonda": "web",
+  "pruebas": "Plegar todas las partes",
+  "espera": "cae",
+  "que": "el rótulo de «Plegar/Desplegar todas» sigue al estado"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/10-libro.js",
+  "viejo": "      if (s.nivel === 1 && sig && (sig.nivel || 0) > 1) {",
+  "nuevo": "      if (s.nivel === 1) {",
+  "sonda": "web",
+  "pruebas": "Una parte se pliega",
+  "espera": "cae",
+  "que": "sólo las partes (nivel 1 con capítulos) llevan cabecera plegable"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/estilos.css",
+  "viejo": "  nav .indice-herr { display: flex; justify-content: flex-end; padding: 0 8px 2px; font-size: 12px; }",
+  "nuevo": "  nav .indice-herr { display: flex; justify-content: flex-end; padding: 0 8px 2px; font-size: 13px; }",
+  "sonda": "web",
+  "pruebas": "índice|Una parte se pliega|Plegar todas",
+  "espera": "no cae",
+  "que": "control: un cambio de tamaño de letra no rompe nada"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/pagina/70-interfaz.js",
+  "viejo": "var dentro = cual === 'indice' ? entradaActiva(n) : P.$('.tab.activa', n);",
+  "nuevo": "var dentro = cual === 'indice' ? P.$('a.sec.activa', n) || P.$('a.sec', n) : P.$('.tab.activa', n);",
+  "sonda": "web",
+  "pruebas": "se recorre hasta la última en el teléfono",
+  "espera": "cae",
+  "que": "al abrir el índice con la parte de la activa plegada, el foco va a su cabecera"
+ }
+]

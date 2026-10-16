@@ -1,0 +1,42 @@
+[
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/65-sincronia.js",
+  "viejo": "  /** @param {string} [codigo] */\n  function esTransitorio(codigo) {",
+  "nuevo": "  /** @param {string} codigo */\n  function esTransitorio(codigo) {\n    codigo.toLowerCase();",
+  "sonda": "nucleo",
+  "espera": "cae",
+  "que": "parámetro que deja de ser opcional"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/45-revision.js",
+  "viejo": "    porRevisar: porRevisar,",
+  "nuevo": "",
+  "sonda": "nucleo",
+  "espera": "cae",
+  "que": "quitar una función"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/45-revision.js",
+  "viejo": "    porRevisar: porRevisar,",
+  "nuevo": "    porRevisr: porRevisar,",
+  "sonda": "nucleo",
+  "espera": "cae",
+  "que": "nombre mal escrito"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/45-revision.js",
+  "viejo": "    porRevisar: porRevisar,",
+  "nuevo": "    porRevisar: porRevisar,\n    otra: porRevisar,",
+  "sonda": "nucleo",
+  "espera": "cae",
+  "que": "una de más"
+ },
+ {
+  "archivo": "src/lector_anotaciones/web/nucleo/45-revision.js",
+  "viejo": "  /** @param {Anotacion} a */\n  function reabierta(a) {",
+  "nuevo": "  /** @param {Anotacion} a */\n  function reabierta(a) {\n    if (a) return 'si';",
+  "sonda": "nucleo",
+  "espera": "cae",
+  "que": "tipo de retorno distinto"
+ }
+]
