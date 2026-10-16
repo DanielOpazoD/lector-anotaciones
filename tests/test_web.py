@@ -23,8 +23,8 @@ def test_contratos_con_el_resto_del_sistema(web_index: Path):
     html = _codigo(web_index)
     assert "fetch('libro.json')" in html, "lee el libro generado por `construir`"
     # el libro de la página guarda en «anotaciones» (lo que lee `exportar` y Claude); uno importado, en libros/<id>/…
-    assert "collection(rutaBase('anotaciones'))" in html, "la colección que lee `exportar` y Claude"
-    assert "FUENTE.tipo === 'base' ? 'libros/' + FUENTE.id + '/' + nombre : nombre" in html
+    assert "collection(P.rutaBase('anotaciones'))" in html, "la colección que lee `exportar` y Claude"
+    assert "E.FUENTE.tipo === 'base' ? 'libros/' + E.FUENTE.id + '/' + nombre : nombre" in html
     assert "window.claude.use('db')" in html
     assert "'lector-anotaciones:' + (id || 'libro')" in html, "el respaldo local se separa por libro"
     assert "'lector-anotaciones:' + tipo + ':' + id" in html, "y el de un libro importado lleva su lugar"
@@ -46,7 +46,9 @@ def test_los_subrayados_se_comprueban_antes_de_pintarse(web_index: Path):
     assert "function ubicar(" in html and "function reubicarTodo(" in html
     for estado in ("'exacto'", "'reubicado'", "'perdido'"):
         assert estado in html
-    assert "libro: LIBRO ? LIBRO.generado : null" in html, "cada anotación registra con qué versión del libro se hizo"
+    assert "libro: E.LIBRO ? E.LIBRO.generado : null" in html, (
+        "cada anotación registra con qué versión del libro se hizo"
+    )
 
 
 def test_migra_las_anotaciones_de_claves_anteriores(web_index: Path):
@@ -59,6 +61,6 @@ def test_migra_las_anotaciones_de_claves_anteriores(web_index: Path):
 def test_el_panel_conserva_el_editor_activo(web_index: Path):
     html = _codigo(web_index)
     assert "document.activeElement" in html and "setSelectionRange" in html
-    assert "if (cambio) { pintarTodo(); renderPanel(); renderCuentas(); }" in html, (
+    assert "if (cambio) { P.pintarTodo(); P.renderPanel(); P.renderCuentas(); }" in html, (
         "el eco de un guardado propio no redibuja"
     )
