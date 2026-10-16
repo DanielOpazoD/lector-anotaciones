@@ -1,30 +1,16 @@
 // La ficha es función de (anotación, vista): lo que se le cambia en el sitio (activarla, dejarla, abrir el cuadro de la
 // propuesta) pasa por `vistaEnSitio` y un redibujo la reutiliza tal cual; lo que cambia su vista la rehace.
-import { servir, check, esperar, conBase, seleccionarTexto, test } from './ayudas.mjs';
-
-let srv, base;
-test.beforeAll(async () => {
-  srv = await servir();
-  base = `http://127.0.0.1:${srv.address().port}/`;
-});
-test.afterAll(() => srv.close());
+import { check, esperar, seleccionarTexto, test } from './ayudas.mjs';
 
 const g = (id, autor, creado) => ({ id, tipo: 'general', nota: 'Nota ' + id, estado: 'abierta', creado, autor });
 
 test('Activar, dejar y abrir la propuesta no rehacen la ficha; un redibujo la reutiliza con lo que muestra', async ({
-  browser,
+  abrir,
 }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(
-    (semilla) => {
-      window.__semilla = semilla;
-    },
-    { g1: g('g1', 'u_me', '2026-10-01T00:00:00Z'), g2: g('g2', 'u_otro', '2026-10-01T00:01:00Z') }
-  );
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
-  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  const p = await abrir({
+    modo: 'con-base',
+    semilla: { g1: g('g1', 'u_me', '2026-10-01T00:00:00Z'), g2: g('g2', 'u_otro', '2026-10-01T00:01:00Z') },
+  });
   await seleccionarTexto(p, 'Un hecho es lo que se observó');
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -76,5 +62,4 @@ test('Activar, dejar y abrir la propuesta no rehacen la ficha; un redibujo la re
     await p.evaluate((s) => !!document.querySelector(`.ficha[data-id="${s}"] textarea.sugerencia`), s),
     'rehecha por un cambio suyo, la ficha vuelve con el cuadro de la propuesta abierto'
   );
-  await ctx.close();
 });

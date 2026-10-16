@@ -1,29 +1,13 @@
 // Lo que la medición de cobertura de la 0.6 encontró sin ninguna prueba: recorrer secciones, abrir un resultado de la
 // búsqueda, la copia en Markdown de las notas que no son subrayados, el aviso de «Deshacer» que se va solo y una
 // selección que empieza en el título de la sección.
-import { servir, check, esperar, sinBase, pulsar, enFicha, seleccionarTexto, CLAVE_LOCAL, test } from './ayudas.mjs';
+import { check, esperar, pulsar, enFicha, seleccionarTexto, CLAVE_LOCAL, test } from './ayudas.mjs';
 
-let srv, base;
-test.beforeAll(async () => {
-  srv = await servir();
-  base = `http://127.0.0.1:${srv.address().port}/`;
-});
-test.afterAll(() => srv.close());
-
-const abrir = async (browser, hash = '#cap-01', antes) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const p = await ctx.newPage();
-  if (antes) await antes(p);
-  await p.goto(base + hash);
-  await p.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
-  return { ctx, p };
-};
+const PORTAPAPELES = ['clipboard-read', 'clipboard-write'];
 const visible = (p) => p.evaluate(() => document.querySelector('article.seccion:not([hidden])').id);
 
-test('Recorrer las secciones con J y K y con ‹ ›, sin pasar de los extremos', async ({ browser }) => {
-  const { ctx, p } = await abrir(browser);
+test('Recorrer las secciones con J y K y con ‹ ›, sin pasar de los extremos', async ({ abrir }) => {
+  const p = await abrir({ permisos: PORTAPAPELES });
   await p.focus('#lectura');
   await p.keyboard.press('j');
   await esperar(p, () => document.querySelector('article.seccion:not([hidden])').id === 'sec-cap-02');
@@ -33,8 +17,10 @@ test('Recorrer las secciones con J y K y con ‹ ›, sin pasar de los extremos'
   check((await visible(p)) === 'sec-cap-01', 'K vuelve a la anterior');
   await p.click('#sig');
   check((await visible(p)) === 'sec-cap-02', '‹ › hacen lo mismo con el ratón');
-  await p.goto(base + '#glosario');
-  await p.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await p.evaluate(() => {
+    location.hash = '#glosario';
+  });
+  await esperar(p, () => document.querySelector('article.seccion:not([hidden])').id === 'sec-glosario');
   const fin = await p.evaluate(() => ({
     sig: document.querySelector('#sig').disabled,
     ant: document.querySelector('#ant').disabled,
@@ -42,11 +28,10 @@ test('Recorrer las secciones con J y K y con ‹ ›, sin pasar de los extremos'
   await p.focus('#lectura');
   await p.keyboard.press('j');
   check(fin.sig && !fin.ant && (await visible(p)) === 'sec-glosario', 'en la última sección, «siguiente» no hace nada');
-  await ctx.close();
 });
 
-test('Un resultado de la búsqueda en el libro lleva al pasaje, con el foco en él', async ({ browser }) => {
-  const { ctx, p } = await abrir(browser, '#prefacio');
+test('Un resultado de la búsqueda en el libro lleva al pasaje, con el foco en él', async ({ abrir }) => {
+  const p = await abrir({ hash: '#prefacio' });
   await p.fill('#buscar', 'escrita con prisa');
   await p.press('#buscar', 'Enter');
   await p.waitForSelector('#lista .res:not(.anot)');
@@ -59,11 +44,10 @@ test('Un resultado de la búsqueda en el libro lleva al pasaje, con el foco en �
     r.seccion === 'sec-cap-01' && r.foco === 'cap-01-b1',
     `el resultado abre la sección y enfoca el párrafo (${JSON.stringify(r)})`
   );
-  await ctx.close();
 });
 
-test('«Copiar todo (Markdown)» lleva las notas de sección y generales', async ({ browser }) => {
-  const { ctx, p } = await abrir(browser);
+test('«Copiar todo (Markdown)» lleva las notas de sección y generales', async ({ abrir }) => {
+  const p = await abrir({ permisos: PORTAPAPELES });
   await pulsar(p, '#b-nota-cap');
   await p.keyboard.type('Falta un ejemplo en la sección');
   await p.keyboard.press('Escape');
@@ -75,11 +59,10 @@ test('«Copiar todo (Markdown)» lleva las notas de sección y generales', async
   const md = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
   check(md.includes('- [capitulo] Falta un ejemplo en la sección'), 'la nota de sección, con su tipo');
   check(md.includes('- [general, resuelta] Revisar el título'), 'la general, con su estado');
-  await ctx.close();
 });
 
-test('El aviso de «Deshacer» se va solo a los ocho segundos y devuelve el foco', async ({ browser }) => {
-  const { ctx, p } = await abrir(browser, '#cap-01', (p) => p.clock.install());
+test('El aviso de «Deshacer» se va solo a los ocho segundos y devuelve el foco', async ({ abrir }) => {
+  const p = await abrir({ preparar: (p) => p.clock.install() });
   await seleccionarTexto(p, 'Un hecho es lo que se observó');
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -96,13 +79,12 @@ test('El aviso de «Deshacer» se va solo a los ocho segundos y devuelve el foco
     r.zona === '' && r.foco !== '' && r.foco !== 'deshacer',
     `a los ocho se va y el foco no se pierde (${JSON.stringify(r)})`
   );
-  await ctx.close();
 });
 
 test('Una selección que empieza en el título de la sección subraya desde el principio del párrafo', async ({
-  browser,
+  abrir,
 }) => {
-  const { ctx, p } = await abrir(browser);
+  const p = await abrir();
   await p.evaluate(() => {
     const art = document.querySelector('article.seccion:not([hidden])');
     const titulo = art.querySelector('h1.sec-titulo').firstChild;
@@ -125,5 +107,4 @@ test('Una selección que empieza en el título de la sección subraya desde el p
     a && a.pid === 'cap-01-b1' && a.inicio === 0 && a.cita === 'Un hecho',
     `el subrayado empieza en el párrafo, no en el título (${JSON.stringify(a && { pid: a.pid, inicio: a.inicio, cita: a.cita })})`
   );
-  await ctx.close();
 });

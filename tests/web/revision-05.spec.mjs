@@ -1,27 +1,14 @@
 // La revisión independiente de lo funcional de la 0.5 (propuestas, marcas de párrafo, deshacer): cada prueba falló
 // con el defecto que nombra y pasa con su arreglo; las que ya pasaban fijan lo que la revisión encontró sano.
-import { servir, esperar, conBase, sinBase, seleccionarTexto, enFicha, test } from './ayudas.mjs';
 import { expect } from '@playwright/test';
 
-let srv, base;
-test.beforeAll(async () => {
-  srv = await servir();
-  base = `http://127.0.0.1:${srv.address().port}/`;
-});
-test.afterAll(() => srv.close());
+import { esperar, seleccionarTexto, enFicha, libroAlterado, paginar, CLAVE_LOCAL, TELEFONO, test } from './ayudas.mjs';
 
 const CITA = 'Un hecho es lo que se observó';
-const conectar = async (p) => {
-  await p.goto(base + '#cap-01');
-  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
-};
 const idDe = (p, cita) => p.evaluate((c) => Object.keys(window.__docs).find((k) => window.__docs[k].cita === c), cita);
 
-test('S1 la propuesta llega a la base (update con sugerencia)', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S1 la propuesta llega a la base (update con sugerencia)', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   // flujo 1: P con la selección
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('p');
@@ -63,14 +50,10 @@ test('S1 la propuesta llega a la base (update con sugerencia)', async ({ browser
   );
   expect.soft(r1.base, 'P: la base tiene la propuesta').toBe('Un hecho es lo observado');
   expect.soft(r2.base, '«Proponer texto»: la base tiene la propuesta').toBe('escrita sin prisa');
-  await ctx.close();
 });
 
-test('S2 la diferencia sigue al cuadro que un redibujo repone', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S2 la diferencia sigue al cuadro que un redibujo repone', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   // aislar este defecto del de S1: se añade `sugerencia` a los campos del lector en tiempo de ejecución
   await p.evaluate(() => window.LANucleo.CAMPOS_LECTOR.push('sugerencia'));
   await seleccionarTexto(p, CITA);
@@ -101,14 +84,10 @@ test('S2 la diferencia sigue al cuadro que un redibujo repone', async ({ browser
   );
   expect.soft(tras.dif, 'la diferencia muestra lo que está en el cuadro').not.toBe('Igual a la cita');
   expect.soft(reposo.ins.join('|'), 'en reposo la ficha muestra la propuesta guardada').toContain('medido');
-  await ctx.close();
 });
 
-test('S3 el cuadro abierto con «Proponer texto» sobrevive a un redibujo y conserva el foco', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S3 el cuadro abierto con «Proponer texto» sobrevive a un redibujo y conserva el foco', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   await p.evaluate(() => window.LANucleo.CAMPOS_LECTOR.push('sugerencia')); // aislar de S1
   await seleccionarTexto(p, 'escrita con prisa');
   await p.keyboard.press('3');
@@ -141,15 +120,15 @@ test('S3 el cuadro abierto con «Proponer texto» sobrevive a un redibujo y cons
   expect.soft(tras.cuadro, 'el cuadro sigue en la ficha').toBe(true);
   expect.soft(tras.activo, 'el foco sigue en el cuadro').toContain('sugerencia');
   expect.soft(despues, '«j» no cambia de sección').toBe(tras.hash);
-  await ctx.close();
 });
 
 test('S4 la marca de párrafo lleva el punto «por revisar» con la base (pintada antes de conocer al usuario)', async ({
-  browser,
+  abrir,
 }) => {
-  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
-  await ctx.addInitScript(() => {
-    window.__semilla = {
+  const p = await abrir({
+    contexto: TELEFONO,
+    modo: 'con-base',
+    semilla: {
       s1: {
         id: 's1',
         tipo: 'subrayado',
@@ -171,11 +150,8 @@ test('S4 la marca de párrafo lleva el punto «por revisar» con la base (pintad
         cierre: 'atendida',
         respondido: '2026-10-02T00:00:00.000Z',
       },
-    };
+    },
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
   await p.waitForTimeout(300);
   const r = await p.evaluate(() => {
     const m = document.querySelector('[data-pid="cap-01-b1"] .marca-anot');
@@ -187,14 +163,10 @@ test('S4 la marca de párrafo lleva el punto «por revisar» con la base (pintad
   });
   expect.soft(r.cuenta, 'la página la cuenta por revisar').toBe('1');
   expect.soft(r.marca, 'la marca lleva el punto').toContain('por-revisar');
-  await ctx.close();
 });
 
-test('S5 tras un rechazo que ya devolvió el color no se ofrece deshacer', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S5 tras un rechazo que ya devolvió el color no se ofrece deshacer', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -212,33 +184,25 @@ test('S5 tras un rechazo que ya devolvió el color no se ofrece deshacer', async
     id
   );
   expect.soft(r.zona, 'tras el rechazo no se ofrece deshacer un cambio que no ocurrió').toBe('');
-  await ctx.close();
 });
 
-test('S6 deshacer no escribe estado null cuando no había estado', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(() => {
-    window.__semilla = {
+test('S6 deshacer no escribe estado null cuando no había estado', async ({ abrir }) => {
+  const p = await abrir({
+    modo: 'con-base',
+    semilla: {
       g1: { id: 'g1', tipo: 'general', nota: 'Sin estado', creado: '2026-10-01T00:00:00.000Z', autor: 'u_me' },
-    };
+    },
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
   await p.click('.tab[data-tab="todas"]');
   await enFicha(p, '.ficha[data-id="g1"]', 'button[data-accion="estado"]');
   await p.click('#deshacer');
   await p.waitForTimeout(400);
   const d = await p.evaluate(() => JSON.stringify(window.__docs.g1));
   expect.soft(JSON.parse(d).estado, 'estado no es null').not.toBe(null);
-  await ctx.close();
 });
 
-test('S7 deshacer no pisa un cambio posterior de otra sesión', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S7 deshacer no pisa un cambio posterior de otra sesión', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -253,14 +217,10 @@ test('S7 deshacer no pisa un cambio posterior de otra sesión', async ({ browser
   await p.waitForTimeout(300);
   const d = await p.evaluate((id) => window.__docs[id].color, id);
   expect.soft(d, 'deshacer no pisa el «duda» que puso otra sesión').toBe('duda');
-  await ctx.close();
 });
 
-test('S8 la marca no entra en un título y en una lista va dentro del ítem', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
-  await ctx.addInitScript(sinBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
+test('S8 la marca no entra en un título y en una lista va dentro del ítem', async ({ abrir }) => {
+  const p = await abrir({ contexto: TELEFONO });
   await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   await seleccionarTexto(p, 'Tres maneras');
   await p.keyboard.press('1');
@@ -279,14 +239,10 @@ test('S8 la marca no entra en un título y en una lista va dentro del ítem', as
     padre: 'LI',
     etiqueta: '1 anotación en esta lista',
   });
-  await ctx.close();
 });
 
-test('S9 la diferencia de la propuesta para lectores de pantalla', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
+test('S9 la diferencia de la propuesta para lectores de pantalla', async ({ abrir }) => {
+  const p = await abrir();
   await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('p');
@@ -296,14 +252,10 @@ test('S9 la diferencia de la propuesta para lectores de pantalla', async ({ brow
   const snap = await p.locator('.ficha.c-revisar .propuesta').ariaSnapshot();
   expect.soft(snap, 'lo quitado se expone como borrado').toContain('deletion');
   expect.soft(snap, 'lo añadido, como inserción').toContain('insertion');
-  await ctx.close();
 });
 
-test('S10 borrada en otra sesión o en sólo lectura, deshacer deja de ofrecerse', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S10 borrada en otra sesión o en sólo lectura, deshacer deja de ofrecerse', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -331,14 +283,10 @@ test('S10 borrada en otra sesión o en sólo lectura, deshacer deja de ofrecerse
     zona: document.querySelector('#deshacer-zona').textContent,
   }));
   expect.soft(sl, 'en sólo lectura no se ofrece deshacer').toEqual({ soloLectura: true, zona: '' });
-  await ctx.close();
 });
 
-test('S11 el aviso de deshacer un cambio llega a los lectores de pantalla', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
+test('S11 el aviso de deshacer un cambio llega a los lectores de pantalla', async ({ abrir }) => {
+  const p = await abrir();
   await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('1');
@@ -359,17 +307,14 @@ test('S11 el aviso de deshacer un cambio llega a los lectores de pantalla', asyn
   const r2 = await p.evaluate(() => document.querySelector('#anuncio').textContent);
   expect.soft(r.anuncio, 'se anuncia que se puede deshacer').toBe('Color: cortar. Se puede deshacer.');
   expect.soft(r2, 'y que se deshizo').toBe('Cambio deshecho');
-  await ctx.close();
 });
 
-test('S12 copiar y subrayar con número de página y marca de párrafo (teléfono)', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
-  await ctx.addInitScript(sinBase);
-  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const p = await ctx.newPage();
-  const { libroAlterado, paginar, CLAVE_LOCAL } = await import('./ayudas.mjs');
-  await libroAlterado(p, paginar);
-  await p.goto(base + '#cap-01');
+test('S12 copiar y subrayar con número de página y marca de párrafo (teléfono)', async ({ abrir }) => {
+  const p = await abrir({
+    contexto: TELEFONO,
+    permisos: ['clipboard-read', 'clipboard-write'],
+    preparar: (p) => libroAlterado(p, paginar),
+  });
   await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid] .pg');
   await seleccionarTexto(p, 'escrita con prisa');
   await p.keyboard.press('3');
@@ -413,14 +358,10 @@ test('S12 copiar y subrayar con número de página y marca de párrafo (teléfon
   );
   expect.soft(a && a.cita).toBe('Un hecho');
   expect.soft(copia).toContain('«Un hecho»');
-  await ctx.close();
 });
 
-test('S13 el foco en una marca sobrevive al repintado por una foto de la base', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S13 el foco en una marca sobrevive al repintado por una foto de la base', async ({ abrir }) => {
+  const p = await abrir({ contexto: TELEFONO, modo: 'con-base' });
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -442,22 +383,18 @@ test('S13 el foco en una marca sobrevive al repintado por una foto de la base', 
     .soft(res['[data-pid="cap-01-b1"] .marca-anot'].despues, 'el foco vuelve a la marca de párrafo')
     .toContain('marca-anot');
   expect.soft(res['[data-pid="cap-01-b1"] mark.hl'].despues, 'y a la marca del subrayado').toContain('MARK.hl');
-  await ctx.close();
 });
 
-test('S14 cita larga: cambiar una palabra de un párrafo de ~300 palabras se ve como una palabra', async ({
-  browser,
-}) => {
-  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  const p = await ctx.newPage();
-  const { libroAlterado } = await import('./ayudas.mjs');
+test('S14 cita larga: cambiar una palabra de un párrafo de ~300 palabras se ve como una palabra', async ({ abrir }) => {
   const largo = Array.from({ length: 300 }, (_, i) => 'palabra' + i).join(' ');
-  await libroAlterado(p, (L) => {
-    const cap1 = L.secciones.find((s) => /^Capítulo 1/.test(s.titulo));
-    cap1.bloques[0].html = largo;
+  const p = await abrir({
+    contexto: { viewport: { width: 1400, height: 900 } },
+    preparar: (p) =>
+      libroAlterado(p, (L) => {
+        const cap1 = L.secciones.find((s) => /^Capítulo 1/.test(s.titulo));
+        cap1.bloques[0].html = largo;
+      }),
   });
-  await p.goto(base + '#cap-01');
   await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   await seleccionarTexto(p, largo);
   await p.keyboard.press('p');
@@ -480,14 +417,10 @@ test('S14 cita larga: cambiar una palabra de un párrafo de ~300 palabras se ve 
     };
   });
   expect.soft(r.del, 'una palabra cambiada se muestra como una palabra').toEqual([10]);
-  await ctx.close();
 });
 
-test('S15 margen: la propuesta que crece no monta fichas', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
-  await ctx.addInitScript(sinBase);
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
+test('S15 margen: la propuesta que crece no monta fichas', async ({ abrir }) => {
+  const p = await abrir({ contexto: { viewport: { width: 1400, height: 900 } } });
   await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   await seleccionarTexto(p, 'La diferencia parece obvia');
   await p.keyboard.press('2');
@@ -512,47 +445,40 @@ test('S15 margen: la propuesta que crece no monta fichas', async ({ browser }) =
   const reposo = await solapan();
   expect.soft(escribiendo.solapes).toEqual([]);
   expect.soft(reposo.solapes).toEqual([]);
-  await ctx.close();
 });
 
-test('S16 contestar la pregunta en la réplica quita el punto «por revisar» de la marca', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
-  await ctx.addInitScript(sinBase);
-  const { CLAVE_LOCAL } = await import('./ayudas.mjs');
-  await ctx.addInitScript(
-    ([k]) => {
-      if (sessionStorage.getItem('s16')) return;
-      sessionStorage.setItem('s16', '1');
-      localStorage.setItem(
-        k,
-        JSON.stringify({
-          q1: {
-            id: 'q1',
-            tipo: 'subrayado',
-            sid: 'cap-01',
-            sidTitulo: 'Capítulo 1. Hechos y observaciones',
-            pid: 'cap-01-b1',
-            src: 'x.md:1',
-            inicio: 0,
-            fin: 29,
-            cita: 'Un hecho es lo que se observó',
-            antes: '',
-            despues: ', no lo que se concluyó de la ',
-            color: 'duda',
-            nota: '',
-            estado: 'abierta',
-            creado: '2026-10-01T00:00:00.000Z',
-            respuesta: '¿Observado por quién?',
-            cierre: 'pregunta',
-            respondido: '2026-10-02T00:00:00.000Z',
-          },
-        })
-      );
-    },
-    [CLAVE_LOCAL]
-  );
-  const p = await ctx.newPage();
-  await p.goto(base + '#cap-01');
+test('S16 contestar la pregunta en la réplica quita el punto «por revisar» de la marca', async ({ abrir }) => {
+  // la copia local con la pregunta, sembrada una sola vez (no en cada recarga)
+  const sembrar = ([k]) => {
+    if (sessionStorage.getItem('s16')) return;
+    sessionStorage.setItem('s16', '1');
+    localStorage.setItem(
+      k,
+      JSON.stringify({
+        q1: {
+          id: 'q1',
+          tipo: 'subrayado',
+          sid: 'cap-01',
+          sidTitulo: 'Capítulo 1. Hechos y observaciones',
+          pid: 'cap-01-b1',
+          src: 'x.md:1',
+          inicio: 0,
+          fin: 29,
+          cita: 'Un hecho es lo que se observó',
+          antes: '',
+          despues: ', no lo que se concluyó de la ',
+          color: 'duda',
+          nota: '',
+          estado: 'abierta',
+          creado: '2026-10-01T00:00:00.000Z',
+          respuesta: '¿Observado por quién?',
+          cierre: 'pregunta',
+          respondido: '2026-10-02T00:00:00.000Z',
+        },
+      })
+    );
+  };
+  const p = await abrir({ contexto: TELEFONO, previo: [[sembrar, [CLAVE_LOCAL]]], esperar: null });
   await p.waitForSelector('[data-pid="cap-01-b1"] .marca-anot');
   const antes = await p.evaluate(() => document.querySelector('[data-pid="cap-01-b1"] .marca-anot').className);
   await p.tap('[data-pid="cap-01-b1"] .marca-anot');
@@ -566,13 +492,12 @@ test('S16 contestar la pregunta en la réplica quita el punto «por revisar» de
     cuenta: document.querySelector('#n-revisar').textContent,
   }));
   expect.soft(despues.marca, 'sin el punto tras contestar').not.toContain('por-revisar');
-  await ctx.close();
 });
 
-test('S17 propuesta rechazada y conservada en el navegador: al recargar sube', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(() => {
-    window.__semilla = {
+test('S17 propuesta rechazada y conservada en el navegador: al recargar sube', async ({ abrir }) => {
+  const p = await abrir({
+    modo: 'con-base',
+    semilla: {
       s1: {
         id: 's1',
         tipo: 'subrayado',
@@ -592,18 +517,14 @@ test('S17 propuesta rechazada y conservada en el navegador: al recargar sube', a
         editado: '2026-10-01T00:00:00.000Z',
         autor: 'u_me',
       },
-    };
+    },
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
   await p.evaluate(() => (window.__rechazar = 'unavailable'));
   await enFicha(p, '.ficha[data-id="s1"]', 'button[data-accion="proponer"]');
   await p.keyboard.press('Control+A');
   await p.keyboard.type('Un hecho es lo observado');
   await p.keyboard.press('Escape');
   await p.waitForTimeout(1000);
-  const { CLAVE_LOCAL } = await import('./ayudas.mjs');
   const r1 = await p.evaluate(
     (k) => ({
       local: (JSON.parse(localStorage.getItem(k) || '{}').s1 || {}).sugerencia,
@@ -620,15 +541,14 @@ test('S17 propuesta rechazada y conservada en el navegador: al recargar sube', a
     dif: (document.querySelector('.ficha[data-id="s1"] .dif-propuesta') || {}).textContent || null,
   }));
   expect.soft(r2.base, 'la propuesta conservada sube al recargar').toBe('Un hecho es lo observado');
-  await ctx.close();
 });
 
 test('S18 en «Por revisar», tras un redibujo, la tecla «a» escrita en la propuesta no revisa la anotación', async ({
-  browser,
+  abrir,
 }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(() => {
-    window.__semilla = {
+  const p = await abrir({
+    modo: 'con-base',
+    semilla: {
       s1: {
         id: 's1',
         tipo: 'subrayado',
@@ -651,11 +571,8 @@ test('S18 en «Por revisar», tras un redibujo, la tecla «a» escrita en la pro
         cierre: 'atendida',
         respondido: '2026-10-02T00:00:00.000Z',
       },
-    };
+    },
   });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
   await p.click('.tab[data-tab="revisar"]');
   await enFicha(p, '.ficha[data-id="s1"]', 'button[data-accion="proponer"]');
   await p.keyboard.type(' por la mañana');
@@ -670,51 +587,48 @@ test('S18 en «Por revisar», tras un redibujo, la tecla «a» escrita en la pro
     zona: document.querySelector('#deshacer-zona').textContent,
   }));
   expect.soft(d.revisado, 'una tecla perdida no revisa la anotación').toBeUndefined();
-  await ctx.close();
 });
 
 for (const ancho of [320, 360]) {
-  test(`S19 barra de selección con «Proponer» a ${ancho} px`, async ({ browser }) => {
-    const ctx = await browser.newContext({ viewport: { width: ancho, height: 700 }, hasTouch: true });
-    await ctx.addInitScript(sinBase);
-    const p = await ctx.newPage();
-    await p.goto(base + '#cap-01');
-    await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  test(`S19 barra de selección con «Proponer» a ${ancho} px`, async ({ abrir }) => {
+    const p = await abrir({ contexto: { viewport: { width: ancho, height: 700 }, hasTouch: true } });
     await seleccionarTexto(p, CITA);
     await p.evaluate(() => document.dispatchEvent(new Event('selectionchange')));
     await p.waitForTimeout(400);
     const r = await p.evaluate(() => {
-      const tb = document.querySelector('#sel-tb');
+      const tb = document.querySelector('#sel-tb'),
+        c = tb.getBoundingClientRect();
+      const botones = Array.from(tb.querySelectorAll('button')).map((b) => {
+        const x = b.getBoundingClientRect();
+        return { id: b.id || b.getAttribute('data-c'), l: x.left, r: x.right, t: x.top, b: x.bottom };
+      });
+      const encimados = botones.flatMap((x, i) =>
+        botones
+          .slice(i + 1)
+          .filter((y) => x.l < y.r - 1 && y.l < x.r - 1 && x.t < y.b - 1 && y.t < x.b - 1)
+          .map((y) => x.id + '/' + y.id)
+      );
       return {
-        visible: getComputedStyle(tb).display,
-        tb: [
-          Math.round(tb.getBoundingClientRect().left),
-          Math.round(tb.getBoundingClientRect().right),
-          tb.scrollWidth,
-          tb.clientWidth,
-        ],
-        botones: Array.from(tb.querySelectorAll('button')).map((b) => {
-          const x = b.getBoundingClientRect();
-          return [
-            b.id || b.getAttribute('data-c'),
-            Math.round(x.left),
-            Math.round(x.right),
-            Math.round(x.width),
-            Math.round(x.height),
-          ];
-        }),
-        doc: [document.documentElement.scrollWidth, innerWidth],
+        visible: getComputedStyle(tb).display !== 'none',
+        dentro: c.left >= 0 && c.right <= innerWidth,
+        sinDesborde: tb.scrollWidth <= tb.clientWidth,
+        proponer: botones.some((x) => x.id === 'sel-proponer'),
+        fuera: botones.filter((x) => x.l < c.left - 1 || x.r > c.right + 1).map((x) => x.id),
+        chicos: botones.filter((x) => x.r - x.l < 40 || x.b - x.t < 40).map((x) => x.id),
+        encimados,
+        pagina: document.documentElement.scrollWidth <= innerWidth,
       };
     });
-    await ctx.close();
+    expect.soft(r.visible && r.proponer, 'la barra aparece con «Proponer»').toBe(true);
+    expect.soft(r.dentro && r.sinDesborde && r.pagina, 'la barra cabe en la pantalla, sin desborde').toBe(true);
+    expect.soft(r.fuera, 'ningún botón se sale de la barra').toEqual([]);
+    expect.soft(r.chicos, 'los botones miden al menos 40 px para el dedo').toEqual([]);
+    expect.soft(r.encimados, 'ningún botón se encima a otro').toEqual([]);
   });
 }
 
-test('S20 temporizador de un aviso reemplazado y doble clic en Deshacer', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(conBase);
-  const p = await ctx.newPage();
-  await conectar(p);
+test('S20 temporizador de un aviso reemplazado y doble clic en Deshacer', async ({ abrir }) => {
+  const p = await abrir({ modo: 'con-base' });
   await seleccionarTexto(p, CITA);
   await p.keyboard.press('1');
   await p.keyboard.press('Escape');
@@ -734,5 +648,4 @@ test('S20 temporizador de un aviso reemplazado y doble clic en Deshacer', async 
   );
   expect.soft(zona).toBe('Color: duda.Deshacer');
   expect.soft(r.color).toBe('cortar');
-  await ctx.close();
 });
