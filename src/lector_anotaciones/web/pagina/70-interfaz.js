@@ -330,7 +330,7 @@
       n.classList.remove('foco');
       if (n.classList.contains('ficha')) P.ajustarTextareas(n);
     });
-    P.refirmarFoco(antes);
+    P.vistaEnSitio(antes, { foco: false });
     P.colocarMargenPronto();
     P.actualizarNav();
   }

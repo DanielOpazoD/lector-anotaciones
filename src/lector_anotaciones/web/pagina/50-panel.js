@@ -10,7 +10,9 @@
   P.lista = lista;
   P.listaNavegable = listaNavegable;
   P.ordenKey = ordenKey;
-  P.refirmarFoco = refirmarFoco;
+  P.vistaEnSitio = vistaEnSitio;
+  P.propuestaAbierta = propuestaAbierta;
+  P.olvidarFicha = olvidarFicha;
   P.avanzarFicha = avanzarFicha;
   P.renderPanel = renderPanel;
   P.renderCuentaRevisar = renderCuentaRevisar;
@@ -104,50 +106,66 @@
     return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi + 1) * 10 + ini / 100000;
   }
   // ------------------------------------------------------------ fichas por id
-  // Cada ficha dibujada se guarda con la anotación y la «firma de vista» con que se dibujó: lo que, además de la
-  // anotación, cambia lo que muestra (activa, por revisar, revisada, sin guardar, dónde quedó, si su pasaje cambió, sólo
-  // lectura, quién es el lector y su perfil, si hay varios lectores, la huella de su bloque). Un redibujo reutiliza el
-  // nodo si las dos siguen iguales.
+  // Una ficha es función de dos cosas: la anotación y su «vista», todo lo demás que decide lo que muestra (activa, por
+  // revisar, revisada, sin guardar, dónde quedó, si su pasaje cambió, sólo lectura, el lector y su perfil, la propuesta
+  // abierta). La vista se reúne aquí, y sólo aquí: `ficha(a, vista)` (52-ficha.js) no lee nada más al dibujar, y
+  // `npm run modulos` lo comprueba. Cada ficha dibujada se guarda con la anotación, la vista y la firma (la vista en
+  // JSON); un redibujo reutiliza el nodo si la anotación es la misma y la firma no cambió.
   var PROPUESTA_ABIERTA = {}; // ids con el cuadro de la propuesta abierto sin propuesta guardada todavía
-  var FICHAS = {}; // id → { a, firma, nodo }
+  var FICHAS = {}; // id → { a, vista, firma, nodo }
   var MEDIDAS = new WeakMap(); // nodo de ficha → ancho de la lista y modo con que se midieron sus notas
-  P.PROPUESTA_ABIERTA = PROPUESTA_ABIERTA;
-  P.FICHAS = FICHAS;
-  function firmaFicha(a, varios) {
+  function vistaDeFicha(a, varios) {
     var u = E.UBIC[a.id],
-      pe = P.pidEfectivo(a);
-    return [
-      P.V.fichaFoco === a.id,
-      porRevisar(a),
-      !!P.V.revisadas[a.id],
-      P.SINC.sinGuardar[a.id] || '',
-      u ? u.estado + ':' + u.pid : '',
-      P.cambioDe(a) || '',
-      E.SOLO_LECTURA,
-      E.ME || '',
-      a.autor ? JSON.stringify(P.PERFILES[a.autor] || null) : '',
-      varios,
-      pe && P.BLOQUES[pe] ? P.BLOQUES[pe].h || '' : '',
-    ].join('|');
+      pe = P.pidEfectivo(a),
+      b = pe ? P.BLOQUES[pe] : null,
+      pendiente = porRevisar(a),
+      perdido = !!u && u.estado === 'perdido';
+    return Object.freeze({
+      foco: P.V.fichaFoco === a.id,
+      pendiente: pendiente,
+      revisada: !pendiente && !!P.V.revisadas[a.id],
+      sinGuardar: P.SINC.sinGuardar[a.id] || '',
+      ubicacion: u ? u.estado : '',
+      otroBloque: !!u && u.pid !== a.pid,
+      cambio: !!P.cambioDe(a),
+      bloqueCambio: a.tipo === 'subrayado' && !!a.bh && !!b && !!b.h && b.h !== a.bh && !perdido,
+      soloLectura: !!E.SOLO_LECTURA,
+      // el lector se muestra si no es quien lee, o si hay varios
+      autor:
+        a.autor && (a.autor !== E.ME || varios) ? { perfil: P.PERFILES[a.autor] || null, yo: a.autor === E.ME } : null,
+      propuestaAbierta: !!PROPUESTA_ABIERTA[a.id],
+    });
   }
   function fichaPara(a, varios) {
     var c = FICHAS[a.id],
-      firma = firmaFicha(a, varios);
+      vista = vistaDeFicha(a, varios),
+      firma = JSON.stringify(vista);
     if (c && c.a === a && c.firma === firma) return { nodo: c.nodo, nueva: false };
-    var nodo = P.ficha(a);
-    FICHAS[a.id] = { a: a, firma: firma, nodo: nodo };
+    var nodo = P.ficha(a, vista);
+    FICHAS[a.id] = { a: a, vista: vista, firma: firma, nodo: nodo };
     return { nodo: nodo, nueva: true };
   }
-  // Tras activar o dejar una ficha en su sitio (la clase `foco`), su registro dice que lo está, para que el próximo
-  // redibujo no la rehaga por eso. Sólo esa parte de la firma: lo demás que haya cambiado sin redibujarse (una pregunta
-  // que se contestó, un autor que se puso al subir) sigue pendiente y el redibujo lo muestra.
-  function refirmarFoco(id) {
+  // El único camino para cambiar una ficha sin redibujarla: quien la toca en el sitio (la clase `foco`, el cuadro de la
+  // propuesta) dice qué parte de la vista ya muestra, y el registro la anota para que el próximo redibujo no la rehaga
+  // por eso. Lo demás que haya cambiado sin redibujarse (una pregunta que se contestó, un autor que se puso al subir)
+  // sigue pendiente y el redibujo lo muestra.
+  function vistaEnSitio(id, cambios) {
     var c = FICHAS[id];
     if (!c || !c.nodo.isConnected) return;
-    c.firma = String(P.V.fichaFoco === id) + c.firma.slice(c.firma.indexOf('|'));
+    c.vista = Object.freeze(Object.assign({}, c.vista, cambios));
+    c.firma = JSON.stringify(c.vista);
+  }
+  // El cuadro de la propuesta queda abierto aunque no se haya guardado nada: un redibujo lo vuelve a dibujar.
+  function propuestaAbierta(id) {
+    PROPUESTA_ABIERTA[id] = 1;
+    vistaEnSitio(id, { propuestaAbierta: true });
+  }
+  // Una ficha que no debe reutilizarse (lo pasajero que muestra, como «¿Borrar?», no está en su vista).
+  function olvidarFicha(id) {
+    delete FICHAS[id];
   }
   // Tras un guardado silencioso, el cuadro ya muestra lo escrito: el registro pasa a la anotación nueva si la ficha
-  // mostraba la anterior (`ant`). La firma no se toca: si el cambio altera lo que la ficha muestra («revisada»), el
+  // mostraba la anterior (`ant`). La vista no se toca: si el cambio altera lo que la ficha muestra («revisada»), el
   // próximo redibujo la rehace.
   function avanzarFicha(id, ant) {
     var c = FICHAS[id];
@@ -415,8 +433,8 @@
     P.$$('mark.hl[data-aids~="' + id + '"]').forEach(function (m) {
       m.classList.add('foco');
     });
-    refirmarFoco(antes);
-    refirmarFoco(id);
+    vistaEnSitio(antes, { foco: false });
+    vistaEnSitio(id, { foco: true });
     if (P.margenActivo()) P.reacomodarPorActivar(id);
     P.actualizarNav();
   }

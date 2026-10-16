@@ -33,6 +33,7 @@ interface Pagina {
   mover: (d?: any) => void;
   // 20-guardado.js
   guardar: (a?: any) => void;
+  guardarSilencioso: (id?: any, parche?: any) => void;
   escribirEnBase: (id?: any, previa?: any, alRechazar?: any, reintento?: any) => void;
   reintentar: (id?: any) => void;
   activarSoloLectura: () => void;
@@ -67,7 +68,9 @@ interface Pagina {
   lista: (todoElLibro?: any) => any[];
   listaNavegable: () => any[];
   ordenKey: (a?: any) => number;
-  refirmarFoco: (id?: any) => void;
+  vistaEnSitio: (id?: any, cambios?: any) => void;
+  propuestaAbierta: (id?: any) => void;
+  olvidarFicha: (id?: any) => void;
   avanzarFicha: (id?: any, ant?: any) => void;
   renderPanel: () => void;
   renderCuentaRevisar: () => void;
@@ -75,10 +78,8 @@ interface Pagina {
   ajustarAlto: (ta?: any) => void;
   ajustarTextareas: (raiz?: any) => void;
   activar: (id?: any) => void;
-  PROPUESTA_ABIERTA: Record<string, any>;
-  FICHAS: Record<string, any>;
   // 52-ficha.js
-  ficha: (a?: any) => any;
+  ficha: (a?: any, v?: any) => any;
   abrirPropuesta: (id?: any) => void;
   // 54-revisar.js
   cambioDe: (a?: any) => any;
@@ -117,9 +118,10 @@ interface Pagina {
   alternarFoco: () => void;
   mqMovil: MediaQueryList;
   // 75-lectores.js
-  chipAutor: (id?: any) => any;
+  chipAutor: (perfil?: any, yo?: any) => any;
   variosAutores: () => boolean;
   resolverPerfiles: (ids?: any) => void;
+  etiquetasFicha: (a?: any) => any;
   pintarEtiquetas: (f?: any, a?: any) => void;
   renderSelectores: () => void;
   etiquetasDe: any;

@@ -1,33 +1,34 @@
 // ------------------------------------------------------------ la ficha de una anotación, por partes
-// `ctx`: la anotación con que se dibuja (`a`), el nodo (`f`), la anotación viva (`actual()`) y lo que se calcula una vez
-// (`pendiente`, `cambio`, `u`). Las clausuras de la ficha leen la anotación viva, no la copia con que se dibujó: un
-// guardado silencioso (nota, réplica) sustituye el objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o
-// el estado después deben llevar lo recién escrito.
+// La ficha es función de la anotación (`a`) y de su vista (`v`, la reúne `vistaDeFicha` en 50-panel.js): al dibujar no
+// se lee nada más que eso y ayudantes puros (`P.el`, `P.etiqueta`, `P.N`, `P.diffPalabras`, `P.chipAutor`,
+// `P.etiquetasFicha`); `npm run modulos` lo comprueba. Lo que corre después (los manejadores de eventos y las acciones,
+// `abrirPropuesta` y `cursorAlFinal`) sí lee y cambia el estado.
+// `ctx`: la anotación con que se dibuja (`a`), la vista (`v`), el nodo (`f`) y la anotación viva (`actual()`). Los
+// manejadores leen la anotación viva, no la copia con que se dibujó: un guardado silencioso (nota, réplica) sustituye el
+// objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o el estado después deben llevar lo recién escrito.
 (function (P, E) {
   // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
   P.ficha = ficha;
   P.abrirPropuesta = abrirPropuesta;
-  function ficha(a) {
+  function ficha(a, v) {
     var ctx = {
       a: a,
+      v: v,
       actual: function () {
         return P.anots[a.id] || a;
       },
-      pendiente: P.porRevisar(a),
-      cambio: P.cambioDe(a),
-      u: E.UBIC[a.id],
     };
-    var pendiente = ctx.pendiente;
+    var pendiente = v.pendiente;
     var f = P.el('div', {
       'class':
         'ficha t-' +
         a.tipo +
         (a.color ? ' c-' + a.color : '') +
         (a.estado === 'resuelta' ? ' resuelta' : '') +
-        (P.V.fichaFoco === a.id ? ' foco' : '') +
-        (P.SINC.sinGuardar[a.id] ? ' sin-guardar' : '') +
+        (v.foco ? ' foco' : '') +
+        (v.sinGuardar ? ' sin-guardar' : '') +
         (pendiente ? ' por-revisar' : '') +
-        (!pendiente && P.V.revisadas[a.id] ? ' revisada' : ''),
+        (v.revisada ? ' revisada' : ''),
       'data-id': a.id,
       tabindex: '-1',
       role: 'article',
@@ -44,7 +45,7 @@
     if (a.cierre === 'pregunta') f.classList.add('cierre-pregunta');
     if (a.tipo === 'subrayado')
       f.appendChild(P.el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
-    if (E.SOLO_LECTURA) {
+    if (v.soloLectura) {
       fichaSoloLectura(ctx);
       return f;
     }
@@ -64,9 +65,7 @@
   // Cabecera: categoría, sección y página, lector, cierre, «nueva respuesta» o «revisada», e «ir al texto».
   function fichaCabecera(ctx) {
     var a = ctx.a,
-      u = ctx.u,
-      cambio = ctx.cambio,
-      pendiente = ctx.pendiente,
+      v = ctx.v,
       actual = ctx.actual;
     var cab = P.el('div', { 'class': 'cab' }, [
       P.el('span', {}, [
@@ -74,7 +73,7 @@
         P.etiqueta(a),
       ]),
     ]);
-    if (a.autor && (a.autor !== E.ME || P.variosAutores())) cab.firstChild.appendChild(P.chipAutor(a.autor));
+    if (v.autor) cab.firstChild.appendChild(P.chipAutor(v.autor.perfil, v.autor.yo));
     if (a.cierre)
       cab.firstChild.appendChild(
         P.el('span', {
@@ -82,12 +81,11 @@
           text: a.cierre === 'atendida' ? 'atendida' : a.cierre === 'descartada' ? 'descartada' : 'pregunta',
         })
       );
-    if (pendiente) cab.firstChild.appendChild(P.el('span', { 'class': 'nueva', text: 'nueva respuesta' }));
-    else if (P.V.revisadas[a.id])
-      cab.firstChild.appendChild(P.el('span', { 'class': 'nueva hecha', text: '✓ revisada' }));
+    if (v.pendiente) cab.firstChild.appendChild(P.el('span', { 'class': 'nueva', text: 'nueva respuesta' }));
+    else if (v.revisada) cab.firstChild.appendChild(P.el('span', { 'class': 'nueva hecha', text: '✓ revisada' }));
     if (
-      (a.pid && !(u && u.estado === 'perdido')) ||
-      cambio ||
+      (a.pid && v.ubicacion !== 'perdido') ||
+      v.cambio ||
       (a.tipo === 'pagina' && a.pagina) ||
       a.tipo === 'capitulo'
     ) {
@@ -102,15 +100,14 @@
   // Avisos: sin guardar en la base, reubicada, perdida, bloque cambiado desde que se anotó.
   function fichaAvisos(ctx) {
     var a = ctx.a,
-      u = ctx.u,
-      cambio = ctx.cambio,
+      v = ctx.v,
       out = [];
-    if (P.SINC.sinGuardar[a.id]) {
+    if (v.sinGuardar) {
       var ag = P.el('div', {
         'class': 'aviso-guardar',
-        text: 'Sin guardar en la base (' + P.SINC.sinGuardar[a.id] + '); se conserva en este navegador. ',
+        text: 'Sin guardar en la base (' + v.sinGuardar + '); se conserva en este navegador. ',
       });
-      if (!E.SOLO_LECTURA) {
+      if (!v.soloLectura) {
         var re = P.el('button', { 'class': 'enlace', type: 'button', text: 'Reintentar', 'data-accion': 'reintentar' });
         re.addEventListener('click', function () {
           P.reintentar(a.id);
@@ -119,34 +116,26 @@
       }
       out.push(ag);
     }
-    if (u && u.estado === 'reubicado')
+    if (v.ubicacion === 'reubicado')
       out.push(
         P.el('div', {
           'class': 'aviso-ubic',
           text:
             'Reubicado: el texto se movió desde que se hizo la anotación' +
-            (u.pid !== a.pid ? ' (ahora en otro bloque)' : '') +
+            (v.otroBloque ? ' (ahora en otro bloque)' : '') +
             '.',
         })
       );
-    if (u && u.estado === 'perdido')
+    if (v.ubicacion === 'perdido')
       out.push(
         P.el('div', {
           'class': 'aviso-ubic',
-          text: cambio
+          text: v.cambio
             ? 'El pasaje se reescribió: la cita ya no está tal cual; «ver el cambio» muestra el antes y el después.'
             : 'No encontrado en esta versión del libro; la cita se conserva aquí.',
         })
       );
-    var pe = P.pidEfectivo(a);
-    if (
-      a.tipo === 'subrayado' &&
-      a.bh &&
-      P.BLOQUES[pe] &&
-      P.BLOQUES[pe].h &&
-      P.BLOQUES[pe].h !== a.bh &&
-      !(u && u.estado === 'perdido')
-    )
+    if (v.bloqueCambio)
       out.push(
         P.el('div', {
           'class': 'aviso-cambio',
@@ -182,7 +171,7 @@
     var guardarPropuesta = function () {
       var vivo = P.anots[a.id];
       if (!vivo || ta.value === (typeof vivo.sugerencia === 'string' ? vivo.sugerencia : vivo.cita)) return;
-      guardarSilencioso(a.id, { sugerencia: ta.value });
+      P.guardarSilencioso(a.id, { sugerencia: ta.value });
     };
     ta.addEventListener('input', function () {
       mostrarDif(ta.value);
@@ -237,7 +226,6 @@
     var a = P.anots[id],
       f = P.$('.ficha[data-id="' + id + '"]');
     if (!a || !f || a.tipo !== 'subrayado' || E.SOLO_LECTURA) return;
-    P.PROPUESTA_ABIERTA[id] = 1; // un redibujo antes de guardar nada lo vuelve a dibujar
     P.activar(id);
     var ta = P.$('textarea.sugerencia', f);
     if (!ta) {
@@ -247,6 +235,7 @@
       if (b) b.remove();
       ta = P.$('textarea.sugerencia', caja);
     }
+    P.propuestaAbierta(id); // la ficha ya lo muestra; un redibujo antes de guardar nada lo vuelve a dibujar
     ta.focus({ preventScroll: true });
     P.ajustarAlto(ta);
     P.colocarMargenPronto();
@@ -323,6 +312,7 @@
   // cuadro de la réplica.
   function fichaEdicion(ctx) {
     var a = ctx.a,
+      v = ctx.v,
       f = ctx.f;
     var salirConTecla = teclaSalir(a.id);
     var ta = P.el('textarea', {
@@ -336,7 +326,7 @@
     var timer = null;
     var guardarNota = function () {
       if (P.anots[a.id] && ta.value !== P.anots[a.id].nota) {
-        guardarSilencioso(a.id, { nota: ta.value });
+        P.guardarSilencioso(a.id, { nota: ta.value });
         P.pintarEtiquetas(f, P.anots[a.id]);
       }
     };
@@ -357,8 +347,9 @@
     });
     ta.addEventListener('keydown', salirConTecla);
     f.appendChild(ta);
-    P.pintarEtiquetas(f, a);
-    if (a.tipo === 'subrayado' && (typeof a.sugerencia === 'string' || P.PROPUESTA_ABIERTA[a.id]))
+    var et = P.etiquetasFicha(a);
+    if (et) f.appendChild(et);
+    if (a.tipo === 'subrayado' && (typeof a.sugerencia === 'string' || v.propuestaAbierta))
       f.appendChild(fichaPropuesta(a, true));
     var hilo = fichaHilo(a);
     if (hilo) f.appendChild(hilo);
@@ -397,7 +388,7 @@
           parche.revisado = P.N.marcaRevision(vivo, P.ahora());
           if (P.V.tab === 'revisar') P.VISTA.revisada(a.id);
         }
-        guardarSilencioso(a.id, parche);
+        P.guardarSilencioso(a.id, parche);
         if (parche.revisado) P.renderCuentaRevisar();
       };
       rp.addEventListener('input', function () {
@@ -422,10 +413,9 @@
   // Acciones: colores, «✓ Atendida» y «Reabrir» (por revisar) o «Resuelta», «Ver el cambio», «Copiar» y «Borrar».
   function fichaAcciones(ctx) {
     var a = ctx.a,
+      v = ctx.v,
       f = ctx.f,
-      actual = ctx.actual,
-      pendiente = ctx.pendiente,
-      cambio = ctx.cambio;
+      actual = ctx.actual;
     var acc = P.el('div', { 'class': 'acciones' });
     if (a.tipo === 'subrayado') {
       var cols = P.el('div', { 'class': 'colores' });
@@ -449,7 +439,7 @@
       });
       acc.appendChild(cols);
     }
-    if (pendiente) {
+    if (v.pendiente) {
       // por revisar: «Atendida» confirma lo hecho; «Reabrir» la devuelve con el cursor en la nota (o en la réplica)
       var at = P.el('button', {
         'class': 'btn peq primario',
@@ -493,7 +483,7 @@
       });
       acc.appendChild(res);
     }
-    if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string' && !P.PROPUESTA_ABIERTA[a.id]) {
+    if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string' && !v.propuestaAbierta) {
       var pr = P.el('button', {
         'class': 'btn peq',
         type: 'button',
@@ -506,7 +496,7 @@
       });
       acc.appendChild(pr);
     }
-    if (cambio) {
+    if (v.cambio) {
       var vc = P.el('button', {
         'class': 'btn peq',
         type: 'button',
@@ -560,23 +550,10 @@
       var c = P.el('span', { 'class': 'confirmar' }, [P.el('span', { text: '¿Borrar?' }), si, no]);
       acc.replaceChild(c, del);
       // la pregunta es pasajera: si la ficha se redibuja, vuelve con «Borrar»
-      delete P.FICHAS[a.id];
+      P.olvidarFicha(a.id);
       si.focus({ preventScroll: true });
     });
     acc.appendChild(del);
     return acc;
-  }
-  function guardarSilencioso(id, parche) {
-    // Ediciones de nota y réplica. Lo escrito es trabajo del lector y no se tira: si la base rechaza, el borrador
-    // sigue en el cuadro y en memoria marcado «sin guardar», con copia en el navegador y reintento desde la ficha
-    // (`rechazoEscritura` sin versión previa); un rechazo de permiso pasa además la página a sólo lectura. Al
-    // recargar, una copia local más reciente que la de la base vuelve a cargarse y a subir (`cargarLocal`).
-    var ant = P.anots[id];
-    if (!ant || E.SOLO_LECTURA) return;
-    P.SINC.cambiar(Object.assign({}, ant, parche), P.ahora());
-    // la ficha ya muestra lo escrito: no hace falta rehacerla (salvo que cambie lo que muestra, como «revisada»)
-    P.avanzarFicha(id, ant);
-    if (E.col) P.escribirEnBase(id, null);
-    else P.guardarLocal(E.modo === 'cargando' ? [id] : undefined);
   }
 })(LAPagina, LAEstado);

@@ -7,7 +7,14 @@ Lo que declara es privado; lo que otro fragmento necesita lo ofrece en `P` (func
 el estado que varios comparten y reasignan vive en `E`. Los tipos de ambos están en `tipos/pagina.d.ts`, así que
 usar algo que nadie ofrece es un error de `npm run tipos`.
 
-En total: 127 cosas ofrecidas y 22 de estado compartido.
+La ficha de una anotación es función de la anotación y de su vista: `vistaDeFicha` (50-panel.js) reúne todo lo
+demás que decide lo que muestra, su JSON es la firma con que se reutiliza el nodo y `vistaEnSitio` es el único
+camino para cambiar una ficha sin redibujarla. En 52-ficha.js, lo que corre al dibujar sólo usa la anotación, la
+vista y ayudantes puros (`P.el`, `P.etiqueta`, `P.N`, `P.diffPalabras`, `P.chipAutor`, `P.etiquetasFicha`); las acciones
+(`abrirPropuesta`, `cursorAlFinal`) y los manejadores de eventos corren después.
+Este guion lo comprueba.
+
+En total: 129 cosas ofrecidas y 22 de estado compartido.
 
 ## Estado compartido (`E`)
 
@@ -15,7 +22,7 @@ En total: 127 cosas ofrecidas y 22 de estado compartido.
 |---|---|---|
 | `avisoRevisar` | 00-base.js | 00-base.js, 90-arranque.js |
 | `CAPAS_ON` | 00-base.js | 00-base.js, 45-pintar.js, 82-capas.js, 90-arranque.js |
-| `col` | 00-base.js | 00-base.js, 20-guardado.js, 52-ficha.js, 90-arranque.js |
+| `col` | 00-base.js | 00-base.js, 20-guardado.js, 90-arranque.js |
 | `db` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js, 90-arranque.js |
 | `ESCRIBIENDO` | 00-base.js | 00-base.js, 88-biblioteca.js |
 | `FUENTE` | 88-biblioteca.js | 88-biblioteca.js, 90-arranque.js |
@@ -23,14 +30,14 @@ En total: 127 cosas ofrecidas y 22 de estado compartido.
 | `LEIDAS` | 00-base.js | 00-base.js, 84-progreso-voz.js, 90-arranque.js |
 | `LIBRO` | 00-base.js | 00-base.js, 20-guardado.js, 30-crear.js, 45-pintar.js, 60-exportar.js, 70-interfaz.js, 80-cambios.js, 82-capas.js, 86-deshacer-respaldo.js, 88-biblioteca.js, 90-arranque.js |
 | `LOCAL_KEY` | 00-base.js | 00-base.js, 10-libro.js, 20-guardado.js, 70-interfaz.js, 80-cambios.js, 82-capas.js, 84-progreso-voz.js, 86-deshacer-respaldo.js, 90-arranque.js |
-| `ME` | 00-base.js | 00-base.js, 30-crear.js, 50-panel.js, 52-ficha.js, 75-lectores.js, 88-biblioteca.js, 90-arranque.js |
-| `modo` | 00-base.js | 00-base.js, 20-guardado.js, 52-ficha.js, 90-arranque.js |
+| `ME` | 00-base.js | 00-base.js, 30-crear.js, 50-panel.js, 75-lectores.js, 88-biblioteca.js, 90-arranque.js |
+| `modo` | 00-base.js | 00-base.js, 20-guardado.js, 90-arranque.js |
 | `punteroAbajo` | 55-margen.js | 52-ficha.js, 55-margen.js |
 | `respaldoBloqueado` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js |
 | `respaldoHoy` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js |
 | `SECS` | 00-base.js | 00-base.js, 10-libro.js, 40-ubicar.js, 50-panel.js, 54-revisar.js, 65-buscar.js, 82-capas.js, 84-progreso-voz.js, 90-arranque.js |
 | `SOLO_LECTURA` | 00-base.js | 00-base.js, 20-guardado.js, 30-crear.js, 50-panel.js, 52-ficha.js, 54-revisar.js, 70-interfaz.js, 86-deshacer-respaldo.js, 88-biblioteca.js, 90-arranque.js |
-| `UBIC` | 40-ubicar.js | 20-guardado.js, 40-ubicar.js, 45-pintar.js, 50-panel.js, 52-ficha.js, 54-revisar.js, 60-exportar.js |
+| `UBIC` | 40-ubicar.js | 20-guardado.js, 40-ubicar.js, 45-pintar.js, 50-panel.js, 54-revisar.js, 60-exportar.js |
 | `ultimoBorrado` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js |
 | `USER` | 00-base.js | 00-base.js, 75-lectores.js, 90-arranque.js |
 | `VISTO` | 00-base.js | 00-base.js, 80-cambios.js, 90-arranque.js |
@@ -59,14 +66,14 @@ Usa:
 
 ### 20-guardado.js
 
-Ofrece: `activarSoloLectura`, `borrar`, `cargarLocal`, `escribirCampos`, `escribirEnBase`, `guardar`, `guardarLocal`, `podarLocal`, `reintentar`.
+Ofrece: `activarSoloLectura`, `borrar`, `cargarLocal`, `escribirCampos`, `escribirEnBase`, `guardar`, `guardarLocal`, `guardarSilencioso`, `podarLocal`, `reintentar`.
 
 Usa:
 
 - de 00-base.js: `$`, `$$`, `ahora`, `anots`, `enCurso`, `estado`, `lsGet`, `lsSet`, `N`, `SINC`
 - de 40-ubicar.js: `ubicar`
 - de 45-pintar.js: `marcasPagina`, `pintar`, `pintarPid`
-- de 50-panel.js: `renderPanel`
+- de 50-panel.js: `avanzarFicha`, `renderPanel`
 - de 54-revisar.js: `renderCuentas`
 - de 70-interfaz.js: `ocultarTb`
 - de 80-cambios.js: `lsJSON`
@@ -105,7 +112,7 @@ Usa:
 
 ### 50-panel.js
 
-Ofrece: `activar`, `ajustarAlto`, `ajustarTextareas`, `avanzarFicha`, `cambiarTab`, `cuantasPorRevisar`, `etiqueta`, `FICHAS`, `lista`, `listaNavegable`, `ordenKey`, `porRevisar`, `PROPUESTA_ABIERTA`, `refirmarFoco`, `renderCuentaRevisar`, `renderPanel`.
+Ofrece: `activar`, `ajustarAlto`, `ajustarTextareas`, `avanzarFicha`, `cambiarTab`, `cuantasPorRevisar`, `etiqueta`, `lista`, `listaNavegable`, `olvidarFicha`, `ordenKey`, `porRevisar`, `propuestaAbierta`, `renderCuentaRevisar`, `renderPanel`, `vistaEnSitio`.
 
 Usa:
 
@@ -124,15 +131,14 @@ Ofrece: `abrirPropuesta`, `ficha`.
 
 Usa:
 
-- de 00-base.js: `$`, `ahora`, `anots`, `BLOQUES`, `el`, `N`, `SINC`, `V`, `VISTA`
-- de 20-guardado.js: `borrar`, `escribirEnBase`, `guardar`, `guardarLocal`, `reintentar`
-- de 40-ubicar.js: `pidEfectivo`
-- de 50-panel.js: `activar`, `ajustarAlto`, `avanzarFicha`, `etiqueta`, `FICHAS`, `porRevisar`, `PROPUESTA_ABIERTA`, `renderCuentaRevisar`
-- de 54-revisar.js: `cambioDe`, `irAAnot`, `revisar`, `verCambio`
+- de 00-base.js: `$`, `ahora`, `anots`, `el`, `N`, `V`, `VISTA`
+- de 20-guardado.js: `borrar`, `guardar`, `guardarSilencioso`, `reintentar`
+- de 50-panel.js: `activar`, `ajustarAlto`, `etiqueta`, `olvidarFicha`, `porRevisar`, `propuestaAbierta`, `renderCuentaRevisar`
+- de 54-revisar.js: `irAAnot`, `revisar`, `verCambio`
 - de 55-margen.js: `colocarMargenPronto`
 - de 60-exportar.js: `copiar`, `textoAnotacion`
 - de 70-interfaz.js: `volverAlTexto`
-- de 75-lectores.js: `chipAutor`, `pintarEtiquetas`, `variosAutores`
+- de 75-lectores.js: `chipAutor`, `etiquetasFicha`, `pintarEtiquetas`
 - de 80-cambios.js: `diffPalabras`
 - de 86-deshacer-respaldo.js: `ofrecerDeshacerCambio`
 
@@ -198,7 +204,7 @@ Usa:
 - de 00-base.js: `$`, `$$`, `anots`, `lsSet`, `SEC_BY_ID`, `V`, `VISTA`
 - de 10-libro.js: `irA`, `mover`
 - de 30-crear.js: `ancestroPid`, `crearSubrayado`, `extremosDeRango`, `notaGeneral`, `notaPagina`, `notaSeccion`
-- de 50-panel.js: `ajustarTextareas`, `cambiarTab`, `porRevisar`, `refirmarFoco`, `renderPanel`
+- de 50-panel.js: `ajustarTextareas`, `cambiarTab`, `porRevisar`, `renderPanel`, `vistaEnSitio`
 - de 52-ficha.js: `abrirPropuesta`
 - de 54-revisar.js: `actualizarNav`, `navegar`, `revisar`, `verCambio`
 - de 55-margen.js: `colocarMargenPronto`
@@ -216,7 +222,7 @@ Usa:
 
 ### 75-lectores.js
 
-Ofrece: `chipAutor`, `etiquetasDe`, `pintarEtiquetas`, `renderSelectores`, `resolverPerfiles`, `variosAutores`.
+Ofrece: `chipAutor`, `etiquetasDe`, `etiquetasFicha`, `pintarEtiquetas`, `renderSelectores`, `resolverPerfiles`, `variosAutores`.
 
 Usa:
 

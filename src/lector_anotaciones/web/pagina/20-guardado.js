@@ -5,6 +5,7 @@
 (function (P, E) {
   // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
   P.guardar = guardar;
+  P.guardarSilencioso = guardarSilencioso;
   P.escribirEnBase = escribirEnBase;
   P.reintentar = reintentar;
   P.activarSoloLectura = activarSoloLectura;
@@ -35,6 +36,19 @@
     } else {
       guardarLocal();
     }
+  }
+  function guardarSilencioso(id, parche) {
+    // Ediciones de nota y réplica. Lo escrito es trabajo del lector y no se tira: si la base rechaza, el borrador
+    // sigue en el cuadro y en memoria marcado «sin guardar», con copia en el navegador y reintento desde la ficha
+    // (`rechazoEscritura` sin versión previa); un rechazo de permiso pasa además la página a sólo lectura. Al
+    // recargar, una copia local más reciente que la de la base vuelve a cargarse y a subir (`cargarLocal`).
+    var ant = P.anots[id];
+    if (!ant || E.SOLO_LECTURA) return;
+    P.SINC.cambiar(Object.assign({}, ant, parche), P.ahora());
+    // la ficha ya muestra lo escrito: no hace falta rehacerla (salvo que cambie lo que muestra, como «revisada»)
+    P.avanzarFicha(id, ant);
+    if (E.col) P.escribirEnBase(id, null);
+    else P.guardarLocal(E.modo === 'cargando' ? [id] : undefined);
   }
   function escribirEnBase(id, previa, alRechazar, reintento) {
     // Escribe lo que hay en memoria para esa id (`SINC.escritura`: los campos del lector con `update` si la base ya

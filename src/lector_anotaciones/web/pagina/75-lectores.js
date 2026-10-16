@@ -4,15 +4,15 @@
   P.chipAutor = chipAutor;
   P.variosAutores = variosAutores;
   P.resolverPerfiles = resolverPerfiles;
+  P.etiquetasFicha = etiquetasFicha;
   P.pintarEtiquetas = pintarEtiquetas;
   P.renderSelectores = renderSelectores;
-  function chipAutor(id) {
-    var p = P.PERFILES[id],
-      c = P.el('span', { 'class': 'autor', title: 'Lector' }, [
-        P.el('i', { style: 'background:' + ((p && p.color) || 'var(--fg-2)') }),
-        P.el('span', { text: (p && p.name) || (id === E.ME ? 'yo' : 'otro lector') }),
-      ]);
-    return c;
+  // El lector de una anotación, con el perfil que se tenga de él (`yo`: es quien lee). Puro: lo usa la ficha al dibujar.
+  function chipAutor(perfil, yo) {
+    return P.el('span', { 'class': 'autor', title: 'Lector' }, [
+      P.el('i', { style: 'background:' + ((perfil && perfil.color) || 'var(--fg-2)') }),
+      P.el('span', { text: (perfil && perfil.name) || (yo ? 'yo' : 'otro lector') }),
+    ]);
   }
   function variosAutores() {
     var vistos = {};
@@ -43,14 +43,10 @@
       })
       .catch(function () {});
   }
-  function pintarEtiquetas(f, a) {
-    var ex = f.querySelector('.etiquetas');
-    if (ex) ex.remove();
+  // Las etiquetas de la nota (#así), como botones que filtran por ellas; null si no tiene. Puro: lo usa la ficha al dibujar.
+  function etiquetasFicha(a) {
     var tags = etiquetasDe(a);
-    if (!tags.length) {
-      renderSelectores();
-      return;
-    }
+    if (!tags.length) return null;
     var et = P.el('div', { 'class': 'etiquetas' });
     tags.forEach(function (t) {
       var b = P.el('button', { type: 'button', text: '#' + t, title: 'Filtrar por #' + t });
@@ -60,9 +56,15 @@
       });
       et.appendChild(b);
     });
-    var ta = f.querySelector('textarea');
-    if (ta && ta.nextSibling) f.insertBefore(et, ta.nextSibling);
-    else f.appendChild(et);
+    return et;
+  }
+  // Tras guardar una nota sin redibujar la ficha: sus etiquetas, al día, tras el cuadro de la nota, y los selectores.
+  function pintarEtiquetas(f, a) {
+    var ex = f.querySelector('.etiquetas');
+    if (ex) ex.remove();
+    var et = etiquetasFicha(a),
+      ta = f.querySelector('textarea');
+    if (et) f.insertBefore(et, ta ? ta.nextSibling : null);
     renderSelectores();
   }
   var etiquetasDe = P.N.etiquetasDe;
