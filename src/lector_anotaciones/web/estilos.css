@@ -84,8 +84,20 @@
   #estado.aviso { color: var(--acento); }
 
   main.mesa { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; min-height: 0; }
-  nav.indice { border-right: 1px solid var(--line); overflow: auto; padding: 12px 8px 24px max(12px, env(safe-area-inset-left, 0px)); font-size: 13px; }
-  nav .grupo { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); padding-left: 8px; }
+  /* El índice se desplaza solo, sin arrastrar la página al llegar al final, y su última entrada queda sobre la zona segura. */
+  nav.indice { border-right: 1px solid var(--line); overflow: auto; overscroll-behavior: contain; scroll-padding-block: 8px calc(8px + env(safe-area-inset-bottom, 0px)); padding: 12px 8px calc(24px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); font-size: 13px; }
+  /* Una parte: su cabecera la pliega (el triángulo gira), su barra de progreso, su entrada y sus capítulos con sangría. */
+  nav .parte { margin: 10px 0 4px; }
+  nav .parte + a.sec { margin-top: 8px; }
+  nav button.grupo { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0 0 2px; padding: 3px 8px 3px 4px; border: 0; background: none; border-radius: var(--radius); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); text-align: left; }
+  nav button.grupo::before { content: ""; flex: none; margin: 0 2px; border-inline: 4px solid transparent; border-top: 5px solid currentColor; transition: transform .15s; }
+  nav .parte.plegada button.grupo::before { transform: rotate(-90deg); }
+  nav button.grupo:hover { background: var(--bg-2); color: var(--fg); }
+  nav button.grupo .cuenta { margin-left: auto; letter-spacing: 0; font-size: 11px; background: var(--acento); color: var(--sobre-acento); border-radius: 999px; padding: 0 6px; }
+  nav .parte:not(.plegada) button.grupo .cuenta { display: none; }
+  nav .parte.plegada:has(.capitulos a.sec.activa) button.grupo { color: var(--tinta); font-weight: 600; }
+  nav .capitulos { margin-left: 10px; padding-left: 4px; border-left: 1px solid var(--line); }
+  nav .indice-herr { display: flex; justify-content: flex-end; padding: 0 8px 2px; font-size: 12px; }
   nav a.sec { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: var(--radius); color: inherit; text-decoration: none; }
   nav a.sec:hover { background: var(--bg-2); }
   nav a.sec.activa { background: var(--tinta); color: var(--sobre-tinta); }
@@ -360,6 +372,8 @@
     section.lectura.con-hoja { padding-bottom: 75vh; }
     aside.panel .panel-cab::before { content: ""; position: absolute; top: 5px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
     nav.indice { width: min(85vw, 340px); }
+    /* la cabecera fija del cajón no tapa la entrada a la que se llega */
+    nav.indice { scroll-padding-top: calc(max(12px, env(safe-area-inset-top, 0px)) + 56px); }
     #velo.claro { background: rgba(0,0,0,.18); }
     nav.indice.abierta, aside.panel.abierta { transform: none; }
     .cajon-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
@@ -398,7 +412,7 @@
     .btn.peq, summary.btn { padding: 6px 10px; font-size: 13px; }
     #lightbox .cerrar { font-size: 20px; }  /* la × de la figura ampliada conserva su tamaño */
     .col-btn { width: 40px; height: 40px; }
-    .enlace, .ficha .etiquetas button, .sec-herr label, nav a.sec, aside .nota-pg input, .vacio .enlace { min-height: 40px; }
+    .enlace, .ficha .etiquetas button, .sec-herr label, nav a.sec, nav button.grupo, aside .nota-pg input, .vacio .enlace { min-height: 40px; }
     .enlace, .ficha .etiquetas button { display: inline-flex; align-items: center; }
     .cerrar { min-width: 40px; }
     .pg { min-height: 32px; min-width: 40px; padding: 6px 6px; }

@@ -4,19 +4,22 @@
   P.renderLibro = renderLibro;
   P.irA = irA;
   P.mover = mover;
+  // Las partes plegadas del índice (id de la parte → 1), recordadas en este navegador para cada libro.
+  /** @type {Record<string, number>} */
+  var PLEGADAS = {};
   function renderLibro() {
     var ind = P.$('#indice-lista');
     ind.innerHTML = '';
     var lect = P.$('#lectura');
     lect.innerHTML = '';
-    var grupo = null;
-    E.SECS.forEach(function (s) {
+    PLEGADAS = P.lsJSON(E.LOCAL_KEY + ':plegadas');
+    // Una parte es una sección de nivel 1 seguida de otras de nivel mayor: su cabecera la pliega y la despliega; su
+    // barra de progreso y su propia entrada quedan a la vista y lo que se pliega son sus capítulos. Una sección de
+    // nivel 1 sin capítulos es sólo su entrada.
+    /** @type {HTMLElement | null} */
+    var caps = null;
+    E.SECS.forEach(function (s, i) {
       P.SEC_BY_ID[s.id] = s;
-      if (s.nivel === 1) {
-        grupo = P.el('div', { 'class': 'grupo', text: s.titulo.replace(/\.\s.*$/, '') });
-        ind.appendChild(grupo);
-        ind.appendChild(P.el('div', { 'class': 'progreso', 'data-grupo': s.id }, [P.el('i')]));
-      }
       var a = P.el('a', { 'class': 'sec', href: '#' + s.id, 'data-sid': s.id }, [
         P.el('span', {
           text:
@@ -32,7 +35,28 @@
         ev.preventDefault();
         irA(s.id);
       });
-      ind.appendChild(a);
+      var sig = E.SECS[i + 1];
+      if (s.nivel === 1 && sig && (sig.nivel || 0) > 1) {
+        var lista = P.el('div', { 'class': 'capitulos', id: 'indice-' + s.id });
+        caps = lista;
+        var cab = P.el('button', { 'class': 'grupo', type: 'button', 'aria-controls': lista.id }, [
+          P.el('span', { text: s.titulo.replace(/\.\s.*$/, '') }),
+        ]);
+        var parte = P.el('div', { 'class': 'parte', 'data-parte': s.id }, [
+          cab,
+          P.el('div', { 'class': 'progreso', 'data-grupo': s.id }, [P.el('i')]),
+          a,
+          lista,
+        ]);
+        cab.addEventListener('click', function () {
+          plegarParte(s.id, !parte.classList.contains('plegada'));
+        });
+        pliegue(parte, !!PLEGADAS[s.id]);
+        ind.appendChild(parte);
+      } else {
+        if (s.nivel === 1) caps = null;
+        (caps || ind).appendChild(a);
+      }
       var art = P.el('article', { 'class': 'seccion', id: 'sec-' + s.id, hidden: '' });
       art.appendChild(P.el('h1', { 'class': 'sec-titulo', text: s.titulo }));
       art.appendChild(
@@ -68,6 +92,19 @@
       });
       lect.appendChild(art);
     });
+    if (P.$$('.parte', ind).length > 1) {
+      var todas = P.el('button', { 'class': 'enlace', type: 'button', id: 'b-plegar-todas' });
+      todas.addEventListener('click', function () {
+        var plegar = P.$$('nav .parte').some(function (g) {
+          return !g.classList.contains('plegada');
+        });
+        P.$$('nav .parte').forEach(function (g) {
+          plegarParte(g.getAttribute('data-parte') || '', plegar);
+        });
+      });
+      ind.insertBefore(P.el('div', { 'class': 'indice-herr' }, [todas]), ind.firstChild);
+      rotularTodas();
+    }
     var pie = P.el('div', { 'class': 'nav-pie' }, [
       P.el('button', { 'class': 'btn', type: 'button', id: 'ant', text: '← Anterior' }),
       P.el('button', { 'class': 'btn', type: 'button', id: 'sig', text: 'Siguiente →' }),
@@ -123,6 +160,33 @@
     P.ORIG[b.id] = n.innerHTML;
     return n;
   }
+  // Una parte del índice, plegada o desplegada (sólo lo que se ve).
+  /** @param {HTMLElement} g @param {boolean} plegada */
+  function pliegue(g, plegada) {
+    g.classList.toggle('plegada', plegada);
+    P.$('.capitulos', g).hidden = plegada;
+    P.$('.grupo', g).setAttribute('aria-expanded', plegada ? 'false' : 'true');
+  }
+  // Pliega o despliega una parte del índice y lo recuerda en este navegador.
+  /** @param {string} id @param {boolean} plegada */
+  function plegarParte(id, plegada) {
+    var g = P.$('nav .parte[data-parte="' + id + '"]');
+    if (!g || g.classList.contains('plegada') === plegada) return;
+    pliegue(g, plegada);
+    if (plegada) PLEGADAS[id] = 1;
+    else delete PLEGADAS[id];
+    P.lsSet(E.LOCAL_KEY + ':plegadas', JSON.stringify(PLEGADAS));
+    rotularTodas();
+  }
+  function rotularTodas() {
+    var b = P.$('#b-plegar-todas');
+    if (b)
+      b.textContent = P.$$('nav .parte').some(function (g) {
+        return !g.classList.contains('plegada');
+      })
+        ? 'Plegar todas las partes'
+        : 'Desplegar todas las partes';
+  }
   function irA(sid, pid) {
     if (!P.SEC_BY_ID[sid]) return;
     P.VISTA.cambiar({ secActual: sid });
@@ -135,7 +199,9 @@
       if (on) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
-    var act = P.$('nav a.sec.activa');
+    var act = P.$('nav a.sec.activa'),
+      oculta = act && act.closest('.capitulos[hidden]');
+    if (oculta) plegarParte(oculta.parentNode.getAttribute('data-parte'), false);
     if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     try {
       history.replaceState(null, '', '#' + sid);

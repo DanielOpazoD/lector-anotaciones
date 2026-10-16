@@ -263,7 +263,7 @@
     if (!mqMovil.matches) return;
     if (ahora) {
       if (!n.contains(document.activeElement)) {
-        var dentro = cual === 'indice' ? P.$('a.sec.activa', n) || P.$('a.sec', n) : P.$('.tab.activa', n);
+        var dentro = cual === 'indice' ? entradaActiva(n) : P.$('.tab.activa', n);
         (dentro || P.$('.cerrar', n)).focus({ preventScroll: true });
       }
     } else if (n.contains(activo) || !activo || activo === document.body) {
@@ -276,6 +276,13 @@
       (destino || P.$('#b-' + cual)).focus({ preventScroll: true });
       E.volverA = null;
     }
+  }
+  // Dónde empieza el foco al abrir el índice: la entrada activa o, si su parte está plegada, la cabecera de la parte.
+  /** @param {HTMLElement} n */
+  function entradaActiva(n) {
+    var a = P.$('a.sec.activa', n) || P.$('a.sec', n),
+      oculta = a && a.closest('.capitulos[hidden]');
+    return oculta ? P.$('.grupo', oculta.parentNode) : a;
   }
   function cerrarCajones() {
     var c = cajonAbierto();

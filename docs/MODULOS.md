@@ -61,7 +61,7 @@ Usa:
 - de 30-crear.js: `notaPagina`
 - de 50-panel.js: `renderPanel`
 - de 70-interfaz.js: `lateral`
-- de 80-cambios.js: `marcarCambio`, `registrarVisto`
+- de 80-cambios.js: `lsJSON`, `marcarCambio`, `registrarVisto`
 - de 84-progreso-voz.js: `detenerLectura`, `herramientasSeccion`
 
 ### 20-guardado.js

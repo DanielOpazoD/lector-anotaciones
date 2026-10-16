@@ -2,6 +2,27 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.6.1] - 2026-10-16
+
+### Añadido
+
+- **Partes plegables en el índice.** La cabecera de cada parte (un triángulo y su nombre) la pliega y la despliega: se
+  ocultan sus capítulos y quedan su título, su barra de avance y, en la cabecera, la suma de sus anotaciones.
+  «Plegar todas las partes» (con dos partes o más) deja un libro largo en su esqueleto. Lo plegado se recuerda en el
+  navegador para cada libro, y llegar a un capítulo de una parte plegada (J/K, la búsqueda, una anotación) la
+  despliega.
+
+### Cambiado
+
+- Las secciones de primer nivel sin capítulos (prefacio, apéndices, glosario…) ya no repiten su nombre como rótulo
+  encima de su entrada; los capítulos de cada parte van con sangría bajo ella.
+
+### Corregido
+
+- **En el teléfono, la entrada a la que se llega en el índice quedaba bajo la cabecera del cajón** («Índice ×») al
+  subir a una sección anterior. Además, el índice se desplaza sin arrastrar la página al llegar al final y su última
+  entrada queda por encima de la zona segura inferior de la pantalla.
+
 ## [0.6.0] - 2026-10-16
 
 Una versión de calidad del código: por fuera casi nada cambia; por dentro, la página está en módulos, la ficha se

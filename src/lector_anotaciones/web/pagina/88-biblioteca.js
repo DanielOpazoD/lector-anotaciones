@@ -647,8 +647,9 @@
       x.tipo === 'base'
         ? compartida.borrar(BASE_BIB, x.id)
         : enNavegador.borrar(x.id).then(function () {
-            // las anotaciones de un libro sólo de este navegador viven en su clave local
-            ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) {
+            // las anotaciones de un libro sólo de este navegador viven en su clave local, y lo demás suyo al lado
+            var sufijos = ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo', ':plegadas'];
+            sufijos.forEach(function (s) {
               try {
                 localStorage.removeItem(claveLocalDe('local', x.id) + s);
               } catch (e) {

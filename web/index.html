@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="lector-anotaciones 0.6.0">
+<meta name="generator" content="lector-anotaciones 0.6.1">
 <title>Lector de anotaciones</title>
 <link rel="icon" href="data:,">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -95,8 +95,20 @@
   #estado.aviso { color: var(--acento); }
 
   main.mesa { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; min-height: 0; }
-  nav.indice { border-right: 1px solid var(--line); overflow: auto; padding: 12px 8px 24px max(12px, env(safe-area-inset-left, 0px)); font-size: 13px; }
-  nav .grupo { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); padding-left: 8px; }
+  /* El índice se desplaza solo, sin arrastrar la página al llegar al final, y su última entrada queda sobre la zona segura. */
+  nav.indice { border-right: 1px solid var(--line); overflow: auto; overscroll-behavior: contain; scroll-padding-block: 8px calc(8px + env(safe-area-inset-bottom, 0px)); padding: 12px 8px calc(24px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); font-size: 13px; }
+  /* Una parte: su cabecera la pliega (el triángulo gira), su barra de progreso, su entrada y sus capítulos con sangría. */
+  nav .parte { margin: 10px 0 4px; }
+  nav .parte + a.sec { margin-top: 8px; }
+  nav button.grupo { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0 0 2px; padding: 3px 8px 3px 4px; border: 0; background: none; border-radius: var(--radius); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); text-align: left; }
+  nav button.grupo::before { content: ""; flex: none; margin: 0 2px; border-inline: 4px solid transparent; border-top: 5px solid currentColor; transition: transform .15s; }
+  nav .parte.plegada button.grupo::before { transform: rotate(-90deg); }
+  nav button.grupo:hover { background: var(--bg-2); color: var(--fg); }
+  nav button.grupo .cuenta { margin-left: auto; letter-spacing: 0; font-size: 11px; background: var(--acento); color: var(--sobre-acento); border-radius: 999px; padding: 0 6px; }
+  nav .parte:not(.plegada) button.grupo .cuenta { display: none; }
+  nav .parte.plegada:has(.capitulos a.sec.activa) button.grupo { color: var(--tinta); font-weight: 600; }
+  nav .capitulos { margin-left: 10px; padding-left: 4px; border-left: 1px solid var(--line); }
+  nav .indice-herr { display: flex; justify-content: flex-end; padding: 0 8px 2px; font-size: 12px; }
   nav a.sec { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: var(--radius); color: inherit; text-decoration: none; }
   nav a.sec:hover { background: var(--bg-2); }
   nav a.sec.activa { background: var(--tinta); color: var(--sobre-tinta); }
@@ -371,6 +383,8 @@
     section.lectura.con-hoja { padding-bottom: 75vh; }
     aside.panel .panel-cab::before { content: ""; position: absolute; top: 5px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
     nav.indice { width: min(85vw, 340px); }
+    /* la cabecera fija del cajón no tapa la entrada a la que se llega */
+    nav.indice { scroll-padding-top: calc(max(12px, env(safe-area-inset-top, 0px)) + 56px); }
     #velo.claro { background: rgba(0,0,0,.18); }
     nav.indice.abierta, aside.panel.abierta { transform: none; }
     .cajon-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
@@ -409,7 +423,7 @@
     .btn.peq, summary.btn { padding: 6px 10px; font-size: 13px; }
     #lightbox .cerrar { font-size: 20px; }  /* la × de la figura ampliada conserva su tamaño */
     .col-btn { width: 40px; height: 40px; }
-    .enlace, .ficha .etiquetas button, .sec-herr label, nav a.sec, aside .nota-pg input, .vacio .enlace { min-height: 40px; }
+    .enlace, .ficha .etiquetas button, .sec-herr label, nav a.sec, nav button.grupo, aside .nota-pg input, .vacio .enlace { min-height: 40px; }
     .enlace, .ficha .etiquetas button { display: inline-flex; align-items: center; }
     .cerrar { min-width: 40px; }
     .pg { min-height: 32px; min-width: 40px; padding: 6px 6px; }
@@ -3690,19 +3704,22 @@
   P.renderLibro = renderLibro;
   P.irA = irA;
   P.mover = mover;
+  // Las partes plegadas del índice (id de la parte → 1), recordadas en este navegador para cada libro.
+  /** @type {Record<string, number>} */
+  var PLEGADAS = {};
   function renderLibro() {
     var ind = P.$('#indice-lista');
     ind.innerHTML = '';
     var lect = P.$('#lectura');
     lect.innerHTML = '';
-    var grupo = null;
-    E.SECS.forEach(function (s) {
+    PLEGADAS = P.lsJSON(E.LOCAL_KEY + ':plegadas');
+    // Una parte es una sección de nivel 1 seguida de otras de nivel mayor: su cabecera la pliega y la despliega; su
+    // barra de progreso y su propia entrada quedan a la vista y lo que se pliega son sus capítulos. Una sección de
+    // nivel 1 sin capítulos es sólo su entrada.
+    /** @type {HTMLElement | null} */
+    var caps = null;
+    E.SECS.forEach(function (s, i) {
       P.SEC_BY_ID[s.id] = s;
-      if (s.nivel === 1) {
-        grupo = P.el('div', { 'class': 'grupo', text: s.titulo.replace(/\.\s.*$/, '') });
-        ind.appendChild(grupo);
-        ind.appendChild(P.el('div', { 'class': 'progreso', 'data-grupo': s.id }, [P.el('i')]));
-      }
       var a = P.el('a', { 'class': 'sec', href: '#' + s.id, 'data-sid': s.id }, [
         P.el('span', {
           text:
@@ -3718,7 +3735,28 @@
         ev.preventDefault();
         irA(s.id);
       });
-      ind.appendChild(a);
+      var sig = E.SECS[i + 1];
+      if (s.nivel === 1 && sig && (sig.nivel || 0) > 1) {
+        var lista = P.el('div', { 'class': 'capitulos', id: 'indice-' + s.id });
+        caps = lista;
+        var cab = P.el('button', { 'class': 'grupo', type: 'button', 'aria-controls': lista.id }, [
+          P.el('span', { text: s.titulo.replace(/\.\s.*$/, '') }),
+        ]);
+        var parte = P.el('div', { 'class': 'parte', 'data-parte': s.id }, [
+          cab,
+          P.el('div', { 'class': 'progreso', 'data-grupo': s.id }, [P.el('i')]),
+          a,
+          lista,
+        ]);
+        cab.addEventListener('click', function () {
+          plegarParte(s.id, !parte.classList.contains('plegada'));
+        });
+        pliegue(parte, !!PLEGADAS[s.id]);
+        ind.appendChild(parte);
+      } else {
+        if (s.nivel === 1) caps = null;
+        (caps || ind).appendChild(a);
+      }
       var art = P.el('article', { 'class': 'seccion', id: 'sec-' + s.id, hidden: '' });
       art.appendChild(P.el('h1', { 'class': 'sec-titulo', text: s.titulo }));
       art.appendChild(
@@ -3754,6 +3792,19 @@
       });
       lect.appendChild(art);
     });
+    if (P.$$('.parte', ind).length > 1) {
+      var todas = P.el('button', { 'class': 'enlace', type: 'button', id: 'b-plegar-todas' });
+      todas.addEventListener('click', function () {
+        var plegar = P.$$('nav .parte').some(function (g) {
+          return !g.classList.contains('plegada');
+        });
+        P.$$('nav .parte').forEach(function (g) {
+          plegarParte(g.getAttribute('data-parte') || '', plegar);
+        });
+      });
+      ind.insertBefore(P.el('div', { 'class': 'indice-herr' }, [todas]), ind.firstChild);
+      rotularTodas();
+    }
     var pie = P.el('div', { 'class': 'nav-pie' }, [
       P.el('button', { 'class': 'btn', type: 'button', id: 'ant', text: '← Anterior' }),
       P.el('button', { 'class': 'btn', type: 'button', id: 'sig', text: 'Siguiente →' }),
@@ -3809,6 +3860,33 @@
     P.ORIG[b.id] = n.innerHTML;
     return n;
   }
+  // Una parte del índice, plegada o desplegada (sólo lo que se ve).
+  /** @param {HTMLElement} g @param {boolean} plegada */
+  function pliegue(g, plegada) {
+    g.classList.toggle('plegada', plegada);
+    P.$('.capitulos', g).hidden = plegada;
+    P.$('.grupo', g).setAttribute('aria-expanded', plegada ? 'false' : 'true');
+  }
+  // Pliega o despliega una parte del índice y lo recuerda en este navegador.
+  /** @param {string} id @param {boolean} plegada */
+  function plegarParte(id, plegada) {
+    var g = P.$('nav .parte[data-parte="' + id + '"]');
+    if (!g || g.classList.contains('plegada') === plegada) return;
+    pliegue(g, plegada);
+    if (plegada) PLEGADAS[id] = 1;
+    else delete PLEGADAS[id];
+    P.lsSet(E.LOCAL_KEY + ':plegadas', JSON.stringify(PLEGADAS));
+    rotularTodas();
+  }
+  function rotularTodas() {
+    var b = P.$('#b-plegar-todas');
+    if (b)
+      b.textContent = P.$$('nav .parte').some(function (g) {
+        return !g.classList.contains('plegada');
+      })
+        ? 'Plegar todas las partes'
+        : 'Desplegar todas las partes';
+  }
   function irA(sid, pid) {
     if (!P.SEC_BY_ID[sid]) return;
     P.VISTA.cambiar({ secActual: sid });
@@ -3821,7 +3899,9 @@
       if (on) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
-    var act = P.$('nav a.sec.activa');
+    var act = P.$('nav a.sec.activa'),
+      oculta = act && act.closest('.capitulos[hidden]');
+    if (oculta) plegarParte(oculta.parentNode.getAttribute('data-parte'), false);
     if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     try {
       history.replaceState(null, '', '#' + sid);
@@ -5946,6 +6026,21 @@
         c.textContent = por[sid];
       } else if (c) c.remove();
     });
+    // la cabecera de una parte lleva la suma de sus capítulos, que se ve cuando está plegada
+    P.$$('nav .parte').forEach(function (g) {
+      var n = P.$$('.capitulos a.sec', g).reduce(function (t, a) {
+          return t + (por[a.getAttribute('data-sid')] || 0);
+        }, 0),
+        cab = P.$('.grupo', g),
+        c = P.$('.cuenta', cab);
+      if (n) {
+        if (!c) {
+          c = P.el('span', { 'class': 'cuenta' });
+          cab.appendChild(c);
+        }
+        c.textContent = n;
+      } else if (c) c.remove();
+    });
     P.$('#n-panel').textContent = Object.keys(P.anots).length ? '(' + Object.keys(P.anots).length + ')' : '';
     P.renderCuentaRevisar();
   }
@@ -6864,7 +6959,7 @@
     if (!mqMovil.matches) return;
     if (ahora) {
       if (!n.contains(document.activeElement)) {
-        var dentro = cual === 'indice' ? P.$('a.sec.activa', n) || P.$('a.sec', n) : P.$('.tab.activa', n);
+        var dentro = cual === 'indice' ? entradaActiva(n) : P.$('.tab.activa', n);
         (dentro || P.$('.cerrar', n)).focus({ preventScroll: true });
       }
     } else if (n.contains(activo) || !activo || activo === document.body) {
@@ -6877,6 +6972,13 @@
       (destino || P.$('#b-' + cual)).focus({ preventScroll: true });
       E.volverA = null;
     }
+  }
+  // Dónde empieza el foco al abrir el índice: la entrada activa o, si su parte está plegada, la cabecera de la parte.
+  /** @param {HTMLElement} n */
+  function entradaActiva(n) {
+    var a = P.$('a.sec.activa', n) || P.$('a.sec', n),
+      oculta = a && a.closest('.capitulos[hidden]');
+    return oculta ? P.$('.grupo', oculta.parentNode) : a;
   }
   function cerrarCajones() {
     var c = cajonAbierto();
@@ -8472,8 +8574,9 @@
       x.tipo === 'base'
         ? compartida.borrar(BASE_BIB, x.id)
         : enNavegador.borrar(x.id).then(function () {
-            // las anotaciones de un libro sólo de este navegador viven en su clave local
-            ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) {
+            // las anotaciones de un libro sólo de este navegador viven en su clave local, y lo demás suyo al lado
+            var sufijos = ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo', ':plegadas'];
+            sufijos.forEach(function (s) {
               try {
                 localStorage.removeItem(claveLocalDe('local', x.id) + s);
               } catch (e) {

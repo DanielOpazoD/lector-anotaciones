@@ -222,6 +222,21 @@
         c.textContent = por[sid];
       } else if (c) c.remove();
     });
+    // la cabecera de una parte lleva la suma de sus capítulos, que se ve cuando está plegada
+    P.$$('nav .parte').forEach(function (g) {
+      var n = P.$$('.capitulos a.sec', g).reduce(function (t, a) {
+          return t + (por[a.getAttribute('data-sid')] || 0);
+        }, 0),
+        cab = P.$('.grupo', g),
+        c = P.$('.cuenta', cab);
+      if (n) {
+        if (!c) {
+          c = P.el('span', { 'class': 'cuenta' });
+          cab.appendChild(c);
+        }
+        c.textContent = n;
+      } else if (c) c.remove();
+    });
     P.$('#n-panel').textContent = Object.keys(P.anots).length ? '(' + Object.keys(P.anots).length + ')' : '';
     P.renderCuentaRevisar();
   }
