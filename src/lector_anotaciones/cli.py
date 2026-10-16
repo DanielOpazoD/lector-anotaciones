@@ -1,4 +1,5 @@
-"""Línea de órdenes: `lector-anotaciones construir …`, `… pagina …` y `… exportar …`."""
+"""Línea de órdenes: `lector-anotaciones construir …`, `… pagina …`, `… exportar …`, `… pendientes …` y
+`… responder …`."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from .construir import cargar_anterior, construir, escribir, resumen, validar
 from .exportar import a_markdown, cargar, orden_de_secciones
 from .pagina import escribir_pagina, esta_al_dia
 from .paginas import HerramientaFaltante
+from .responder import a_texto, cargar_coleccion, en_lotes, escrituras, leer_respuestas, leer_versiones, pendientes
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -78,7 +80,39 @@ def _parser() -> argparse.ArgumentParser:
     e.add_argument("--solo-abiertas", action="store_true", help="omite las anotaciones resueltas")
     e.add_argument("--agrupar", choices=("seccion", "archivo"), default="seccion")
     e.add_argument("--libro", type=Path, help="libro.json, para ordenar las secciones como en el libro")
+
+    pe = sub.add_parser("pendientes", help="lista lo que espera respuesta de quien edita las fuentes")
+    pe.add_argument("anotaciones", type=Path, help="JSON de la página o directorio con un documento por archivo")
+    pe.add_argument("--json", action="store_true", help="salida en JSON: [{motivo, anotacion}]")
+    pe.add_argument("--salida", type=Path, help="archivo de salida (por defecto, la salida estándar)")
+
+    r = sub.add_parser(
+        "responder", help="prepara las escrituras (acción «batch» de ArtifactData) que dejan las respuestas en la base"
+    )
+    r.add_argument("anotaciones", type=Path, help="la colección como se leyó: JSON o directorio de documentos")
+    r.add_argument("respuestas", type=Path, help="JSON con [{id, respuesta, cierre, commit?}]")
+    r.add_argument(
+        "--versiones",
+        type=Path,
+        required=True,
+        help="versiones de los documentos: JSON {id: versión} o el texto que devolvió la lectura de la colección",
+    )
+    r.add_argument("--coleccion", default="anotaciones", help="ruta de la colección (p. ej. libros/<id>/anotaciones)")
+    r.add_argument(
+        "--salida",
+        type=Path,
+        help="archivo JSON con las escrituras; si no caben en un lote, uno por lote (-1, -2…). Por defecto, la salida "
+        "estándar",
+    )
     return p
+
+
+def _escribir_o_imprimir(texto: str, salida: Path | None, resumen: str) -> None:
+    if salida:
+        Path(salida).write_text(texto, encoding="utf-8")
+        print(f"ok {salida}: {resumen}")
+    else:
+        sys.stdout.write(texto)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -152,6 +186,48 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ok {args.salida}: {len(anots)} anotaciones")
         else:
             sys.stdout.write(md)
+        return 0
+    if args.orden == "pendientes":
+        try:
+            lista = pendientes(cargar_coleccion(args.anotaciones))
+        except (FileNotFoundError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        if args.json:
+            texto = json.dumps([{"motivo": m, "anotacion": a} for m, a in lista], ensure_ascii=False, indent=2) + "\n"
+        else:
+            texto = a_texto(lista)
+        _escribir_o_imprimir(texto, args.salida, f"{len(lista)} pendientes")
+        return 0
+    if args.orden == "responder":
+        notas: list[str] = []
+        try:
+            lotes = en_lotes(
+                escrituras(
+                    cargar_coleccion(args.anotaciones),
+                    leer_respuestas(args.respuestas),
+                    leer_versiones(args.versiones),
+                    coleccion=args.coleccion,
+                    avisos=notas,
+                )
+            )
+        except (FileNotFoundError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        for a in notas:
+            print(f"aviso: {a}", file=sys.stderr)
+        if len(lotes) > 1 and not args.salida:
+            print(f"error: {len(lotes)} lotes no caben en la salida estándar; usa --salida", file=sys.stderr)
+            return 2
+        if len(lotes) <= 1:
+            lote = lotes[0] if lotes else []
+            texto = json.dumps(lote, ensure_ascii=False, indent=2) + "\n"
+            _escribir_o_imprimir(texto, args.salida, f"{len(lote)} escrituras en un lote")
+            return 0
+        for i, lote in enumerate(lotes, 1):
+            destino = Path(args.salida).with_name(f"{Path(args.salida).stem}-{i}{Path(args.salida).suffix}")
+            destino.write_text(json.dumps(lote, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print(f"ok {destino}: lote {i} de {len(lotes)}, {len(lote)} escrituras")
         return 0
     return 2
 

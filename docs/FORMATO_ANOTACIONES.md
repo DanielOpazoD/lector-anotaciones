@@ -99,6 +99,15 @@ Hay que escribir `respondido` con fecha y hora (ISO 8601) **cada vez** que se re
 
 Quien responde escribe sólo sus campos (`respuesta`, `cierre`, `commit`, `respondido` y, si corresponde, `estado`) con una escritura que fusiona (`update` en la base; la acción «update» de `ArtifactData`), no el documento entero: así no pisa lo que el autor escribió entre tanto. La página hace lo mismo con los suyos.
 
+Las dos órdenes de la línea de órdenes hacen esto sin escribirlo a mano:
+
+```bash
+lector-anotaciones pendientes db/          # o el JSON de «Copiar todo»; --json para procesarlo
+lector-anotaciones responder db/ respuestas.json --versiones lectura.txt --salida lote.json
+```
+
+`pendientes` muestra lo que espera a quien edita: sin respuesta, reabierto por el autor, o una pregunta con réplica (una pregunta sin réplica y una respuesta que el autor no revisó esperan al autor). `respuestas.json` es `[{"id", "respuesta", "cierre", "commit"?}]`. `responder` escribe, para cada una, la entrada `{"op": "update", "collection", "doc_id", "data", "if_version"}` de la acción «batch» de `ArtifactData`: `respuesta`, `cierre`, `respondido` (ahora), `estado` (`resuelta`, o `abierta` si es otra pregunta), `commit` (o lo borra, si era de la respuesta anterior), y `hilo` con la respuesta anterior y la réplica al final; la réplica se borra. `--versiones` es el texto que devolvió la lectura de la colección (o un JSON `{id: versión}`): cada escritura queda fijada a la versión leída, y si el autor cambió la anotación entre tanto, la base rechaza el lote entero sin escribir nada. Más de 50 escrituras se reparten en varios lotes (`lote-1.json`, `lote-2.json`…).
+
 La página muestra la respuesta bajo la nota, con el cierre como etiqueta, y ofrece los filtros «con respuesta» y «preguntas». La pestaña «Por revisar» reúne las respuestas a anotaciones propias (o sin autor, si la página no sabe quién lee) que el autor todavía no revisó (`revisado`), en el orden del libro: **A** las da por atendidas (`estado: "resuelta"`), **R** las reabre (`estado: "abierta"`, con el cursor en la nota para decir qué falta) y **V** muestra el cambio del pasaje. Una respuesta `atendida` o `descartada` que el autor reabrió llega a la exportación y a «Copiar» con la línea «Reabierta por el autor tras la respuesta». Nada de esto toca la nota del autor salvo lo que él mismo escriba.
 
 ## Etiquetas

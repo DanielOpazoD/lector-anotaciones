@@ -133,3 +133,23 @@ def test_la_conversacion_y_lo_reabierto_se_escriben_igual_en_python_y_en_la_pagi
     ]
     js = _evaluar_js([["lineaHilo", [h]] for h in hilos] + [["reabierta", [a]] for a in anots])
     assert js == [linea_hilo(h) for h in hilos] + [reabierta(a) for a in anots]
+
+
+def test_lo_que_escribe_responder_vuelve_a_la_bandeja_del_autor_en_la_pagina():
+    # `responder` escribe un `respondido` nuevo; la página (porRevisar) tiene que devolver la anotación a «Por revisar»
+    # aunque el autor ya hubiera revisado la respuesta anterior, y dejarla de contar como reabierta si se resolvió.
+    from lector_anotaciones.responder import aplicar_update, datos_respuesta
+
+    t = "2026-10-15T09:00:00.000Z"
+    base = {"id": "a", "tipo": "general", "nota": "n", "creado": t, "respuesta": "Hecho.", "respondido": t}
+    reabierta = {**base, "cierre": "atendida", "estado": "abierta", "revisado": t}
+    contestada = {**base, "cierre": "pregunta", "estado": "abierta", "revisado": t, "replica": "Sí."}
+    nuevas = [
+        aplicar_update(a, datos_respuesta(a, {"respuesta": "Otra vez.", "cierre": c}, "2026-10-16T12:00:00.000Z"))
+        for a, c in [(reabierta, "atendida"), (contestada, "pregunta"), (contestada, "descartada")]
+    ]
+    js = _evaluar_js(
+        [["porRevisar", [a, None]] for a in [reabierta, contestada, *nuevas]]
+        + [["reabierta", [a]] for a in [reabierta, *nuevas]]
+    )
+    assert js == [False, False, True, True, True, True, False, False, False]

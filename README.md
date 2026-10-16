@@ -63,7 +63,13 @@ python -m http.server --directory salida 8000      # http://localhost:8000/
 
 # 3. Las anotaciones, de vuelta al trabajo sobre las fuentes
 lector-anotaciones exportar anotaciones.json --agrupar archivo --solo-abiertas --salida tareas.md
+
+# 4. Lo que espera respuesta y las escrituras que la dejan en la base
+lector-anotaciones pendientes db/                  # el directorio que deja una lectura de la colección
+lector-anotaciones responder db/ respuestas.json --versiones lectura.txt --salida lote.json
 ```
+
+`pendientes` lista lo que espera a quien edita (sin respuesta, reabierto por el autor, o una pregunta ya contestada) en el orden en que conviene aplicarlo. `responder` toma las respuestas (`[{id, respuesta, cierre, commit?}]`) y escribe las entradas de la acción «batch» de `ArtifactData`: un `update` por anotación con sólo los campos de quien responde, lo vigente pasado al `hilo` y fijado a la versión leída, para no pisar lo que el autor escribió entre tanto. Ver [docs/FORMATO_ANOTACIONES.md](docs/FORMATO_ANOTACIONES.md#cómo-responde-quien-edita).
 
 `--anterior` compara con una salida previa (por defecto, la propia salida si ya existe) para marcar los bloques que cambiaron; `--sin-capas`, `--frase-larga`, `--muletillas` y `--terminos-retirados` gobiernan las capas editoriales. `--marca-pagina-1` es el texto con que empieza la página impresa 1 en el PDF (por ejemplo el encabezado corrido seguido del título del prefacio); con él la herramienta calcula cuántas páginas preliminares hay que restar. Sin PDF, los bloques quedan sin página. El directorio [`ejemplo/`](ejemplo/) tiene un libro inventado con todo el dialecto para probar de punta a punta.
 
@@ -79,8 +85,9 @@ src/lector_anotaciones/   paquete Python
   paginas.py              PDF → texto por página; búsqueda y herencia de la página impresa
   construir.py            arma y valida libro.json
   exportar.py             anotaciones JSON → Markdown de tareas
+  responder.py            qué espera respuesta; respuestas → escrituras de la base
   pagina.py               empaqueta las fuentes de la página en un solo index.html
-  cli.py                  órdenes `construir`, `pagina` y `exportar`
+  cli.py                  órdenes `construir`, `pagina`, `exportar`, `pendientes` y `responder`
   web/                    fuentes de la página
     plantilla.html        el documento, con las marcas {{ESTILOS}}, {{NUCLEO}} y {{PAGINA}}
     estilos.css
