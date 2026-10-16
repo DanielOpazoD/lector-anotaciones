@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from . import __version__
@@ -26,9 +27,11 @@ def _parser() -> argparse.ArgumentParser:
         description="Convierte un libro en Markdown en la página de lectura y anotación, y vuelca las anotaciones.",
     )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    sub = p.add_subparsers(dest="orden", required=True)
+    # cada orden lleva su función en `orden` (set_defaults); main la llama
+    sub = p.add_subparsers(dest="nombre_orden", required=True)
 
     c = sub.add_parser("construir", help="genera libro.json desde las fuentes Markdown (y el PDF, si lo hay)")
+    c.set_defaults(orden=_construir)
     c.add_argument("fuentes", nargs="+", type=Path, help="archivos .md o directorios con ellos, en orden")
     c.add_argument("--pdf", type=Path, help="PDF maquetado del libro, para asignar páginas impresas")
     c.add_argument("--salida", type=Path, default=Path("libro.json"), help="archivo JSON de salida")
@@ -69,6 +72,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     g = sub.add_parser("pagina", help="escribe la página de lectura y anotación (un único index.html sin dependencias)")
+    g.set_defaults(orden=_pagina)
     g.add_argument("--salida", type=Path, default=Path("index.html"), help="archivo HTML de salida")
     g.add_argument(
         "--comprobar",
@@ -77,6 +81,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     e = sub.add_parser("exportar", help="convierte las anotaciones (JSON) en un Markdown de trabajo")
+    e.set_defaults(orden=_exportar)
     e.add_argument("anotaciones", type=Path, help="JSON copiado desde la página o volcado de la colección")
     e.add_argument("--salida", type=Path, help="archivo Markdown (por defecto, la salida estándar)")
     e.add_argument("--titulo", default="")
@@ -85,6 +90,7 @@ def _parser() -> argparse.ArgumentParser:
     e.add_argument("--libro", type=Path, help="libro.json, para ordenar las secciones como en el libro")
 
     pe = sub.add_parser("pendientes", help="lista lo que espera respuesta de quien edita las fuentes")
+    pe.set_defaults(orden=_pendientes)
     pe.add_argument("anotaciones", type=Path, help="JSON de la página o directorio con un documento por archivo")
     pe.add_argument("--json", action="store_true", help="salida en JSON: [{motivo, anotacion}]")
     pe.add_argument("--salida", type=Path, help="archivo de salida (por defecto, la salida estándar)")
@@ -92,6 +98,7 @@ def _parser() -> argparse.ArgumentParser:
     r = sub.add_parser(
         "responder", help="prepara las escrituras (acción «batch» de ArtifactData) que dejan las respuestas en la base"
     )
+    r.set_defaults(orden=_responder)
     r.add_argument("anotaciones", type=Path, help="la colección como se leyó: JSON o directorio de documentos")
     r.add_argument("respuestas", type=Path, help="JSON con [{id, respuesta, cierre, commit?}]")
     r.add_argument(
@@ -110,6 +117,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     ap = sub.add_parser("aplicar", help="aplica a las fuentes Markdown las propuestas de texto pendientes")
+    ap.set_defaults(orden=_aplicar)
     ap.add_argument("anotaciones", type=Path, help="JSON de la página o directorio con un documento por archivo")
     ap.add_argument("--fuentes", type=Path, required=True, help="directorio con las fuentes .md del libro")
     ap.add_argument(
@@ -129,159 +137,176 @@ def _escribir_o_imprimir(texto: str, salida: Path | None, resumen: str) -> None:
         sys.stdout.write(texto)
 
 
+def _construir(args: argparse.Namespace) -> int:
+    """Construye libro.json (y, con --pagina, la página junto a él)."""
+    avisos: list[str] = []
+    try:
+        anterior = None if args.sin_anterior else cargar_anterior(args.anterior or args.salida, avisos)
+        capas = None
+        if not args.sin_capas:
+            capas = ConfigCapas(frase_larga=args.frase_larga)
+            if args.muletillas:
+                capas.muletillas = leer_lista(args.muletillas)
+            if args.terminos_retirados:
+                capas.terminos_retirados = leer_lista(args.terminos_retirados)
+        libro = construir(
+            args.fuentes,
+            pdf=args.pdf,
+            titulo=args.titulo,
+            subtitulo=args.subtitulo,
+            autor=args.autor,
+            figs=args.figs,
+            marca_pagina_1=args.marca_pagina_1,
+            ventana=args.ventana,
+            claves_anteriores=args.claves_anteriores,
+            anterior=anterior,
+            capas=capas,
+            avisos=avisos,
+        )
+    except (FileNotFoundError, HerramientaFaltante, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for a in avisos:
+        print(f"aviso: {a}", file=sys.stderr)
+    problemas = validar(libro)
+    for pr in problemas:
+        print(f"problema: {pr}", file=sys.stderr)
+    tam = escribir(libro, args.salida)
+    print(f"ok {args.salida}: {resumen(libro)}, {tam // 1024} KB")
+    if args.pagina:
+        destino = Path(args.salida).parent / "index.html"
+        print(f"ok {destino}: página de lectura, {escribir_pagina(destino) // 1024} KB")
+    return 1 if (problemas and args.estricto) else 0
+
+
+def _pagina(args: argparse.Namespace) -> int:
+    """Escribe la página de lectura, o comprueba que la escrita esté al día."""
+    if args.comprobar:
+        if esta_al_dia(args.salida):
+            print(f"ok {args.salida}: al día con las fuentes de la página")
+            return 0
+        orden = f"lector-anotaciones pagina --salida {args.salida}"
+        print(f"error: {args.salida} no coincide con las fuentes; regenérala con `{orden}`", file=sys.stderr)
+        return 1
+    print(f"ok {args.salida}: página de lectura, {escribir_pagina(args.salida) // 1024} KB")
+    return 0
+
+
+def _exportar(args: argparse.Namespace) -> int:
+    """Vuelca las anotaciones en un Markdown de trabajo."""
+    try:
+        anots = cargar(args.anotaciones)
+        orden = None
+        titulo = args.titulo
+        if args.libro:
+            libro = json.loads(Path(args.libro).read_text(encoding="utf-8-sig"))
+            orden = orden_de_secciones(libro)
+            titulo = titulo or libro.get("titulo", "")
+    except (FileNotFoundError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    md = a_markdown(anots, titulo=titulo, solo_abiertas=args.solo_abiertas, agrupar=args.agrupar, orden_secciones=orden)
+    if args.salida:
+        Path(args.salida).write_text(md, encoding="utf-8")
+        print(f"ok {args.salida}: {len(anots)} anotaciones")
+    else:
+        sys.stdout.write(md)
+    return 0
+
+
+def _pendientes(args: argparse.Namespace) -> int:
+    """Lista lo que espera respuesta de quien edita."""
+    try:
+        lista = pendientes(cargar_coleccion(args.anotaciones))
+    except (FileNotFoundError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    if args.json:
+        texto = json.dumps([{"motivo": m, "anotacion": a} for m, a in lista], ensure_ascii=False, indent=2) + "\n"
+    else:
+        texto = a_texto(lista)
+    _escribir_o_imprimir(texto, args.salida, f"{len(lista)} pendientes")
+    return 0
+
+
+def _responder(args: argparse.Namespace) -> int:
+    """Prepara los lotes de escrituras con las respuestas."""
+    notas: list[str] = []
+    try:
+        respuestas = leer_respuestas(args.respuestas)
+        if args.commit:  # el commit es el que aplicó el cambio: sólo en lo atendido
+            respuestas = [
+                dict(r, commit=r.get("commit") or args.commit) if r.get("cierre") == "atendida" else r
+                for r in respuestas
+            ]
+        lotes = en_lotes(
+            escrituras(
+                cargar_coleccion(args.anotaciones, de_la_base=True),
+                respuestas,
+                leer_versiones(args.versiones),
+                coleccion=args.coleccion,
+                avisos=notas,
+            )
+        )
+    except (FileNotFoundError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for a in notas:
+        print(f"aviso: {a}", file=sys.stderr)
+    if len(lotes) > 1 and not args.salida:
+        print(f"error: {len(lotes)} lotes no caben en la salida estándar; usa --salida", file=sys.stderr)
+        return 2
+    if args.salida:
+        # los lotes numerados de una corrida anterior con la misma salida se retiran: con sus versiones todavía
+        # válidas, mandarlos por error escribiría respuestas viejas
+        salida = Path(args.salida)
+        for viejo in sorted(salida.parent.glob(f"{salida.stem}-*{salida.suffix}")):
+            if viejo.stem[len(salida.stem) + 1 :].isdigit():
+                viejo.unlink()
+                print(f"retirado {viejo}: de una corrida anterior", file=sys.stderr)
+    if len(lotes) <= 1:
+        lote = lotes[0] if lotes else []
+        texto = json.dumps(lote, ensure_ascii=False, indent=2) + "\n"
+        _escribir_o_imprimir(texto, args.salida, f"{len(lote)} escrituras en un lote")
+        return 0
+    for i, lote in enumerate(lotes, 1):
+        destino = Path(args.salida).with_name(f"{Path(args.salida).stem}-{i}{Path(args.salida).suffix}")
+        destino.write_text(json.dumps(lote, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"ok {destino}: lote {i} de {len(lotes)}, {len(lote)} escrituras")
+    return 0
+
+
+def _aplicar(args: argparse.Namespace) -> int:
+    """Aplica las propuestas de texto a las fuentes (o muestra las diferencias)."""
+    if args.respuestas and not args.escribir:
+        print("error: --respuestas sólo con --escribir: sin escribir, nada quedó aplicado", file=sys.stderr)
+        return 2
+    try:
+        resultados, archivos = aplicar(cargar_coleccion(args.anotaciones), args.fuentes)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for r in resultados:
+        donde = f"{r.archivo}:{r.linea}" if r.linea else r.archivo or "sin origen"
+        extra = f" ({r.detalle})" if r.detalle else ""
+        print(f"{r.estado}: {r.id} · {donde} · «{r.cita}» → «{r.propuesta}»{extra}", file=sys.stderr)
+    if args.escribir:
+        for ruta, arch in sorted(archivos.items()):
+            escribir_fuente(ruta, arch.texto)
+            print(f"ok {ruta}: {len(arch.resultados)} propuestas aplicadas")
+    else:
+        sys.stdout.write(diferencias(archivos, args.fuentes))
+    if args.respuestas:
+        lista = respuestas_de(resultados)
+        Path(args.respuestas).write_text(json.dumps(lista, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"ok {args.respuestas}: {len(lista)} respuestas para `responder`", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.orden == "construir":
-        avisos: list[str] = []
-        try:
-            anterior = None if args.sin_anterior else cargar_anterior(args.anterior or args.salida, avisos)
-            capas = None
-            if not args.sin_capas:
-                capas = ConfigCapas(frase_larga=args.frase_larga)
-                if args.muletillas:
-                    capas.muletillas = leer_lista(args.muletillas)
-                if args.terminos_retirados:
-                    capas.terminos_retirados = leer_lista(args.terminos_retirados)
-            libro = construir(
-                args.fuentes,
-                pdf=args.pdf,
-                titulo=args.titulo,
-                subtitulo=args.subtitulo,
-                autor=args.autor,
-                figs=args.figs,
-                marca_pagina_1=args.marca_pagina_1,
-                ventana=args.ventana,
-                claves_anteriores=args.claves_anteriores,
-                anterior=anterior,
-                capas=capas,
-                avisos=avisos,
-            )
-        except (FileNotFoundError, HerramientaFaltante, ValueError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-        for a in avisos:
-            print(f"aviso: {a}", file=sys.stderr)
-        problemas = validar(libro)
-        for pr in problemas:
-            print(f"problema: {pr}", file=sys.stderr)
-        tam = escribir(libro, args.salida)
-        print(f"ok {args.salida}: {resumen(libro)}, {tam // 1024} KB")
-        if args.pagina:
-            destino = Path(args.salida).parent / "index.html"
-            print(f"ok {destino}: página de lectura, {escribir_pagina(destino) // 1024} KB")
-        return 1 if (problemas and args.estricto) else 0
-    if args.orden == "pagina":
-        if args.comprobar:
-            if esta_al_dia(args.salida):
-                print(f"ok {args.salida}: al día con las fuentes de la página")
-                return 0
-            orden = f"lector-anotaciones pagina --salida {args.salida}"
-            print(f"error: {args.salida} no coincide con las fuentes; regenérala con `{orden}`", file=sys.stderr)
-            return 1
-        print(f"ok {args.salida}: página de lectura, {escribir_pagina(args.salida) // 1024} KB")
-        return 0
-    if args.orden == "exportar":
-        try:
-            anots = cargar(args.anotaciones)
-            orden = None
-            titulo = args.titulo
-            if args.libro:
-                libro = json.loads(Path(args.libro).read_text(encoding="utf-8-sig"))
-                orden = orden_de_secciones(libro)
-                titulo = titulo or libro.get("titulo", "")
-        except (FileNotFoundError, ValueError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-        md = a_markdown(
-            anots, titulo=titulo, solo_abiertas=args.solo_abiertas, agrupar=args.agrupar, orden_secciones=orden
-        )
-        if args.salida:
-            Path(args.salida).write_text(md, encoding="utf-8")
-            print(f"ok {args.salida}: {len(anots)} anotaciones")
-        else:
-            sys.stdout.write(md)
-        return 0
-    if args.orden == "pendientes":
-        try:
-            lista = pendientes(cargar_coleccion(args.anotaciones))
-        except (FileNotFoundError, ValueError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-        if args.json:
-            texto = json.dumps([{"motivo": m, "anotacion": a} for m, a in lista], ensure_ascii=False, indent=2) + "\n"
-        else:
-            texto = a_texto(lista)
-        _escribir_o_imprimir(texto, args.salida, f"{len(lista)} pendientes")
-        return 0
-    if args.orden == "responder":
-        notas: list[str] = []
-        try:
-            respuestas = leer_respuestas(args.respuestas)
-            if args.commit:  # el commit es el que aplicó el cambio: sólo en lo atendido
-                respuestas = [
-                    dict(r, commit=r.get("commit") or args.commit) if r.get("cierre") == "atendida" else r
-                    for r in respuestas
-                ]
-            lotes = en_lotes(
-                escrituras(
-                    cargar_coleccion(args.anotaciones, de_la_base=True),
-                    respuestas,
-                    leer_versiones(args.versiones),
-                    coleccion=args.coleccion,
-                    avisos=notas,
-                )
-            )
-        except (FileNotFoundError, ValueError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-        for a in notas:
-            print(f"aviso: {a}", file=sys.stderr)
-        if len(lotes) > 1 and not args.salida:
-            print(f"error: {len(lotes)} lotes no caben en la salida estándar; usa --salida", file=sys.stderr)
-            return 2
-        if args.salida:
-            # los lotes numerados de una corrida anterior con la misma salida se retiran: con sus versiones todavía
-            # válidas, mandarlos por error escribiría respuestas viejas
-            salida = Path(args.salida)
-            for viejo in sorted(salida.parent.glob(f"{salida.stem}-*{salida.suffix}")):
-                if viejo.stem[len(salida.stem) + 1 :].isdigit():
-                    viejo.unlink()
-                    print(f"retirado {viejo}: de una corrida anterior", file=sys.stderr)
-        if len(lotes) <= 1:
-            lote = lotes[0] if lotes else []
-            texto = json.dumps(lote, ensure_ascii=False, indent=2) + "\n"
-            _escribir_o_imprimir(texto, args.salida, f"{len(lote)} escrituras en un lote")
-            return 0
-        for i, lote in enumerate(lotes, 1):
-            destino = Path(args.salida).with_name(f"{Path(args.salida).stem}-{i}{Path(args.salida).suffix}")
-            destino.write_text(json.dumps(lote, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            print(f"ok {destino}: lote {i} de {len(lotes)}, {len(lote)} escrituras")
-        return 0
-    if args.orden == "aplicar":
-        if args.respuestas and not args.escribir:
-            print("error: --respuestas sólo con --escribir: sin escribir, nada quedó aplicado", file=sys.stderr)
-            return 2
-        try:
-            resultados, archivos = aplicar(cargar_coleccion(args.anotaciones), args.fuentes)
-        except (FileNotFoundError, ValueError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-        for r in resultados:
-            donde = f"{r.archivo}:{r.linea}" if r.linea else r.archivo or "sin origen"
-            extra = f" ({r.detalle})" if r.detalle else ""
-            print(f"{r.estado}: {r.id} · {donde} · «{r.cita}» → «{r.propuesta}»{extra}", file=sys.stderr)
-        if args.escribir:
-            for ruta, arch in sorted(archivos.items()):
-                escribir_fuente(ruta, arch.texto)
-                print(f"ok {ruta}: {len(arch.resultados)} propuestas aplicadas")
-        else:
-            sys.stdout.write(diferencias(archivos, args.fuentes))
-        if args.respuestas:
-            lista = respuestas_de(resultados)
-            Path(args.respuestas).write_text(json.dumps(lista, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            print(f"ok {args.respuestas}: {len(lista)} respuestas para `responder`", file=sys.stderr)
-        return 0
-    return 2
+    orden: Callable[[argparse.Namespace], int] = args.orden
+    return orden(args)
 
 
 if __name__ == "__main__":
