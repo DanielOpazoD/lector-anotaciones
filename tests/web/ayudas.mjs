@@ -226,7 +226,12 @@ export const conBase = () => {
     metadata: { fromCache: false },
     docChanges: () => cambios.map((c) => ({ type: c.type, doc: { id: c.id, data: () => coleccion(nombre)[c.id] } })),
   });
-  const emitir = (nombre, cambios) => (oyentes[nombre] || []).forEach((cb) => cb(snap(nombre, cambios)));
+  // window.__ecos cuenta las fotos que la base ya entregó: una prueba espera así al eco de una escritura
+  window.__ecos = 0;
+  const emitir = (nombre, cambios) => {
+    (oyentes[nombre] || []).forEach((cb) => cb(snap(nombre, cambios)));
+    window.__ecos++;
+  };
   const sembrar = window.__semilla || {};
   Object.keys(sembrar).forEach((id) => {
     coleccion('anotaciones')[id] = sembrar[id];
