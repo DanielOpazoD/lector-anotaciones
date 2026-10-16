@@ -1,0 +1,85 @@
+{
+  "formato": 2,
+  "libro": "Libro de ejemplo",
+  "generado": "2026-10-15",
+  "exportado": "2026-10-16T00:08:30.327Z",
+  "anotaciones": [
+    {
+      "id": "amva7m1f8pvwaz",
+      "tipo": "capitulo",
+      "sid": "cap-01",
+      "sidTitulo": "Capítulo 1. Hechos y observaciones",
+      "nota": "Nota de la sección",
+      "estado": "abierta",
+      "creado": "2026-10-16T00:08:29.876Z",
+      "editado": "2026-10-16T00:08:29.937Z",
+      "libro": "2026-10-15",
+      "autor": null
+    },
+    {
+      "id": "amva7m1hlziuow",
+      "tipo": "pagina",
+      "sid": "cap-01",
+      "sidTitulo": "Capítulo 1. Hechos y observaciones",
+      "nota": "Nota de la página 4",
+      "estado": "abierta",
+      "creado": "2026-10-16T00:08:29.961Z",
+      "editado": "2026-10-16T00:08:30.015Z",
+      "libro": "2026-10-15",
+      "autor": null,
+      "pagina": 4
+    },
+    {
+      "id": "amva7m1czniw3p",
+      "tipo": "subrayado",
+      "sid": "cap-01",
+      "sidTitulo": "Capítulo 1. Hechos y observaciones",
+      "nota": "Definición tajante.",
+      "estado": "abierta",
+      "creado": "2026-10-16T00:08:29.795Z",
+      "editado": "2026-10-16T00:08:29.795Z",
+      "libro": "2026-10-15",
+      "autor": null,
+      "pid": "cap-01-b1",
+      "src": "00_preliminares.md:23",
+      "pagina": null,
+      "bh": "2b1982a68760",
+      "inicio": 0,
+      "fin": 29,
+      "cita": "Un hecho es lo que se observó",
+      "antes": "",
+      "despues": ", no lo que se concluyó de la ",
+      "color": "duda",
+      "hilo": [
+        {
+          "de": "editor",
+          "texto": "Quité «es».",
+          "cierre": "atendida",
+          "commit": "abc1234",
+          "cuando": "2026-10-03T10:00:00.000Z"
+        },
+        {
+          "de": "autor",
+          "texto": "No era eso: falta el ejemplo.",
+          "cuando": "2026-10-04T08:00:00.000Z"
+        }
+      ],
+      "respuesta": "Añadí el ejemplo de la fiebre.",
+      "cierre": "atendida",
+      "commit": "def5678",
+      "respondido": "2026-10-05T09:00:00.000Z"
+    },
+    {
+      "id": "amva7m1kk3o9q0",
+      "tipo": "general",
+      "sid": null,
+      "sidTitulo": null,
+      "nota": "Nota general",
+      "estado": "abierta",
+      "creado": "2026-10-16T00:08:30.068Z",
+      "editado": "2026-10-16T00:08:30.106Z",
+      "libro": "2026-10-15",
+      "autor": null
+    }
+  ]
+}

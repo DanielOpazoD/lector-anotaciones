@@ -181,6 +181,12 @@
 
   /* --- respuesta de quien edita, cambios entre versiones, capas, lectores, progreso, concentración --- */
   .ficha .respuesta { margin: 6px 0 4px; padding: 6px 8px; border-left: 3px solid var(--tinta); background: var(--bg-2); font-size: 12.5px; white-space: pre-wrap; border-radius: 0 4px 4px 0; }
+  /* la conversación anterior, plegada sobre la respuesta vigente */
+  .ficha .hilo { margin: 6px 0 2px; font-size: 12px; }
+  .ficha .hilo > summary { cursor: pointer; color: var(--fg-2); }
+  .ficha .hilo-item { margin: 4px 0; padding: 4px 8px; border-left: 2px solid var(--line); white-space: pre-wrap; color: var(--fg); }
+  .ficha .hilo-item.del-autor { border-left-color: var(--hl-duda-ink); }
+  .ficha .hilo-item .quien { font-size: 11px; color: var(--fg-2); letter-spacing: .04em; text-transform: uppercase; white-space: normal; }
   .ficha .respuesta .quien { font-size: 11px; color: var(--fg-2); margin-bottom: 2px; letter-spacing: .04em; text-transform: uppercase; white-space: normal; }
   .ficha.cierre-pregunta { box-shadow: inset 0 0 0 1px var(--hl-duda-ink); }
   .cierre { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bg-2); color: var(--fg-2); margin-left: 6px; text-transform: none; letter-spacing: 0; }

@@ -912,3 +912,107 @@ test('Fichas por id: el panel reutiliza las que no cambiaron y conserva el cuadr
   );
   await ctx.close();
 });
+
+test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el formato 2', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(sinBase);
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const p = await ctx.newPage();
+  const errores = [];
+  p.on('pageerror', (e) => errores.push(String(e)));
+  await p.goto(base + '#cap-01');
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  // un subrayado, una nota de la sección, una de página y una general
+  await seleccionarTexto(p, 'Un hecho es lo que se observó');
+  await p.keyboard.press('3');
+  await p.keyboard.press('Escape');
+  await pulsar(p, '#b-nota-cap');
+  await p.keyboard.type('Nota de la sección');
+  await p.keyboard.press('Escape');
+  await abrirDe(p, '#pg-num');
+  await p.fill('#pg-num', '4');
+  await p.press('#pg-num', 'Enter');
+  await p.keyboard.type('Nota de la página 4');
+  await p.keyboard.press('Escape');
+  await pulsar(p, '#b-nota-gen');
+  await p.keyboard.type('Nota general');
+  await p.keyboard.press('Escape');
+  const clave = CLAVE_LOCAL;
+  await p.evaluate((k) => {
+    const j = JSON.parse(localStorage.getItem(k));
+    const s = Object.values(j).find((a) => a.tipo === 'subrayado');
+    Object.assign(s, {
+      nota: 'Definición tajante.',
+      hilo: [
+        {
+          de: 'editor',
+          texto: 'Quité «es».',
+          cierre: 'atendida',
+          commit: 'abc1234',
+          cuando: '2026-10-03T10:00:00.000Z',
+        },
+        { de: 'autor', texto: 'No era eso: falta el ejemplo.', cuando: '2026-10-04T08:00:00.000Z' },
+      ],
+      respuesta: 'Añadí el ejemplo de la fiebre.',
+      cierre: 'atendida',
+      commit: 'def5678',
+      respondido: '2026-10-05T09:00:00.000Z',
+    });
+    localStorage.setItem(k, JSON.stringify(j));
+  }, clave);
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  await p.click('.tab[data-tab="todas"]');
+  const ficha = await p.evaluate(() => {
+    const f = Array.from(document.querySelectorAll('.ficha')).find((x) => x.querySelector('.hilo'));
+    if (!f) return null;
+    const d = f.querySelector('details.hilo');
+    return {
+      resumen: d.querySelector('summary').textContent,
+      abierto: d.open,
+      items: Array.from(d.querySelectorAll('.hilo-item')).map((i) => i.querySelector('.quien').textContent),
+      antesDeLaRespuesta: !!(
+        d.compareDocumentPosition(f.querySelector('.respuesta')) & Node.DOCUMENT_POSITION_FOLLOWING
+      ),
+    };
+  });
+  check(
+    ficha &&
+      ficha.resumen === 'Conversación anterior (2)' &&
+      !ficha.abierto &&
+      ficha.items[0] === 'Quien edita · atendida · abc1234 · 2026-10-03' &&
+      ficha.items[1] === 'Tú · 2026-10-04' &&
+      ficha.antesDeLaRespuesta,
+    `la conversación anterior va plegada sobre la respuesta vigente (${JSON.stringify(ficha)})`
+  );
+  await enFicha(p, '.ficha.c-duda', 'button[data-accion="copiar"]');
+  const copia = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(
+    copia.includes(
+      '\nAntes, quien edita (atendida, abc1234, 2026-10-03): Quité «es».\nAntes, el autor (2026-10-04): No era eso: falta el ejemplo.\nRespuesta (atendida, def5678): Añadí el ejemplo de la fiebre.'
+    ),
+    `«Copiar» lleva la conversación en orden antes de la respuesta vigente (${JSON.stringify(copia.split('\n').slice(2, 6))})`
+  );
+  await p.keyboard.press('Escape');
+  await pulsar(p, '#b-copiar');
+  const json = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '{}');
+  const datos = JSON.parse(json);
+  const conHilo = (datos.anotaciones || []).find((a) => a.hilo);
+  const notaPg = (datos.anotaciones || []).find((a) => a.tipo === 'pagina');
+  check(
+    notaPg && notaPg.nota === 'Nota de la página 4',
+    `el Enter del número de página no entra en la nota nueva (${JSON.stringify(notaPg && notaPg.nota)})`
+  );
+  check(
+    datos.formato === 2 && conHilo && conHilo.hilo.length === 2 && (datos.anotaciones || []).length === 4,
+    `«Copiar todo (JSON)» sale en el formato 2 y conserva el hilo (${JSON.stringify({ formato: datos.formato, n: (datos.anotaciones || []).length })})`
+  );
+  // con GUARDAR_EXPORTACION=ruta, esta exportación queda como muestra para tests/test_esquemas.py
+  if (process.env.GUARDAR_EXPORTACION)
+    fs.writeFileSync(process.env.GUARDAR_EXPORTACION, JSON.stringify(datos, null, 2) + '\n');
+  check(
+    errores.length === 0,
+    `sin errores de página con la conversación anterior${errores.length ? ': ' + errores.join(' | ') : ''}`
+  );
+  await ctx.close();
+});

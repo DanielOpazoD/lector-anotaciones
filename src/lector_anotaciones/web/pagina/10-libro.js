@@ -39,8 +39,9 @@ function renderLibro() {
     );
     art.appendChild(herramientasSeccion(s));
     var pagPrev = null;
-    s.bloques.forEach(function (b) {
+    s.bloques.forEach(function (b, i) {
       BLOQUE_SEC[b.id] = s.id;
+      POS_BLOQUE[b.id] = i;
       BLOQUES[b.id] = b;
       var node = renderBloque(b);
       if (b.pagina && b.pagina !== pagPrev) {

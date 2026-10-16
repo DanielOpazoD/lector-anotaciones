@@ -154,6 +154,8 @@ $('#b-nota-pg').addEventListener('click', function () {
 });
 $('#pg-num').addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter') {
+    // el Enter no llega a la nota nueva, que recibe el foco: empezaría con un salto de línea
+    ev.preventDefault();
     cerrarNueva();
     notaPagina($('#pg-num').value, V.secActual);
   }

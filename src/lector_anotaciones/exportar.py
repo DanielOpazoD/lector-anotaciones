@@ -71,9 +71,17 @@ def _orden_archivo(a: dict) -> tuple:
     return (archivo, int(linea) if linea.isdigit() else 0, a.get("inicio") or 0)
 
 
+def linea_hilo(h: dict) -> str:
+    """Una entrada anterior de la conversación: quién, con su cierre, commit y fecha, y el texto."""
+    quien = "quien edita" if h.get("de") == "editor" else "el autor"
+    detalle = ", ".join(x for x in (h.get("cierre"), h.get("commit"), (h.get("cuando") or "")[:10]) if x)
+    texto = (h.get("texto") or "").strip().replace(chr(10), " ")
+    return f"Antes, {quien}{f' ({detalle})' if detalle else ''}: {texto}"
+
+
 def _cola(a: dict) -> list[str]:
-    """Las líneas de respuesta, cierre y réplica que siguen a una anotación."""
-    lineas = []
+    """Las líneas de la conversación anterior, la respuesta, el cierre y la réplica que siguen a una anotación."""
+    lineas = [f"  - {linea_hilo(h)}" for h in a.get("hilo") or [] if isinstance(h, dict)]
     if a.get("respuesta") or a.get("cierre"):
         cierre = a.get("cierre")
         detalle = f" ({cierre}{', ' + a['commit'] if a.get('commit') else ''})" if cierre else ""

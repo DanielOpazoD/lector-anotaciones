@@ -140,7 +140,16 @@ test('Modo local y reubicación tras un cambio del libro', async ({ browser }) =
       const j = JSON.parse(localStorage.getItem(clave));
       const s = Object.values(j).find((a) => a.tipo === 'subrayado');
       const movida = Object.assign({}, s, { id: 'movida', inicio: s.inicio + 7, fin: s.fin + 7 });
-      const corrida = Object.assign({}, s, { id: 'corrida', pid: pidSiguiente, src: 'viejo.md:1', color: 'duda' });
+      // atribuida al bloque siguiente y con otra huella (el bloque cambió): se busca por la cita y lo dice
+      const corrida = Object.assign({}, s, {
+        id: 'corrida',
+        pid: pidSiguiente,
+        src: 'viejo.md:1',
+        color: 'duda',
+        bh: 'viejo0000000',
+      });
+      // atribuida al bloque siguiente pero con la huella de su bloque, que no cambió (sólo se le corrió el id): exacta
+      const desplazada = Object.assign({}, s, { id: 'desplazada', pid: pidSiguiente, src: 'viejo.md:2' });
       const perdida = Object.assign({}, s, {
         id: 'perdida',
         cita: 'frase que no existe en ningún bloque del libro',
@@ -181,6 +190,7 @@ test('Modo local y reubicación tras un cambio del libro', async ({ browser }) =
       });
       j.movida = movida;
       j.corrida = corrida;
+      j.desplazada = desplazada;
       j.perdida = perdida;
       j.repetida = repetida;
       j.conctx = conctx;
@@ -205,6 +215,7 @@ test('Modo local y reubicación tras un cambio del libro', async ({ browser }) =
     `con desplazamientos viejos, la marca vuelve a cubrir la cita exacta («${cubren('movida')}»)`
   );
   check(cubren('corrida') === sub.cita, 'atribuida al bloque siguiente, la marca vuelve al bloque donde está la cita');
+  check(cubren('desplazada') === sub.cita, 'con el id corrido y el bloque intacto, la huella la devuelve a su bloque');
   check(cubren('perdida') === '', 'una cita que ya no existe no pinta nada');
   check(cubren('repetida') === '', 'una cita corta que aparece en varios bloques sin contexto no se adivina');
   const marcasCtx = await page.$$eval('article.seccion:not([hidden]) mark.hl', (ms) =>
@@ -239,6 +250,10 @@ test('Modo local y reubicación tras un cambio del libro', async ({ browser }) =
     'las fichas reubicadas lo dicen'
   );
   check(/^No encontrado/.test(aviso('perdida')), 'la ficha perdida lo dice y conserva la cita');
+  check(
+    aviso('desplazada') === '',
+    `si sólo se corrió el id de su bloque (mismo texto, misma huella), la ficha no lleva aviso (${aviso('desplazada')})`
+  );
   check(aviso(sub.id) === '', 'la anotación intacta no lleva aviso');
   const guardadoDespues = await page.evaluate((clave) => JSON.parse(localStorage.getItem(clave)), guardado.clave);
   check(
@@ -254,6 +269,14 @@ test('Modo local y reubicación tras un cambio del libro', async ({ browser }) =
       copiaCorrida.includes('reubicado') &&
       copiaCorrida.includes('(antes viejo.md:1)'),
     `Copiar en una ficha reubicada da el bloque actual y avisa (${JSON.stringify(copiaCorrida).slice(0, 110)}…)`
+  );
+  await enFicha(page, '.ficha[data-id="desplazada"]', 'button:has-text("Copiar")');
+  const copiaDesplazada = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(
+    copiaDesplazada.includes(`· ${sub.src}\n`) &&
+      !copiaDesplazada.includes('reubicado') &&
+      !copiaDesplazada.includes('viejo.md'),
+    `Copiar en una ficha cuyo bloque sólo cambió de id da el bloque actual, sin aviso (${JSON.stringify(copiaDesplazada).slice(0, 90)}…)`
   );
   await enFicha(page, '.ficha[data-id="perdida"]', 'button:has-text("Copiar")');
   const copiaPerdida = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');

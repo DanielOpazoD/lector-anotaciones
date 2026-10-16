@@ -6,7 +6,7 @@ interface Anotacion {
   id: string;
   tipo: 'subrayado' | 'pagina' | 'capitulo' | 'general';
   sid?: string | null;
-  sidTitulo?: string;
+  sidTitulo?: string | null;
   pid?: string;
   src?: string;
   pagina?: number;
@@ -30,6 +30,14 @@ interface Anotacion {
   respondido?: string;
   replica?: string;
   revisado?: string;
+  /** La conversación anterior, de la más vieja a la más nueva; lo vigente sigue en respuesta y replica. */
+  hilo?: {
+    de: 'editor' | 'autor';
+    texto: string;
+    cierre?: 'atendida' | 'descartada' | 'pregunta';
+    commit?: string;
+    cuando?: string;
+  }[];
   [otro: string]: any;
 }
 
@@ -97,6 +105,8 @@ interface Nucleo {
   esDePermiso(codigo: string, tamano: number, verbo: string): boolean;
   porRevisar(a: Anotacion, yo: string | null): boolean;
   marcaRevision(a: Anotacion, ahora: string): string;
+  reabierta(a: Anotacion): boolean;
+  lineaHilo(h: NonNullable<Anotacion['hilo']>[number]): string;
   vecina(
     lista: { id: string }[],
     actual: string | null,

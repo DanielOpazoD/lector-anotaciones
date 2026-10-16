@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DanielOpazoD/lector-anotaciones/esquemas/exportacion/2",
+  "title": "«Copiar todo (JSON)» de la página (formato 2)",
+  "description": "Lo que la página copia con «Copiar todo (JSON)» y lo que lee `lector-anotaciones exportar`. Una exportación sin `formato` es de la versión 1 (sin hilo).",
+  "type": "object",
+  "required": ["anotaciones"],
+  "properties": {
+    "formato": { "const": 2 },
+    "libro": { "type": ["string", "null"] },
+    "generado": { "type": ["string", "null"] },
+    "exportado": { "type": "string" },
+    "anotaciones": { "type": "array", "items": { "$ref": "https://github.com/DanielOpazoD/lector-anotaciones/esquemas/anotacion/2" } }
+  }
+}

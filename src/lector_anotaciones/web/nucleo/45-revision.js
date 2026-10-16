@@ -46,5 +46,26 @@
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;
     return j >= 0 && j < lista.length ? j : -1;
   }
-  return { porRevisar: porRevisar, marcaRevision: marcaRevision, vecina: vecina };
+  // Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
+  function reabierta(a) {
+    return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta';
+  }
+  // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
+  function lineaHilo(h) {
+    var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(', ');
+    return (
+      'Antes, ' +
+      (h.de === 'editor' ? 'quien edita' : 'el autor') +
+      (detalle ? ' (' + detalle + ')' : '') +
+      ': ' +
+      (h.texto || '').trim().replace(/\n/g, ' ')
+    );
+  }
+  return {
+    porRevisar: porRevisar,
+    marcaRevision: marcaRevision,
+    vecina: vecina,
+    reabierta: reabierta,
+    lineaHilo: lineaHilo,
+  };
 });

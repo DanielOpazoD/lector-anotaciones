@@ -24,14 +24,24 @@
     }
     return mejor;
   }
-  // ctx: { existe(pid) → bool, texto(pid) → string, candidatos(a) → [pid…] en orden: la sección, luego el libro }.
+  // ctx: { existe(pid) → bool, texto(pid) → string, candidatos(a) → [pid…] en orden: la sección, luego el libro,
+  // porHuella(h) → [pid…] de los bloques con esa huella, en el mismo orden (opcional) }.
   // Devuelve { pid, inicio, fin, estado: 'exacto' | 'reubicado' | 'perdido' }, o null si no es un subrayado.
+  // El orden: la cita donde estaba; si no, el bloque con la misma huella que cuando se anotó (`bh`: el mismo texto,
+  // aunque su id haya cambiado porque se insertaron o quitaron bloques antes), donde la ubicación sigue siendo exacta;
+  // si no, la búsqueda por la cita y su contexto, en su bloque y después fuera.
   function ubicarEn(a, ctx) {
     if (a.tipo !== 'subrayado' || !a.pid) return null;
     var existe = ctx.existe(a.pid),
       txt = existe ? ctx.texto(a.pid) : '';
     if (existe && txt.slice(a.inicio, a.fin) === a.cita)
       return { pid: a.pid, inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    if (a.bh && ctx.porHuella) {
+      var mismos = ctx.porHuella(a.bh);
+      for (var k = 0; k < mismos.length; k++)
+        if (mismos[k] !== a.pid && ctx.texto(mismos[k]).slice(a.inicio, a.fin) === a.cita)
+          return { pid: mismos[k], inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    }
     var m = existe ? buscarCita(txt, a) : null;
     if (m) return { pid: a.pid, inicio: m.i, fin: m.i + a.cita.length, estado: 'reubicado' };
     // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque

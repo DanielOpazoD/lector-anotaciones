@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DanielOpazoD/lector-anotaciones/esquemas/anotacion/2",
+  "title": "Anotación (formato 2)",
+  "description": "Una anotación del lector, como la guarda la página en la base compartida o en el navegador. Ver docs/FORMATO_ANOTACIONES.md. Los campos desconocidos se toleran: versiones futuras pueden agregar.",
+  "type": "object",
+  "required": ["id", "tipo"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "tipo": { "enum": ["subrayado", "pagina", "capitulo", "general"] },
+    "sid": { "type": ["string", "null"] },
+    "sidTitulo": { "type": ["string", "null"] },
+    "pid": { "type": "string" },
+    "src": { "type": "string" },
+    "pagina": { "type": ["integer", "null"], "minimum": 1 },
+    "inicio": { "type": "integer", "minimum": 0 },
+    "fin": { "type": "integer", "minimum": 0 },
+    "cita": { "type": "string" },
+    "antes": { "type": "string" },
+    "despues": { "type": "string" },
+    "color": { "enum": ["revisar", "cortar", "duda", "conservar"] },
+    "grupo": { "type": "string" },
+    "nota": { "type": "string" },
+    "estado": { "enum": ["abierta", "resuelta"] },
+    "creado": { "type": "string", "format": "date-time" },
+    "editado": { "type": "string", "format": "date-time" },
+    "libro": { "type": ["string", "null"] },
+    "bh": { "type": "string" },
+    "autor": { "type": ["string", "null"] },
+    "respuesta": { "type": "string" },
+    "cierre": { "enum": ["atendida", "descartada", "pregunta"] },
+    "commit": { "type": "string" },
+    "respondido": { "type": "string" },
+    "replica": { "type": "string" },
+    "revisado": { "type": "string" },
+    "hilo": {
+      "description": "Lo anterior de la conversación, del más viejo al más nuevo; lo vigente sigue en respuesta, cierre, commit, respondido y replica.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["de", "texto"],
+        "properties": {
+          "de": { "enum": ["editor", "autor"] },
+          "texto": { "type": "string" },
+          "cierre": { "enum": ["atendida", "descartada", "pregunta"] },
+          "commit": { "type": "string" },
+          "cuando": { "type": "string" }
+        }
+      }
+    },
+    "sin_guardar": {
+      "description": "Sólo en lo que produce «Copiar todo (JSON)»: el código del rechazo de una anotación que la base no tiene.",
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "tipo": { "const": "subrayado" } } },
+      "then": { "required": ["pid", "inicio", "fin", "cita", "color"] }
+    },
+    {
+      "if": { "properties": { "tipo": { "const": "pagina" } } },
+      "then": { "required": ["pagina"] }
+    }
+  ]
+}

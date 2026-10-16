@@ -2,6 +2,7 @@ var LIBRO = null,
   SECS = [],
   SEC_BY_ID = {},
   BLOQUE_SEC = {},
+  POS_BLOQUE = {}, // id de bloque → su posición en la sección
   ORIG = {};
 var db = null,
   col = null,

@@ -188,3 +188,29 @@ def test_orden_dentro_de_la_seccion_es_el_del_libro_no_el_de_la_pagina():
     assert md.index("de la sección") < md.index("página once") < md.index("página catorce") < md.index("«b2»"), (
         "las notas sin bloque van antes, y las de página ordenadas por página"
     )
+
+
+def test_a_markdown_lleva_la_conversacion_anterior_antes_de_la_respuesta_vigente():
+    con = dict(
+        SUBRAYADO,
+        id="h1",
+        hilo=[
+            {
+                "de": "editor",
+                "texto": "Quité la cifra.",
+                "cierre": "atendida",
+                "commit": "abc1234",
+                "cuando": "2026-10-03T10:00:00Z",
+            },
+            {"de": "autor", "texto": "La cifra\nhacía falta.", "cuando": "2026-10-04"},
+        ],
+        respuesta="La repuse con su fuente.",
+        cierre="atendida",
+        commit="def5678",
+    )
+    md = a_markdown([con], ahora=AHORA)
+    assert (
+        "  - Antes, quien edita (atendida, abc1234, 2026-10-03): Quité la cifra.\n"
+        "  - Antes, el autor (2026-10-04): La cifra hacía falta.\n"
+        "  - Respuesta (atendida, def5678): La repuse con su fuente."
+    ) in md

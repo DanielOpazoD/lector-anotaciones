@@ -96,3 +96,40 @@ def test_espacios_y_digitos_unicode_como_python(tmp_path, texto):
     md = tmp_path / "c.md"
     md.write_text(texto, encoding="utf-8")
     assert _forma(_armar_js([md], "T")) == _forma(construir([md], titulo="T", capas=None))
+
+
+def _evaluar_js(llamadas: list) -> list:
+    salida = subprocess.run(
+        [NODE, str(RAIZ / "tests" / "js" / "evaluar.mjs")],
+        input=json.dumps(llamadas),
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return json.loads(salida.stdout)
+
+
+def test_la_conversacion_y_lo_reabierto_se_escriben_igual_en_python_y_en_la_pagina():
+    from lector_anotaciones.exportar import linea_hilo, reabierta
+
+    hilos = [
+        {
+            "de": "editor",
+            "texto": "Quité la cifra.",
+            "cierre": "atendida",
+            "commit": "abc1234",
+            "cuando": "2026-10-03T10:00:00Z",
+        },
+        {"de": "autor", "texto": "No:\nla cifra hacía falta.", "cuando": "2026-10-04T08:00:00.000Z"},
+        {"de": "editor", "texto": "  ¿Cuál preferís?  ", "cierre": "pregunta"},
+        {"de": "autor", "texto": ""},
+    ]
+    anots = [
+        {"cierre": "atendida", "revisado": "r", "estado": "abierta"},
+        {"cierre": "atendida", "revisado": "r", "estado": "resuelta"},
+        {"cierre": "pregunta", "revisado": "r"},
+        {"cierre": "descartada"},
+    ]
+    js = _evaluar_js([["lineaHilo", [h]] for h in hilos] + [["reabierta", [a]] for a in anots])
+    assert js == [linea_hilo(h) for h in hilos] + [reabierta(a) for a in anots]

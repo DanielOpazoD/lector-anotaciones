@@ -1,8 +1,7 @@
 // ------------------------------------------------------------ exportar
-// Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
-function reabierta(a) {
-  return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta';
-}
+// en el núcleo (nucleo/45-revision.js), con su par en exportar.py
+var reabierta = N.reabierta,
+  lineaHilo = N.lineaHilo;
 // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
 // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
 // Lo que la base no tiene sale de la página con una señal, para que quien lo reciba sepa que no lo verá en la base.
@@ -49,6 +48,9 @@ function textoAnotacion(a) {
   var out = [cab];
   if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
   if (a.nota) out.push('Nota: ' + a.nota);
+  (a.hilo || []).forEach(function (h) {
+    out.push(lineaHilo(h));
+  });
   if (a.respuesta || a.cierre)
     out.push(
       'Respuesta' +
@@ -116,6 +118,7 @@ function copiarSeleccion(boton) {
 function exportarJSON() {
   return JSON.stringify(
     {
+      formato: 2,
       libro: LIBRO.titulo,
       generado: LIBRO.generado,
       exportado: ahora(),
@@ -172,6 +175,9 @@ function exportarMD() {
           (a.nota || '(sin texto)').replace(/\n/g, ' ') +
           senalSinGuardar(a)
       );
+    (a.hilo || []).forEach(function (h) {
+      out.push('  - ' + lineaHilo(h));
+    });
     if (a.respuesta || a.cierre)
       out.push(
         '  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' ')

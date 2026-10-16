@@ -74,12 +74,18 @@ function lista(todoElLibro) {
 function listaNavegable() {
   return V.tab === 'revisar' ? lista() : lista(true);
 }
+// El orden del libro: la sección y la posición del bloque donde la anotación está hoy (no el número de su id, que
+// cambia si se insertan bloques), y dentro del bloque, el desplazamiento.
 function ordenKey(a) {
+  var pe = pidEfectivo(a),
+    u = UBIC[a.id],
+    sid = (pe && BLOQUE_SEC[pe]) || a.sid;
   var si = SECS.findIndex(function (s) {
-    return s.id === a.sid;
+    return s.id === sid;
   });
-  var bi = a.pid ? parseInt(a.pid.split('-b').pop(), 10) : -1;
-  return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi) * 10 + (a.inicio || 0) / 100000;
+  var bi = pe && POS_BLOQUE[pe] !== undefined ? POS_BLOQUE[pe] : -1;
+  var ini = u && u.pid ? u.inicio : a.inicio || 0;
+  return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi + 1) * 10 + ini / 100000;
 }
 // ------------------------------------------------------------ fichas por id
 // Cada ficha dibujada se guarda con la anotación y la «firma de vista» con que se dibujó: lo que, además de la
@@ -533,12 +539,34 @@ function fichaAvisos(ctx) {
     );
   return out;
 }
+// La conversación anterior (`hilo`), plegada: lo vigente sigue en la respuesta y la réplica que vienen después.
+function fichaHilo(a) {
+  if (!a.hilo || !a.hilo.length) return null;
+  var d = el('details', { 'class': 'hilo' }, [
+    el('summary', { text: 'Conversación anterior (' + a.hilo.length + ')' }),
+  ]);
+  a.hilo.forEach(function (h) {
+    var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(' · ');
+    d.appendChild(
+      el('div', { 'class': 'hilo-item ' + (h.de === 'autor' ? 'del-autor' : 'del-editor') }, [
+        el('div', {
+          'class': 'quien',
+          text: (h.de === 'autor' ? 'Tú' : 'Quien edita') + (detalle ? ' · ' + detalle : ''),
+        }),
+        document.createTextNode(h.texto || ''),
+      ])
+    );
+  });
+  return d;
+}
 // Sólo lectura: la nota y la respuesta como texto, y «Copiar».
 function fichaSoloLectura(ctx) {
   var a = ctx.a,
     f = ctx.f,
     actual = ctx.actual;
   f.appendChild(el('div', { 'class': 'nota-texto', text: a.nota || '' }));
+  var hiloSL = fichaHilo(a);
+  if (hiloSL) f.appendChild(hiloSL);
   if (a.respuesta || a.cierre) {
     var rs = el('div', { 'class': 'respuesta' });
     rs.appendChild(el('div', { 'class': 'quien', text: 'Respuesta' + (a.commit ? ' · ' + a.commit : '') }));
@@ -613,6 +641,8 @@ function fichaEdicion(ctx) {
   ta.addEventListener('keydown', salirConTecla);
   f.appendChild(ta);
   pintarEtiquetas(f, a);
+  var hilo = fichaHilo(a);
+  if (hilo) f.appendChild(hilo);
   if (a.respuesta || a.cierre) {
     var r = el('div', { 'class': 'respuesta' });
     r.appendChild(

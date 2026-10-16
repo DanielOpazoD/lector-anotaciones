@@ -9,12 +9,40 @@ function textoPlano(pid) {
   }
   return TXT[pid];
 }
+// huella → [pid…] de los bloques con esa huella, en el orden del libro (se arma al pedirla)
+var POR_HUELLA = null;
+function bloquesConHuella(h) {
+  if (!POR_HUELLA) {
+    if (!SECS.length) return []; // el libro todavía no cargó: no se guarda un índice vacío
+    POR_HUELLA = {};
+    SECS.forEach(function (s) {
+      s.bloques.forEach(function (b) {
+        if (b.h) (POR_HUELLA[b.h] || (POR_HUELLA[b.h] = [])).push(b.id);
+      });
+    });
+  }
+  return POR_HUELLA[h] || [];
+}
 function ubicar(a) {
   return N.ubicarEn(a, {
     existe: function (pid) {
       return ORIG[pid] !== undefined;
     },
     texto: textoPlano,
+    porHuella: function (h) {
+      // primero los de la sección de la anotación (un texto repetido se ubica en la suya)
+      var todos = bloquesConHuella(h),
+        sid = BLOQUE_SEC[a.pid] || a.sid;
+      return todos
+        .filter(function (p) {
+          return BLOQUE_SEC[p] === sid;
+        })
+        .concat(
+          todos.filter(function (p) {
+            return BLOQUE_SEC[p] !== sid;
+          })
+        );
+    },
     candidatos: function (x) {
       var sec = SEC_BY_ID[BLOQUE_SEC[x.pid] || x.sid];
       var cand = sec

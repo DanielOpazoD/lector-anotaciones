@@ -191,6 +191,12 @@
 
   /* --- respuesta de quien edita, cambios entre versiones, capas, lectores, progreso, concentración --- */
   .ficha .respuesta { margin: 6px 0 4px; padding: 6px 8px; border-left: 3px solid var(--tinta); background: var(--bg-2); font-size: 12.5px; white-space: pre-wrap; border-radius: 0 4px 4px 0; }
+  /* la conversación anterior, plegada sobre la respuesta vigente */
+  .ficha .hilo { margin: 6px 0 2px; font-size: 12px; }
+  .ficha .hilo > summary { cursor: pointer; color: var(--fg-2); }
+  .ficha .hilo-item { margin: 4px 0; padding: 4px 8px; border-left: 2px solid var(--line); white-space: pre-wrap; color: var(--fg); }
+  .ficha .hilo-item.del-autor { border-left-color: var(--hl-duda-ink); }
+  .ficha .hilo-item .quien { font-size: 11px; color: var(--fg-2); letter-spacing: .04em; text-transform: uppercase; white-space: normal; }
   .ficha .respuesta .quien { font-size: 11px; color: var(--fg-2); margin-bottom: 2px; letter-spacing: .04em; text-transform: uppercase; white-space: normal; }
   .ficha.cierre-pregunta { box-shadow: inset 0 0 0 1px var(--hl-duda-ink); }
   .cierre { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bg-2); color: var(--fg-2); margin-left: 6px; text-transform: none; letter-spacing: 0; }
@@ -717,14 +723,24 @@
     }
     return mejor;
   }
-  // ctx: { existe(pid) → bool, texto(pid) → string, candidatos(a) → [pid…] en orden: la sección, luego el libro }.
+  // ctx: { existe(pid) → bool, texto(pid) → string, candidatos(a) → [pid…] en orden: la sección, luego el libro,
+  // porHuella(h) → [pid…] de los bloques con esa huella, en el mismo orden (opcional) }.
   // Devuelve { pid, inicio, fin, estado: 'exacto' | 'reubicado' | 'perdido' }, o null si no es un subrayado.
+  // El orden: la cita donde estaba; si no, el bloque con la misma huella que cuando se anotó (`bh`: el mismo texto,
+  // aunque su id haya cambiado porque se insertaron o quitaron bloques antes), donde la ubicación sigue siendo exacta;
+  // si no, la búsqueda por la cita y su contexto, en su bloque y después fuera.
   function ubicarEn(a, ctx) {
     if (a.tipo !== 'subrayado' || !a.pid) return null;
     var existe = ctx.existe(a.pid),
       txt = existe ? ctx.texto(a.pid) : '';
     if (existe && txt.slice(a.inicio, a.fin) === a.cita)
       return { pid: a.pid, inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    if (a.bh && ctx.porHuella) {
+      var mismos = ctx.porHuella(a.bh);
+      for (var k = 0; k < mismos.length; k++)
+        if (mismos[k] !== a.pid && ctx.texto(mismos[k]).slice(a.inicio, a.fin) === a.cita)
+          return { pid: mismos[k], inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    }
     var m = existe ? buscarCita(txt, a) : null;
     if (m) return { pid: a.pid, inicio: m.i, fin: m.i + a.cita.length, estado: 'reubicado' };
     // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque
@@ -829,7 +845,28 @@
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;
     return j >= 0 && j < lista.length ? j : -1;
   }
-  return { porRevisar: porRevisar, marcaRevision: marcaRevision, vecina: vecina };
+  // Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
+  function reabierta(a) {
+    return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta';
+  }
+  // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
+  function lineaHilo(h) {
+    var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(', ');
+    return (
+      'Antes, ' +
+      (h.de === 'editor' ? 'quien edita' : 'el autor') +
+      (detalle ? ' (' + detalle + ')' : '') +
+      ': ' +
+      (h.texto || '').trim().replace(/\n/g, ' ')
+    );
+  }
+  return {
+    porRevisar: porRevisar,
+    marcaRevision: marcaRevision,
+    vecina: vecina,
+    reabierta: reabierta,
+    lineaHilo: lineaHilo,
+  };
 });
 // Núcleo · Markdown → secciones y bloques. Es el mismo dialecto y la misma salida que `markdown.py` del paquete
 // (la paridad se comprueba en tests/test_paridad_js.py): `#`/`##` abren secciones de nivel 1 y 2, `###`/`####` son
@@ -2853,6 +2890,7 @@ var LIBRO = null,
   SECS = [],
   SEC_BY_ID = {},
   BLOQUE_SEC = {},
+  POS_BLOQUE = {}, // id de bloque → su posición en la sección
   ORIG = {};
 var db = null,
   col = null,
@@ -3002,8 +3040,9 @@ function renderLibro() {
     );
     art.appendChild(herramientasSeccion(s));
     var pagPrev = null;
-    s.bloques.forEach(function (b) {
+    s.bloques.forEach(function (b, i) {
       BLOQUE_SEC[b.id] = s.id;
+      POS_BLOQUE[b.id] = i;
       BLOQUES[b.id] = b;
       var node = renderBloque(b);
       if (b.pagina && b.pagina !== pagPrev) {
@@ -3586,12 +3625,40 @@ function textoPlano(pid) {
   }
   return TXT[pid];
 }
+// huella → [pid…] de los bloques con esa huella, en el orden del libro (se arma al pedirla)
+var POR_HUELLA = null;
+function bloquesConHuella(h) {
+  if (!POR_HUELLA) {
+    if (!SECS.length) return []; // el libro todavía no cargó: no se guarda un índice vacío
+    POR_HUELLA = {};
+    SECS.forEach(function (s) {
+      s.bloques.forEach(function (b) {
+        if (b.h) (POR_HUELLA[b.h] || (POR_HUELLA[b.h] = [])).push(b.id);
+      });
+    });
+  }
+  return POR_HUELLA[h] || [];
+}
 function ubicar(a) {
   return N.ubicarEn(a, {
     existe: function (pid) {
       return ORIG[pid] !== undefined;
     },
     texto: textoPlano,
+    porHuella: function (h) {
+      // primero los de la sección de la anotación (un texto repetido se ubica en la suya)
+      var todos = bloquesConHuella(h),
+        sid = BLOQUE_SEC[a.pid] || a.sid;
+      return todos
+        .filter(function (p) {
+          return BLOQUE_SEC[p] === sid;
+        })
+        .concat(
+          todos.filter(function (p) {
+            return BLOQUE_SEC[p] !== sid;
+          })
+        );
+    },
     candidatos: function (x) {
       var sec = SEC_BY_ID[BLOQUE_SEC[x.pid] || x.sid];
       var cand = sec
@@ -3888,12 +3955,18 @@ function lista(todoElLibro) {
 function listaNavegable() {
   return V.tab === 'revisar' ? lista() : lista(true);
 }
+// El orden del libro: la sección y la posición del bloque donde la anotación está hoy (no el número de su id, que
+// cambia si se insertan bloques), y dentro del bloque, el desplazamiento.
 function ordenKey(a) {
+  var pe = pidEfectivo(a),
+    u = UBIC[a.id],
+    sid = (pe && BLOQUE_SEC[pe]) || a.sid;
   var si = SECS.findIndex(function (s) {
-    return s.id === a.sid;
+    return s.id === sid;
   });
-  var bi = a.pid ? parseInt(a.pid.split('-b').pop(), 10) : -1;
-  return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi) * 10 + (a.inicio || 0) / 100000;
+  var bi = pe && POS_BLOQUE[pe] !== undefined ? POS_BLOQUE[pe] : -1;
+  var ini = u && u.pid ? u.inicio : a.inicio || 0;
+  return (si < 0 ? 999 : si) * 100000 + (bi < 0 ? 0 : bi + 1) * 10 + ini / 100000;
 }
 // ------------------------------------------------------------ fichas por id
 // Cada ficha dibujada se guarda con la anotación y la «firma de vista» con que se dibujó: lo que, además de la
@@ -4347,12 +4420,34 @@ function fichaAvisos(ctx) {
     );
   return out;
 }
+// La conversación anterior (`hilo`), plegada: lo vigente sigue en la respuesta y la réplica que vienen después.
+function fichaHilo(a) {
+  if (!a.hilo || !a.hilo.length) return null;
+  var d = el('details', { 'class': 'hilo' }, [
+    el('summary', { text: 'Conversación anterior (' + a.hilo.length + ')' }),
+  ]);
+  a.hilo.forEach(function (h) {
+    var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(' · ');
+    d.appendChild(
+      el('div', { 'class': 'hilo-item ' + (h.de === 'autor' ? 'del-autor' : 'del-editor') }, [
+        el('div', {
+          'class': 'quien',
+          text: (h.de === 'autor' ? 'Tú' : 'Quien edita') + (detalle ? ' · ' + detalle : ''),
+        }),
+        document.createTextNode(h.texto || ''),
+      ])
+    );
+  });
+  return d;
+}
 // Sólo lectura: la nota y la respuesta como texto, y «Copiar».
 function fichaSoloLectura(ctx) {
   var a = ctx.a,
     f = ctx.f,
     actual = ctx.actual;
   f.appendChild(el('div', { 'class': 'nota-texto', text: a.nota || '' }));
+  var hiloSL = fichaHilo(a);
+  if (hiloSL) f.appendChild(hiloSL);
   if (a.respuesta || a.cierre) {
     var rs = el('div', { 'class': 'respuesta' });
     rs.appendChild(el('div', { 'class': 'quien', text: 'Respuesta' + (a.commit ? ' · ' + a.commit : '') }));
@@ -4427,6 +4522,8 @@ function fichaEdicion(ctx) {
   ta.addEventListener('keydown', salirConTecla);
   f.appendChild(ta);
   pintarEtiquetas(f, a);
+  var hilo = fichaHilo(a);
+  if (hilo) f.appendChild(hilo);
   if (a.respuesta || a.cierre) {
     var r = el('div', { 'class': 'respuesta' });
     r.appendChild(
@@ -5086,10 +5183,9 @@ $('#b-margen').addEventListener('click', function () {
   VISTA.cambiar({ margen: !V.margen });
 });
 // ------------------------------------------------------------ exportar
-// Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
-function reabierta(a) {
-  return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta';
-}
+// en el núcleo (nucleo/45-revision.js), con su par en exportar.py
+var reabierta = N.reabierta,
+  lineaHilo = N.lineaHilo;
 // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
 // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
 // Lo que la base no tiene sale de la página con una señal, para que quien lo reciba sepa que no lo verá en la base.
@@ -5136,6 +5232,9 @@ function textoAnotacion(a) {
   var out = [cab];
   if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
   if (a.nota) out.push('Nota: ' + a.nota);
+  (a.hilo || []).forEach(function (h) {
+    out.push(lineaHilo(h));
+  });
   if (a.respuesta || a.cierre)
     out.push(
       'Respuesta' +
@@ -5203,6 +5302,7 @@ function copiarSeleccion(boton) {
 function exportarJSON() {
   return JSON.stringify(
     {
+      formato: 2,
       libro: LIBRO.titulo,
       generado: LIBRO.generado,
       exportado: ahora(),
@@ -5259,6 +5359,9 @@ function exportarMD() {
           (a.nota || '(sin texto)').replace(/\n/g, ' ') +
           senalSinGuardar(a)
       );
+    (a.hilo || []).forEach(function (h) {
+      out.push('  - ' + lineaHilo(h));
+    });
     if (a.respuesta || a.cierre)
       out.push(
         '  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' ')
@@ -5560,6 +5663,8 @@ $('#b-nota-pg').addEventListener('click', function () {
 });
 $('#pg-num').addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter') {
+    // el Enter no llega a la nota nueva, que recibe el foco: empezaría con un salto de línea
+    ev.preventDefault();
     cerrarNueva();
     notaPagina($('#pg-num').value, V.secActual);
   }

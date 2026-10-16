@@ -112,6 +112,19 @@ test('ubicar: una cita larga y única se encuentra aunque no tenga contexto', ()
   assert.deepEqual(U.ubicarEn(a, ctx), { pid: 'c-b2', inicio: 7, fin: 7 + cita.length, estado: 'reubicado' });
 });
 
+test('ubicar: por la huella, el mismo bloque con otro id (se insertó uno antes) es una ubicación exacta', () => {
+  const textos = { 'c-b1': 'Párrafo nuevo insertado', 'c-b2': 'Hola mundo cruel', 'c-b3': 'Otro' };
+  const huellas = { h1: ['c-b2'], hx: [] };
+  const ctx = { ...libroDePrueba(textos), porHuella: (h) => huellas[h] || [] };
+  const a = { tipo: 'subrayado', pid: 'c-b1', inicio: 5, fin: 10, cita: 'mundo', bh: 'h1' };
+  assert.deepEqual(U.ubicarEn(a, ctx), { pid: 'c-b2', inicio: 5, fin: 10, estado: 'exacto' });
+  // sin huella (o con una que ya no está), se busca por la cita y su contexto, y lo dice
+  assert.equal(U.ubicarEn({ ...a, bh: 'hx', antes: 'Hola ', despues: ' cruel' }, ctx).estado, 'reubicado');
+  assert.equal(U.ubicarEn({ ...a, bh: undefined, antes: 'Hola ', despues: ' cruel' }, ctx).estado, 'reubicado');
+  // el bloque con la huella ya no tiene la cita en su lugar (datos viejos): tampoco es exacta
+  assert.equal(U.ubicarEn({ ...a, inicio: 0, fin: 5 }, ctx).estado !== 'exacto', true);
+});
+
 test('ubicar: lo que no es subrayado no se ubica', () => {
   assert.equal(U.ubicarEn({ tipo: 'general' }, libroDePrueba({})), null);
 });
