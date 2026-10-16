@@ -1,7 +1,8 @@
 // ------------------------------------------------------------ exportar
 // en el núcleo (nucleo/45-revision.js), con su par en exportar.py
 var reabierta = N.reabierta,
-  lineaHilo = N.lineaHilo;
+  lineaHilo = N.lineaHilo,
+  propuesta = N.propuesta;
 // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
 // sección, página, archivo:línea, la cita exacta y la nota. Es lo que se pega en el chat.
 // Lo que la base no tiene sale de la página con una señal, para que quien lo reciba sepa que no lo verá en la base.
@@ -48,6 +49,7 @@ function textoAnotacion(a) {
   var out = [cab];
   if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
   if (a.nota) out.push('Nota: ' + a.nota);
+  if (propuesta(a)) out.push('Propuesta: «' + propuesta(a) + '»');
   (a.hilo || []).forEach(function (h) {
     out.push(lineaHilo(h));
   });
@@ -163,7 +165,8 @@ function exportarMD() {
           a.cita +
           '»' +
           senalSinGuardar(a) +
-          (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : '')
+          (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : '') +
+          (propuesta(a) ? '\n  - Propuesta: «' + propuesta(a).replace(/\n/g, ' ') + '»' : '')
       );
     else
       out.push(

@@ -42,6 +42,7 @@ def test_lo_que_copia_la_pagina_cumple_el_esquema():
     assert datos["formato"] == 2
     assert {a["tipo"] for a in datos["anotaciones"]} == {"subrayado", "pagina", "capitulo", "general"}
     assert any(a.get("hilo") for a in datos["anotaciones"])
+    assert any(a.get("sugerencia") for a in datos["anotaciones"])
     assert _errores(EXPORTACION, datos) == []
 
 

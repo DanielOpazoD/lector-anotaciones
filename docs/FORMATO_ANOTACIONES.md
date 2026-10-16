@@ -52,6 +52,7 @@ los cumplen. La página las guarda una a una en la colección `anotaciones` de l
 | `color` | subrayado | `revisar`, `cortar`, `duda` o `conservar` (ver abajo). |
 | `grupo` | subrayado | Presente cuando una selección abarcó varios bloques: todos los trozos comparten el mismo valor. |
 | `nota` | todos | Texto libre; en los subrayados es opcional. |
+| `sugerencia` | subrayado | El texto que el autor propone en lugar de la cita («Proponer», tecla P). Vacío o igual a la cita no propone nada. La ficha muestra la diferencia palabra por palabra; «Copiar» y la exportación la llevan en una línea «Propuesta: «…»», y `lector-anotaciones aplicar` la escribe en las fuentes. |
 | `estado` | todos | `abierta` o `resuelta`. |
 | `creado`, `editado` | todos | ISO 8601. |
 | `libro` | todos | Valor de `generado` del `libro.json` con que se hizo la anotación. |
@@ -105,6 +106,16 @@ Las dos órdenes de la línea de órdenes hacen esto sin escribirlo a mano:
 lector-anotaciones pendientes db/          # o el JSON de «Copiar todo»; --json para procesarlo
 lector-anotaciones responder db/ respuestas.json --versiones lectura.txt --salida lote.json
 ```
+
+Las propuestas de texto (`sugerencia`) se pueden escribir en las fuentes antes de responder:
+
+```bash
+lector-anotaciones aplicar db/ --fuentes fuentes/                    # muestra las diferencias, no escribe
+lector-anotaciones aplicar db/ --fuentes fuentes/ --escribir --respuestas respuestas.json
+lector-anotaciones responder db/ respuestas.json --versiones lectura.txt --commit 9f1e2d3
+```
+
+`aplicar` busca cada cita en el bloque que empieza en la línea de su `src` (y, si no está ahí, en todo el archivo, como «reubicada»), con los espacios flexibles y tolerando el énfasis entre palabras; con más de una coincidencia decide el contexto (`antes`, `despues`). La que está dentro de un énfasis se cambia ahí dentro; la que cruza el borde de uno, la ambigua y la que no aparece no se tocan y quedan para hacerlas a mano. `--respuestas` deja las de lo aplicado (`atendida`) para `responder`, que con `--commit` les pone el commit.
 
 `pendientes` muestra lo que espera a quien edita: sin respuesta, reabierto por el autor, o una pregunta con réplica (una pregunta sin réplica y una respuesta que el autor no revisó esperan al autor). `respuestas.json` es `[{"id", "respuesta", "cierre", "commit"?}]`. `responder` escribe, para cada una, la entrada `{"op": "update", "collection", "doc_id", "data", "if_version"}` de la acción «batch» de `ArtifactData`: `respuesta`, `cierre`, `respondido` (ahora), `estado` (`resuelta`, o `abierta` si es otra pregunta), `commit` (o lo borra, si era de la respuesta anterior), y `hilo` con la respuesta anterior y la réplica al final; la réplica se borra. `--versiones` es el texto que devolvió la lectura de la colección (o un JSON `{id: versión}`): cada escritura queda fijada a la versión leída, y si el autor cambió la anotación entre tanto, la base rechaza el lote entero sin escribir nada. Más de 50 escrituras se reparten en varios lotes (`lote-1.json`, `lote-2.json`…).
 

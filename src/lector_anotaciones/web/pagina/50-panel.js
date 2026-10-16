@@ -539,6 +539,73 @@ function fichaAvisos(ctx) {
     );
   return out;
 }
+// La propuesta de texto de un subrayado (`sugerencia`): la diferencia palabra por palabra con la cita y, si se puede
+// editar, el cuadro para escribirla, que se ve con la ficha activa. Vacía o igual a la cita no propone nada.
+function fichaPropuesta(a, editable) {
+  var caja = el('div', { 'class': 'propuesta' }, [el('div', { 'class': 'etq', text: 'Propuesta' })]),
+    dif = el('div', { 'class': 'dif-propuesta' });
+  caja.appendChild(dif);
+  var mostrarDif = function (texto) {
+    var s = N.propuesta({ id: a.id, tipo: 'subrayado', cita: a.cita, sugerencia: texto });
+    caja.classList.toggle('vacia', !s);
+    dif.textContent = '';
+    dif.appendChild(s ? renderDiff(a.cita.trim(), s) : el('span', { 'class': 'sin', text: 'Igual a la cita' }));
+  };
+  mostrarDif(a.sugerencia);
+  if (!editable) return caja;
+  var ta = el('textarea', {
+    'class': 'sugerencia',
+    placeholder: 'El texto que propones en lugar de la cita…',
+    'aria-label': 'Texto propuesto en lugar de la cita',
+    id: 'nota-' + a.id + '-sugerencia',
+    rows: '1',
+  });
+  ta.value = typeof a.sugerencia === 'string' ? a.sugerencia : a.cita;
+  var t = null;
+  // abrir el cuadro no propone nada: sólo se guarda lo que cambia respecto de lo que había (o de la cita)
+  var guardarPropuesta = function () {
+    var vivo = anots[a.id];
+    if (!vivo || ta.value === (typeof vivo.sugerencia === 'string' ? vivo.sugerencia : vivo.cita)) return;
+    guardarSilencioso(a.id, { sugerencia: ta.value });
+  };
+  ta.addEventListener('input', function () {
+    mostrarDif(ta.value);
+    ajustarAlto(ta);
+    colocarMargenPronto();
+    clearTimeout(t);
+    t = setTimeout(guardarPropuesta, 900);
+  });
+  ta.addEventListener('blur', function () {
+    clearTimeout(t);
+    guardarPropuesta();
+    ajustarAlto(ta);
+  });
+  ta.addEventListener('focus', function () {
+    cursorAlFinal(ta);
+    ajustarAlto(ta);
+  });
+  ta.addEventListener('keydown', teclaSalir(a.id));
+  caja.appendChild(ta);
+  return caja;
+}
+// Abre el cuadro de la propuesta en la ficha de un subrayado (lo crea con la cita si no lo tiene) y lo enfoca.
+function abrirPropuesta(id) {
+  var a = anots[id],
+    f = $('.ficha[data-id="' + id + '"]');
+  if (!a || !f || a.tipo !== 'subrayado' || SOLO_LECTURA) return;
+  activar(id);
+  var ta = $('textarea.sugerencia', f);
+  if (!ta) {
+    var caja = fichaPropuesta(a, true);
+    f.insertBefore(caja, $('details.hilo, .respuesta, textarea.replica, .acciones', f));
+    var b = $('[data-accion="proponer"]', f);
+    if (b) b.remove();
+    ta = $('textarea.sugerencia', caja);
+  }
+  ta.focus({ preventScroll: true });
+  ajustarAlto(ta);
+  colocarMargenPronto();
+}
 // La conversación anterior (`hilo`), plegada: lo vigente sigue en la respuesta y la réplica que vienen después.
 function fichaHilo(a) {
   if (!a.hilo || !a.hilo.length) return null;
@@ -565,6 +632,7 @@ function fichaSoloLectura(ctx) {
     f = ctx.f,
     actual = ctx.actual;
   f.appendChild(el('div', { 'class': 'nota-texto', text: a.nota || '' }));
+  if (N.propuesta(a)) f.appendChild(fichaPropuesta(a, false));
   var hiloSL = fichaHilo(a);
   if (hiloSL) f.appendChild(hiloSL);
   if (a.respuesta || a.cierre) {
@@ -596,18 +664,22 @@ function cursorAlFinal(ta) {
     ta.setSelectionRange(ta.value.length, ta.value.length);
   } catch (e) {}
 }
-// Edición: la nota (y sus etiquetas), la respuesta de quien edita y, si es una pregunta, el cuadro de la réplica. Esc o
-// Ctrl/Cmd+Enter en un cuadro guarda (al perder el foco) y vuelve al texto.
-function fichaEdicion(ctx) {
-  var a = ctx.a,
-    f = ctx.f;
-  var salirConTecla = function (ev) {
+// Esc o Ctrl/Cmd+Enter en un cuadro de la ficha guarda (al perder el foco) y vuelve al texto.
+function teclaSalir(id) {
+  return function (ev) {
     if (ev.key !== 'Escape' && !(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey))) return;
     ev.preventDefault();
     ev.stopPropagation();
     ev.target.blur();
-    volverAlTexto(a.id);
+    volverAlTexto(id);
   };
+}
+// Edición: la nota (y sus etiquetas), la propuesta de texto, la respuesta de quien edita y, si es una pregunta, el
+// cuadro de la réplica.
+function fichaEdicion(ctx) {
+  var a = ctx.a,
+    f = ctx.f;
+  var salirConTecla = teclaSalir(a.id);
   var ta = el('textarea', {
     'class': 'nota',
     placeholder: a.tipo === 'subrayado' ? 'Añadir una nota…' : 'Escribe la nota…',
@@ -641,6 +713,7 @@ function fichaEdicion(ctx) {
   ta.addEventListener('keydown', salirConTecla);
   f.appendChild(ta);
   pintarEtiquetas(f, a);
+  if (a.tipo === 'subrayado' && typeof a.sugerencia === 'string') f.appendChild(fichaPropuesta(a, true));
   var hilo = fichaHilo(a);
   if (hilo) f.appendChild(hilo);
   if (a.respuesta || a.cierre) {
@@ -764,6 +837,19 @@ function fichaAcciones(ctx) {
       guardar(Object.assign({}, ac, { estado: ac.estado === 'resuelta' ? 'abierta' : 'resuelta' }));
     });
     acc.appendChild(res);
+  }
+  if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string') {
+    var pr = el('button', {
+      'class': 'btn peq',
+      type: 'button',
+      text: 'Proponer texto',
+      title: 'Escribir el texto que propones en lugar de la cita (P)',
+      'data-accion': 'proponer',
+    });
+    pr.addEventListener('click', function () {
+      abrirPropuesta(a.id);
+    });
+    acc.appendChild(pr);
   }
   if (cambio) {
     var vc = el('button', {
@@ -1017,7 +1103,7 @@ function enfocar(id, editar, mostrar) {
     // (pantalla estrecha) la ficha es inerte y el foco va al pasaje.
     if (enfocable(f)) {
       if (editar) {
-        var ta = $('textarea', f);
+        var ta = $(typeof editar === 'string' ? editar : 'textarea', f);
         if (ta) ta.focus({ preventScroll: true });
       }
       if (!f.contains(document.activeElement)) f.focus({ preventScroll: true });

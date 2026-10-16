@@ -18,6 +18,8 @@ interface Anotacion {
   color?: string;
   grupo?: string;
   nota?: string;
+  /** En un subrayado, el texto que el autor propone en lugar de la cita; vacío o igual a la cita, nada. */
+  sugerencia?: string;
   estado?: 'abierta' | 'resuelta';
   creado?: string;
   editado?: string;
@@ -106,6 +108,7 @@ interface Nucleo {
   porRevisar(a: Anotacion, yo: string | null): boolean;
   marcaRevision(a: Anotacion, ahora: string): string;
   reabierta(a: Anotacion): boolean;
+  propuesta(a: Anotacion): string;
   lineaHilo(h: NonNullable<Anotacion['hilo']>[number]): string;
   vecina(
     lista: { id: string }[],

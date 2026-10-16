@@ -235,3 +235,12 @@ test('apilar: cada ficha a la altura de su pasaje, sin pisarse, y la activa mand
   assert.deepEqual(r.tops, { x: -48, y: 0 });
   assert.equal(r.alto, 40);
 });
+
+test('propuesta: el texto que un subrayado propone, salvo vacío o igual a la cita', () => {
+  const s = { id: 'a', tipo: 'subrayado', cita: 'lo que se observó' };
+  assert.equal(N.propuesta({ ...s, sugerencia: ' lo observado ' }), 'lo observado');
+  assert.equal(N.propuesta({ ...s, sugerencia: 'lo que se observó ' }), '');
+  assert.equal(N.propuesta({ ...s, sugerencia: '' }), '');
+  assert.equal(N.propuesta(s), '');
+  assert.equal(N.propuesta({ id: 'b', tipo: 'pagina', sugerencia: 'x' }), '', 'sólo los subrayados proponen');
+});

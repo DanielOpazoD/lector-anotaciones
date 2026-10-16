@@ -21,10 +21,11 @@ Lo que la página añade a la lectura:
 - **Respuesta en cada ficha.** Quien vuelca una anotación a las fuentes la cierra como atendida (con el commit), descartada (con el motivo) o pregunta; la respuesta se ve bajo la nota y, si es una pregunta, aparece un cuadro para replicar. Filtros «con respuesta» y «preguntas».
 - **Bandeja «Por revisar».** Las respuestas que todavía no revisaste, con su cuenta en la pestaña, en el orden del libro: A las da por atendidas y pasa a la siguiente, R las reabre con el cursor en la nota, V muestra el antes y el después del pasaje; contestar una pregunta también la revisa. Lo revisado queda a la vista, marcado, hasta salir de la pestaña.
 - **Notas al margen.** En pantalla ancha, las fichas de la sección van junto a su pasaje, a su altura y sin encimarse, y acompañan al texto al desplazarlo, como los comentarios de un procesador de texto; «Al margen» vuelve a la lista. Cada ficha es compacta (la nota se lee como texto y se edita al tocarla), y `.` y `,` (o ‹ ›) recorren las anotaciones en orden, de una sección a otra.
+- **Proponer otro texto.** Además de subrayar, «Proponer» en la barra de la selección (o P) abre en la ficha un cuadro con la cita para reescribirla; la ficha muestra la diferencia palabra por palabra, y quien edita la aplica a las fuentes con `lector-anotaciones aplicar`.
 - **Qué cambió.** Cada bloque lleva una huella; tras reconstruir, los bloques cambiados se marcan al margen y muestran la diferencia palabra por palabra con la versión anterior. Los bloques cambiados desde la última lectura también se marcan, y una ficha avisa si su bloque cambió desde que se anotó.
 - **Capas editoriales.** Frases largas, muletillas, términos retirados, repeticiones cercanas y citas narrativas, calculadas al construir y activables desde el menú «Capas», con el recuento por sección.
 - **Lectores con identidad.** Cada anotación guarda el id de quien la hizo (capacidad `user` de claude.ai); con varios lectores, las fichas llevan el nombre y el panel filtra por lector.
-- **Progreso y concentración.** Casilla «Leída» por sección, barra de avance por parte en el índice, modo concentración sin índice ni panel, y atajos: 1 a 4 subrayan, N subraya con nota, C copia la selección, `.`/`,` anotación siguiente o anterior, J/K cambian de sección, L marca leída, F concentración, ? ayuda.
+- **Progreso y concentración.** Casilla «Leída» por sección, barra de avance por parte en el índice, modo concentración sin índice ni panel, y atajos: 1 a 4 subrayan, N subraya con nota, C copia la selección, `.`/`,` anotación siguiente o anterior, P propone otro texto, J/K cambian de sección, L marca leída, F concentración, ? ayuda.
 - **Biblioteca.** Además del libro que trae la página, importa otros (Markdown o texto, HTML, EPUB, Word `.docx` o un `libro.json`) y los guarda en la biblioteca compartida de la página o sólo en el navegador; reemplazar un libro por una versión nueva conserva y reubica sus anotaciones; cada libro se descarga como Markdown o `libro.json`. Una página publicada sin `libro.json` es una biblioteca vacía lista para importar.
 - **Anotar sin estorbos.** Un clic fuera de la ficha (en el texto) sale de ella; Esc o Ctrl+Enter en una nota la guarda y devuelve el foco al pasaje. En el teléfono, el panel es una hoja que sube desde abajo y deja ver el pasaje anotado; índice y panel se cierran tocando fuera o con «×»; la barra de subrayado va abajo con botones grandes.
 - **Accesible.** Navegable con teclado (pestañas con flechas, «Saltar al texto», diálogos modales que devuelven el foco), anunciado a lectores de pantalla (estado, pestañas, filtros y colores con su estado; la categoría escrita en cada ficha, no sólo su color), áreas táctiles de 40 px, compatible con alto contraste del sistema y movimiento reducido. «Aa» ajusta el tamaño del texto, el tema (claro, oscuro o el del sistema) y la letra (con o sin serifa).
@@ -64,10 +65,13 @@ python -m http.server --directory salida 8000      # http://localhost:8000/
 # 3. Las anotaciones, de vuelta al trabajo sobre las fuentes
 lector-anotaciones exportar anotaciones.json --agrupar archivo --solo-abiertas --salida tareas.md
 
-# 4. Lo que espera respuesta y las escrituras que la dejan en la base
+# 4. Lo que espera respuesta, las propuestas de texto aplicadas y las escrituras que dejan la respuesta en la base
 lector-anotaciones pendientes db/                  # el directorio que deja una lectura de la colección
-lector-anotaciones responder db/ respuestas.json --versiones lectura.txt --salida lote.json
+lector-anotaciones aplicar db/ --fuentes fuentes/ --escribir --respuestas respuestas.json
+lector-anotaciones responder db/ respuestas.json --versiones lectura.txt --commit 9f1e2d3 --salida lote.json
 ```
+
+`aplicar` escribe en las fuentes las propuestas de texto de los subrayados (sin `--escribir`, sólo muestra las diferencias); lo ambiguo o lo que cortaría un énfasis lo deja para hacerlo a mano.
 
 `pendientes` lista lo que espera a quien edita (sin respuesta, reabierto por el autor, o una pregunta ya contestada) en el orden en que conviene aplicarlo. `responder` toma las respuestas (`[{id, respuesta, cierre, commit?}]`) y escribe las entradas de la acción «batch» de `ArtifactData`: un `update` por anotación con sólo los campos de quien responde, lo vigente pasado al `hilo` y fijado a la versión leída, para no pisar lo que el autor escribió entre tanto. Ver [docs/FORMATO_ANOTACIONES.md](docs/FORMATO_ANOTACIONES.md#cómo-responde-quien-edita).
 
@@ -86,8 +90,9 @@ src/lector_anotaciones/   paquete Python
   construir.py            arma y valida libro.json
   exportar.py             anotaciones JSON → Markdown de tareas
   responder.py            qué espera respuesta; respuestas → escrituras de la base
+  aplicar.py              propuestas de texto → cambios en las fuentes Markdown
   pagina.py               empaqueta las fuentes de la página en un solo index.html
-  cli.py                  órdenes `construir`, `pagina`, `exportar`, `pendientes` y `responder`
+  cli.py                  órdenes `construir`, `pagina`, `exportar`, `pendientes`, `aplicar` y `responder`
   web/                    fuentes de la página
     plantilla.html        el documento, con las marcas {{ESTILOS}}, {{NUCLEO}} y {{PAGINA}}
     estilos.css

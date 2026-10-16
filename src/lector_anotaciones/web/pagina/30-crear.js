@@ -92,7 +92,8 @@ function extremosDeRango(r) {
   }
   return { paras: paras, pA: pA, pB: pB, aFuera: aFuera, bFuera: bFuera };
 }
-function crearSubrayado(color, conNota) {
+// `conNota`: con el cursor en la nota; `proponer`: con el cuadro de la propuesta abierto, empezando por la cita.
+function crearSubrayado(color, conNota, proponer) {
   if (SOLO_LECTURA) return;
   var sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
@@ -147,12 +148,13 @@ function crearSubrayado(color, conNota) {
     a.despues = txt.slice(fin, fin + 30);
     a.color = color;
     if (grupo) a.grupo = grupo;
+    if (proponer) a.sugerencia = a.cita;
     guardar(a);
     if (!primero) primero = a.id;
   }
   sel.removeAllRanges();
   ocultarTb();
-  if (primero) enfocar(primero, !!conNota);
+  if (primero) enfocar(primero, proponer ? 'textarea.sugerencia' : !!conNota);
 }
 function ancestroPid(n) {
   while (n && n.nodeType !== 1) n = n.parentNode;

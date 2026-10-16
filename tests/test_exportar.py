@@ -214,3 +214,10 @@ def test_a_markdown_lleva_la_conversacion_anterior_antes_de_la_respuesta_vigente
         "  - Antes, el autor (2026-10-04): La cifra hacía falta.\n"
         "  - Respuesta (atendida, def5678): La repuse con su fuente."
     ) in md
+
+
+def test_a_markdown_lleva_la_propuesta_bajo_la_nota():
+    con = {**SUBRAYADO, "sugerencia": "una frase\nmejor"}
+    md = a_markdown([con, {**SUBRAYADO, "id": "a9", "sugerencia": " una frase que sobra "}], ahora=AHORA)
+    assert "  - Nota: Repite lo del párrafo anterior. Quitar.\n  - Propuesta: «una frase mejor»\n" in md
+    assert md.count("Propuesta") == 1, "una propuesta igual a la cita no propone nada"

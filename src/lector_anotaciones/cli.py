@@ -1,5 +1,5 @@
-"""Línea de órdenes: `lector-anotaciones construir …`, `… pagina …`, `… exportar …`, `… pendientes …` y
-`… responder …`."""
+"""Línea de órdenes: `lector-anotaciones construir …`, `… pagina …`, `… exportar …`, `… pendientes …`,
+`… aplicar …` y `… responder …`."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .aplicar import aplicar, diferencias
+from .aplicar import respuestas as respuestas_de
 from .capas import ConfigCapas, leer_lista
 from .construir import cargar_anterior, construir, escribir, resumen, validar
 from .exportar import a_markdown, cargar, orden_de_secciones
@@ -98,12 +100,21 @@ def _parser() -> argparse.ArgumentParser:
         help="versiones de los documentos: JSON {id: versión} o el texto que devolvió la lectura de la colección",
     )
     r.add_argument("--coleccion", default="anotaciones", help="ruta de la colección (p. ej. libros/<id>/anotaciones)")
+    r.add_argument("--commit", help="commit de las respuestas que no traen uno")
     r.add_argument(
         "--salida",
         type=Path,
         help="archivo JSON con las escrituras; si no caben en un lote, uno por lote (-1, -2…). Por defecto, la salida "
         "estándar",
     )
+
+    ap = sub.add_parser("aplicar", help="aplica a las fuentes Markdown las propuestas de texto pendientes")
+    ap.add_argument("anotaciones", type=Path, help="JSON de la página o directorio con un documento por archivo")
+    ap.add_argument("--fuentes", type=Path, required=True, help="directorio con las fuentes .md del libro")
+    ap.add_argument(
+        "--escribir", action="store_true", help="escribe los cambios; sin esto, sólo muestra las diferencias"
+    )
+    ap.add_argument("--respuestas", type=Path, help="escribe aquí las respuestas de lo aplicado, para `responder`")
     return p
 
 
@@ -205,7 +216,10 @@ def main(argv: list[str] | None = None) -> int:
             lotes = en_lotes(
                 escrituras(
                     cargar_coleccion(args.anotaciones),
-                    leer_respuestas(args.respuestas),
+                    [
+                        dict(r, commit=r.get("commit") or args.commit) if args.commit else r
+                        for r in leer_respuestas(args.respuestas)
+                    ],
                     leer_versiones(args.versiones),
                     coleccion=args.coleccion,
                     avisos=notas,
@@ -228,6 +242,27 @@ def main(argv: list[str] | None = None) -> int:
             destino = Path(args.salida).with_name(f"{Path(args.salida).stem}-{i}{Path(args.salida).suffix}")
             destino.write_text(json.dumps(lote, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"ok {destino}: lote {i} de {len(lotes)}, {len(lote)} escrituras")
+        return 0
+    if args.orden == "aplicar":
+        try:
+            resultados, archivos = aplicar(cargar_coleccion(args.anotaciones), args.fuentes)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        for r in resultados:
+            donde = f"{r.archivo}:{r.linea}" if r.linea else r.archivo or "sin origen"
+            extra = f" ({r.detalle})" if r.detalle else ""
+            print(f"{r.estado}: {r.id} · {donde} · «{r.cita}» → «{r.propuesta}»{extra}", file=sys.stderr)
+        if args.escribir:
+            for ruta, arch in sorted(archivos.items()):
+                ruta.write_text(arch.texto, encoding="utf-8")
+                print(f"ok {ruta}: {len(arch.resultados)} propuestas aplicadas")
+        else:
+            sys.stdout.write(diferencias(archivos, args.fuentes))
+        if args.respuestas:
+            lista = respuestas_de(resultados)
+            Path(args.respuestas).write_text(json.dumps(lista, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print(f"ok {args.respuestas}: {len(lista)} respuestas para `responder`", file=sys.stderr)
         return 0
     return 2
 

@@ -21,6 +21,10 @@
     "color": { "enum": ["revisar", "cortar", "duda", "conservar"] },
     "grupo": { "type": "string" },
     "nota": { "type": "string" },
+    "sugerencia": {
+      "description": "En un subrayado, el texto que el autor propone en lugar de la cita; vacío o igual a la cita, no propone nada.",
+      "type": "string"
+    },
     "estado": { "enum": ["abierta", "resuelta"] },
     "creado": { "type": "string", "format": "date-time" },
     "editado": { "type": "string", "format": "date-time" },

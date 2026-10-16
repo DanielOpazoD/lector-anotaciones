@@ -61,7 +61,14 @@
       (h.texto || '').trim().replace(/\n/g, ' ')
     );
   }
+  // Lo que un subrayado propone en lugar de su cita (`sugerencia`, sin espacios en los extremos), o '' si no propone
+  // nada: sin propuesta, vacía o igual a la cita (como `propuesta` en exportar.py).
+  function propuesta(a) {
+    var s = a && a.tipo === 'subrayado' && typeof a.sugerencia === 'string' ? a.sugerencia.trim() : '';
+    return s && s !== (a.cita || '').trim() ? s : '';
+  }
   return {
+    propuesta: propuesta,
     porRevisar: porRevisar,
     marcaRevision: marcaRevision,
     vecina: vecina,

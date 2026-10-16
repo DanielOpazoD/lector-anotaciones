@@ -153,3 +153,20 @@ def test_lo_que_escribe_responder_vuelve_a_la_bandeja_del_autor_en_la_pagina():
         + [["reabierta", [a]] for a in [reabierta, *nuevas]]
     )
     assert js == [False, False, True, True, True, True, False, False, False]
+
+
+def test_la_propuesta_se_lee_igual_en_python_y_en_la_pagina():
+    from lector_anotaciones.exportar import propuesta
+
+    sub = {"tipo": "subrayado", "cita": "lo que se observó "}
+    anots = [
+        {**sub, "sugerencia": "lo observado"},
+        {**sub, "sugerencia": "  lo observado\n"},
+        {**sub, "sugerencia": "lo que se observó"},
+        {**sub, "sugerencia": "   "},
+        {**sub, "sugerencia": None},
+        sub,
+        {"tipo": "general", "sugerencia": "x"},
+    ]
+    js = _evaluar_js([["propuesta", [a]] for a in anots])
+    assert js == [propuesta(a) for a in anots] == ["lo observado", "lo observado", "", "", "", "", ""]

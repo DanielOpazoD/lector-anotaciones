@@ -943,6 +943,7 @@ test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el
     const s = Object.values(j).find((a) => a.tipo === 'subrayado');
     Object.assign(s, {
       nota: 'Definición tajante.',
+      sugerencia: 'Un hecho es lo observado',
       hilo: [
         {
           de: 'editor',
@@ -1014,5 +1015,118 @@ test('Conversación anterior: el hilo se ve plegado, se copia y se exporta en el
     errores.length === 0,
     `sin errores de página con la conversación anterior${errores.length ? ': ' + errores.join(' | ') : ''}`
   );
+  await ctx.close();
+});
+
+test('Proponer otro texto: P con la selección, el botón de la ficha, la diferencia y lo que se copia', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(sinBase);
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const p = await ctx.newPage();
+  const errores = [];
+  p.on('pageerror', (e) => errores.push(String(e)));
+  await p.goto(base + '#cap-01');
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  const local = () => p.evaluate((k) => Object.values(JSON.parse(localStorage.getItem(k) || '{}')), CLAVE_LOCAL);
+  // P con texto seleccionado: subraya (revisar) y abre la propuesta con la cita, con el cursor en ella
+  await seleccionarTexto(p, 'Un hecho es lo que se observó');
+  await p.keyboard.press('p');
+  const abierto = await p.evaluate(() => {
+    const t = document.activeElement;
+    return {
+      cuadro: t && t.classList.contains('sugerencia'),
+      valor: t && t.value,
+      ficha: t && t.closest('.ficha').className,
+    };
+  });
+  check(
+    abierto.cuadro && abierto.valor === 'Un hecho es lo que se observó' && /c-revisar/.test(abierto.ficha),
+    `P subraya en «revisar» y abre la propuesta con la cita (${JSON.stringify(abierto)})`
+  );
+  await p.keyboard.press('Control+A');
+  await p.keyboard.type('Un hecho es lo observado');
+  const dif = await p.evaluate(() => {
+    const d = document.querySelector('.ficha.foco .dif-propuesta');
+    return {
+      del: Array.from(d.querySelectorAll('del')).map((x) => x.textContent),
+      ins: Array.from(d.querySelectorAll('ins')).map((x) => x.textContent),
+    };
+  });
+  check(
+    dif.del.join('|') === 'que se observó' && dif.ins.join('|') === 'observado',
+    `la diferencia con la cita se ve palabra por palabra mientras se escribe (${JSON.stringify(dif)})`
+  );
+  await p.keyboard.press('Escape');
+  const guardada = (await local()).find((a) => a.tipo === 'subrayado');
+  check(
+    guardada && guardada.sugerencia === 'Un hecho es lo observado',
+    `Esc guarda la propuesta (${JSON.stringify(guardada && guardada.sugerencia)})`
+  );
+  const reposo = await p.evaluate(() => {
+    const f = document.querySelector('.ficha.c-revisar');
+    return {
+      foco: f.classList.contains('foco'),
+      cuadro: getComputedStyle(f.querySelector('textarea.sugerencia')).display,
+      dif: f.querySelector('.dif-propuesta').offsetHeight > 0,
+    };
+  });
+  check(
+    !reposo.foco && reposo.cuadro === 'none' && reposo.dif,
+    `en reposo la ficha muestra la diferencia, no el cuadro (${JSON.stringify(reposo)})`
+  );
+  await enFicha(p, '.ficha.c-revisar', 'button[data-accion="copiar"]');
+  const copia = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(
+    copia.includes('«Un hecho es lo que se observó»\nPropuesta: «Un hecho es lo observado»'),
+    `«Copiar» lleva la propuesta bajo la cita (${JSON.stringify(copia.split('\n').slice(1, 3))})`
+  );
+  await p.keyboard.press('Escape');
+  await pulsar(p, '#b-copiar-md');
+  const md = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check(
+    md.includes('«Un hecho es lo que se observó»\n  - Propuesta: «Un hecho es lo observado»'),
+    '«Copiar todo (Markdown)» lleva la propuesta'
+  );
+  // «Proponer texto» en la ficha de un subrayado sin propuesta: abrirla y salir sin cambiar nada no propone nada
+  await seleccionarTexto(p, 'escrita con prisa');
+  await p.keyboard.press('3');
+  await p.keyboard.press('Escape');
+  await enFicha(p, '.ficha.c-duda', 'button[data-accion="proponer"]');
+  const boton = await p.evaluate(() => {
+    const f = document.querySelector('.ficha.c-duda');
+    return {
+      cuadro: document.activeElement && document.activeElement.classList.contains('sugerencia'),
+      valor: document.activeElement && document.activeElement.value,
+      sinBoton: !f.querySelector('[data-accion="proponer"]'),
+      vacia: f.querySelector('.propuesta').classList.contains('vacia'),
+    };
+  });
+  check(
+    boton.cuadro && boton.valor === 'escrita con prisa' && boton.sinBoton && boton.vacia,
+    `«Proponer texto» abre la propuesta con la cita y deja de ofrecerse (${JSON.stringify(boton)})`
+  );
+  await p.keyboard.press('Escape');
+  const duda = (await local()).find((a) => a.color === 'duda');
+  check(duda && !('sugerencia' in duda), 'abrir la propuesta y salir sin cambios no guarda nada');
+  // P con una ficha activa abre su propuesta
+  await p.evaluate(() => document.querySelector('.ficha.c-duda .cab > span').click());
+  await p.evaluate(() => document.querySelector('.ficha.c-duda').focus());
+  await p.keyboard.press('p');
+  check(
+    await p.evaluate(() => document.activeElement && document.activeElement.classList.contains('sugerencia')),
+    'P en una ficha activa abre su propuesta'
+  );
+  await p.keyboard.press('Escape');
+  // al recargar, la propuesta sigue en la ficha
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl');
+  const tras = await p.evaluate(() => {
+    const f = document.querySelector('.ficha.c-revisar');
+    return f && f.querySelector('.dif-propuesta') ? f.querySelector('.dif-propuesta').textContent : null;
+  });
+  check(tras === 'Un hecho es lo que se observóobservado', `la propuesta se conserva al recargar (${tras})`);
+  check(errores.length === 0, `sin errores de página al proponer${errores.length ? ': ' + errores.join(' | ') : ''}`);
   await ctx.close();
 });

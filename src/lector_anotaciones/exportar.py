@@ -93,6 +93,14 @@ def _cola(a: dict) -> list[str]:
     return lineas
 
 
+def propuesta(a: dict) -> str:
+    """Lo que un subrayado propone en lugar de su cita, sin espacios en los extremos; vacío si no propone nada (sin
+    propuesta, vacía o igual a la cita), como `propuesta` en la página."""
+    s = a.get("sugerencia") if a.get("tipo") == "subrayado" else None
+    s = s.strip() if isinstance(s, str) else ""
+    return s if s and s != (a.get("cita") or "").strip() else ""
+
+
 def reabierta(a: dict) -> bool:
     """Respondida como atendida o descartada y devuelta por el autor desde «Por revisar»."""
     return bool(a.get("revisado")) and a.get("cierre") in ("atendida", "descartada") and a.get("estado") != "resuelta"
@@ -110,6 +118,8 @@ def _linea(a: dict) -> list[str]:
         lineas = [f"- {caja} " + " · ".join(p for p in partes if p)]
         if nota:
             lineas.append(f"  - Nota: {nota}")
+        if propuesta(a):
+            lineas.append(f"  - Propuesta: «{propuesta(a).replace(chr(10), ' ')}»")
         return [*lineas, *_cola(a)]
     etiqueta = f"**{TIPOS.get(a.get('tipo', ''), a.get('tipo', ''))}**"
     partes = [etiqueta, pag if a.get("tipo") == "pagina" else "", src, quien]

@@ -55,6 +55,12 @@ $('#sel-nota').addEventListener('mousedown', function (ev) {
 $('#sel-nota').addEventListener('click', function () {
   crearSubrayado('revisar', true);
 });
+$('#sel-proponer').addEventListener('mousedown', function (ev) {
+  ev.preventDefault();
+});
+$('#sel-proponer').addEventListener('click', function () {
+  crearSubrayado('revisar', false, true);
+});
 $('#sel-copiar').addEventListener('mousedown', function (ev) {
   ev.preventDefault();
 });
@@ -469,6 +475,13 @@ document.addEventListener('keydown', function (ev) {
   } else if ((ev.key === 'n' || ev.key === 'N') && haySel) {
     ev.preventDefault();
     crearSubrayado('revisar', true);
+  } else if ((ev.key === 'p' || ev.key === 'P') && haySel) {
+    ev.preventDefault();
+    crearSubrayado('revisar', false, true);
+  } else if ((ev.key === 'p' || ev.key === 'P') && V.fichaFoco && anots[V.fichaFoco] && !SOLO_LECTURA) {
+    if (anots[V.fichaFoco].tipo !== 'subrayado' || !enfocable($('.ficha[data-id="' + V.fichaFoco + '"]'))) return;
+    ev.preventDefault();
+    abrirPropuesta(V.fichaFoco);
   } else if ((ev.key === 'c' || ev.key === 'C') && haySel) {
     ev.preventDefault();
     copiarSeleccion($('#sel-copiar'));

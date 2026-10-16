@@ -228,7 +228,7 @@
   #app.foco nav.indice, #app.foco aside.panel, #app.foco #movil-barra { display: none; }
   #app.foco main.mesa { grid-template-columns: 1fr; }
   #app.foco article.seccion { max-width: 70ch; }
-  body.solo-lectura #sel-tb .col-btn, body.solo-lectura #sel-tb .etq, body.solo-lectura #sel-nota, body.solo-lectura #b-nota-cap, body.solo-lectura .panel-cab .confirmar, body.solo-lectura #b-nota-gen, body.solo-lectura .ficha .acciones .btn:not(.copiar), body.solo-lectura .ficha .colores, body.solo-lectura #atajos .anotar { display: none; }
+  body.solo-lectura #sel-tb .col-btn, body.solo-lectura #sel-tb .etq, body.solo-lectura #sel-nota, body.solo-lectura #sel-proponer, body.solo-lectura #b-nota-cap, body.solo-lectura .panel-cab .confirmar, body.solo-lectura #b-nota-gen, body.solo-lectura .ficha .acciones .btn:not(.copiar), body.solo-lectura .ficha .colores, body.solo-lectura #atajos .anotar { display: none; }
   /* En sólo lectura el número de página sigue en el margen (es la referencia del PDF y lleva el punto de «página con nota»); sólo pierde la acción. */
   body.solo-lectura .pg { cursor: default; pointer-events: none; }
   .ficha .nota-texto { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-family: var(--sans); font-size: 13px; min-height: 24px; }
@@ -290,7 +290,7 @@
   .res.anot { border-left: 3px solid var(--tinta); }
   #movil-barra, #b-mas { display: none; }
   .herramientas { display: contents; }
-  #sel-nota { white-space: nowrap; }
+  #sel-nota, #sel-proponer { white-space: nowrap; }
 
   /* --- fichas compactas, bandeja de revisión, recorrido y notas al margen --- */
   .ficha { position: relative; }
@@ -309,6 +309,15 @@
   .ficha:not(.foco) textarea:hover { background: var(--bg-2); }
   .ficha textarea::placeholder { color: var(--fg-2); font-style: italic; }
   .ficha textarea.recortada { -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent); mask-image: linear-gradient(to bottom, #000 62%, transparent); }
+  /* la propuesta de texto: la diferencia con la cita, siempre; el cuadro para escribirla, con la ficha activa */
+  .ficha .propuesta { margin: 4px 0; }
+  .ficha .propuesta .etq { font-size: 11px; color: var(--fg-2); letter-spacing: .04em; text-transform: uppercase; }
+  .ficha .dif-propuesta { font-family: var(--serif); font-size: 13.5px; line-height: 1.45; padding: 4px 8px; background: var(--bg-2); border-radius: 4px; }
+  .ficha .dif-propuesta del { background: var(--hl-cortar); text-decoration: line-through; }
+  .ficha .dif-propuesta ins { background: var(--hl-conservar); text-decoration: none; }
+  .ficha .dif-propuesta .sin { font-family: var(--sans); font-size: 12px; color: var(--fg-2); font-style: italic; }
+  .ficha textarea.sugerencia { display: block; min-height: 0; margin-top: 4px; font-family: var(--serif); font-size: 13.5px; line-height: 1.45; }
+  .ficha:not(.foco):not(:focus-within) .propuesta textarea, .ficha:not(.foco):not(:focus-within) .propuesta.vacia { display: none; }
   .ficha .nueva { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--tinta); color: var(--sobre-tinta); margin-left: 6px; text-transform: none; letter-spacing: 0; }
   .ficha .nueva.hecha { background: var(--hl-conservar); color: var(--hl-conservar-ink); }
   .ficha.por-revisar { box-shadow: inset 0 0 0 1px var(--tinta); }
@@ -405,5 +414,6 @@
     aside .tab.activa, nav a.sec.activa, .btn.primario { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
     .col-btn { forced-color-adjust: none; }
     .ficha { border-left-width: 6px; }
+    .dif-propuesta ins, .diff ins { text-decoration: underline; }
   }
 }

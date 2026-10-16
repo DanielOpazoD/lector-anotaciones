@@ -2,42 +2,42 @@
   "formato": 2,
   "libro": "Libro de ejemplo",
   "generado": "2026-10-15",
-  "exportado": "2026-10-16T00:08:30.327Z",
+  "exportado": "2026-10-16T00:24:33.259Z",
   "anotaciones": [
     {
-      "id": "amva7m1f8pvwaz",
+      "id": "amva86o6whjsbr",
       "tipo": "capitulo",
       "sid": "cap-01",
       "sidTitulo": "Capítulo 1. Hechos y observaciones",
       "nota": "Nota de la sección",
       "estado": "abierta",
-      "creado": "2026-10-16T00:08:29.876Z",
-      "editado": "2026-10-16T00:08:29.937Z",
+      "creado": "2026-10-16T00:24:32.504Z",
+      "editado": "2026-10-16T00:24:32.630Z",
       "libro": "2026-10-15",
       "autor": null
     },
     {
-      "id": "amva7m1hlziuow",
+      "id": "amva86obx80xqd",
       "tipo": "pagina",
       "sid": "cap-01",
       "sidTitulo": "Capítulo 1. Hechos y observaciones",
       "nota": "Nota de la página 4",
       "estado": "abierta",
-      "creado": "2026-10-16T00:08:29.961Z",
-      "editado": "2026-10-16T00:08:30.015Z",
+      "creado": "2026-10-16T00:24:32.685Z",
+      "editado": "2026-10-16T00:24:32.806Z",
       "libro": "2026-10-15",
       "autor": null,
       "pagina": 4
     },
     {
-      "id": "amva7m1czniw3p",
+      "id": "amva86o43ggp6s",
       "tipo": "subrayado",
       "sid": "cap-01",
       "sidTitulo": "Capítulo 1. Hechos y observaciones",
       "nota": "Definición tajante.",
       "estado": "abierta",
-      "creado": "2026-10-16T00:08:29.795Z",
-      "editado": "2026-10-16T00:08:29.795Z",
+      "creado": "2026-10-16T00:24:32.403Z",
+      "editado": "2026-10-16T00:24:32.403Z",
       "libro": "2026-10-15",
       "autor": null,
       "pid": "cap-01-b1",
@@ -50,6 +50,7 @@
       "antes": "",
       "despues": ", no lo que se concluyó de la ",
       "color": "duda",
+      "sugerencia": "Un hecho es lo observado",
       "hilo": [
         {
           "de": "editor",
@@ -70,14 +71,14 @@
       "respondido": "2026-10-05T09:00:00.000Z"
     },
     {
-      "id": "amva7m1kk3o9q0",
+      "id": "amva86ogun635d",
       "tipo": "general",
       "sid": null,
       "sidTitulo": null,
       "nota": "Nota general",
       "estado": "abierta",
-      "creado": "2026-10-16T00:08:30.068Z",
-      "editado": "2026-10-16T00:08:30.106Z",
+      "creado": "2026-10-16T00:24:32.862Z",
+      "editado": "2026-10-16T00:24:32.944Z",
       "libro": "2026-10-15",
       "autor": null
     }
