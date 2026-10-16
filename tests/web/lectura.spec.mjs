@@ -1,73 +1,90 @@
 // Leer: capas, cambios entre versiones, progreso, concentración, atajos, voz y accesibilidad.
-import fs from 'node:fs';
-
 import {
-  LIBRO,
-  servir,
   check,
-  esperar,
-  sinBase,
-  conBase,
-  abrirDe,
   pulsar,
+  abrirDe,
   enFicha,
-  seleccionarTexto,
   seleccionar,
   libroAlterado,
-  paginar,
   conCambio,
-  conRepetidos,
   activo,
-  CLAVE_LOCAL,
   guardadoLocal,
+  sinErrores,
   test,
 } from './ayudas.mjs';
 
-let srv, base;
-test.beforeAll(async () => {
-  srv = await servir();
-  base = `http://127.0.0.1:${srv.address().port}/`;
-});
-test.afterAll(() => srv.close());
+// La página sin base, ya lista y diciéndolo («Sin base compartida»).
+async function sinBaseLista(abrir, op = {}) {
+  const p = await abrir(op);
+  await p.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
+  return p;
+}
 
-test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, búsqueda en notas, figura', async ({
-  browser,
+// ------------------------------------------------------------ un libro con un bloque cambiado
+// El libro de ejemplo con el primer párrafo del capítulo 2 cambiado respecto de la construcción anterior, sin base y
+// con el portapapeles; se abre en `hash`.
+const conUnCambio = (abrir, hash = '#cap-02') =>
+  sinBaseLista(abrir, {
+    hash,
+    permisos: ['clipboard-read', 'clipboard-write'],
+    preparar: (p) => libroAlterado(p, conCambio),
+  });
+// La tecla 2 subraya en «cortar» los primeros 18 caracteres del primer párrafo de la sección abierta.
+async function cortarCon2(p) {
+  await seleccionar(p, 18);
+  await p.keyboard.press('2');
+  await p.waitForSelector('article.seccion:not([hidden]) mark.hl.c-cortar');
+}
+// Selecciona desde el principio del último bloque del capítulo 1 hasta el enlace a la sección siguiente (como un triple
+// clic en el último párrafo): la selección termina fuera de los bloques. Devuelve el pid del bloque.
+const hastaElFinal = (p) =>
+  p.evaluate(() => {
+    const bloques = document.querySelectorAll('#sec-cap-01 .bloque[data-pid]');
+    const b = bloques[bloques.length - 1];
+    const tn = Array.from(b.childNodes).find((x) => x.nodeType === 3 && x.textContent.trim());
+    const r = document.createRange();
+    r.setStart(tn, 0);
+    r.setEnd(document.querySelector('#sig'), 0);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    return b.getAttribute('data-pid');
+  });
+// Los dos subrayados que el recorrido anterior tenía al probar el teclado y el borrado: el de la tecla 2 al principio
+// del capítulo 2 y el de la tecla 1 sobre una selección que sale del último bloque del capítulo 1 (la nota con
+// #etiqueta que llevaba el primero no cuenta aquí). Queda en el capítulo 1, sin selección.
+async function dosSubrayados(abrir) {
+  const p = await conUnCambio(abrir);
+  await cortarCon2(p);
+  await p.evaluate(() => {
+    location.hash = '#cap-01';
+  });
+  await p.waitForSelector('#sec-cap-01:not([hidden]) ul.bloque');
+  const pid = await hastaElFinal(p);
+  await p.waitForSelector('#sel-tb', { state: 'visible' });
+  await p.keyboard.press('1');
+  await p.waitForSelector(`[data-pid="${pid}"] mark.hl.c-revisar`);
+  await p.evaluate(() => window.getSelection().removeAllRanges());
+  return p;
+}
+
+test('Capas: el menú las lista con sus cuentas, las pinta sobre el texto, las resume y las apaga', async ({
+  abrir,
 }) => {
-  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx2.addInitScript(sinBase);
-  await ctx2.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const p2 = await ctx2.newPage();
-  const errores2 = [];
-  p2.on('pageerror', (e) => errores2.push(String(e)));
-  p2.on('console', (m) => {
-    if (m.type() === 'error') errores2.push(`${m.text()} (${(m.location() || {}).url || 'sin url'})`);
-  });
-  // libro.json con un bloque cambiado respecto de la construcción anterior
-  await p2.route('**/libro.json', async (route) => {
-    const L = JSON.parse(fs.readFileSync(LIBRO, 'utf8'));
-    const cap2 = L.secciones.find((s) => /^Capítulo 2/.test(s.titulo));
-    const b = cap2.bloques.find((x) => x.t === 'p');
-    b.anterior = 'Una inferencia es un salto desde lo observado hacia lo no observado.';
-    L.anterior_generado = '2026-01-01';
-    L.cambios = 1;
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(L) });
-  });
-  await p2.goto(base + '#cap-02');
-  await p2.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
-  await p2.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
-  check(!(await p2.$eval('#capas', (d) => d.hidden)), 'el menú de capas aparece cuando libro.json las trae');
-  await p2.click('#capas > summary');
-  const etiquetasCapas = await p2.$$eval('#capas-menu label', (ls) => ls.map((l) => l.textContent));
+  const p = await conUnCambio(abrir);
+  check(!(await p.$eval('#capas', (d) => d.hidden)), 'el menú de capas aparece cuando libro.json las trae');
+  await p.click('#capas > summary');
+  const etiquetasCapas = await p.$$eval('#capas-menu label', (ls) => ls.map((l) => l.textContent));
   check(
     etiquetasCapas.some((t) => /frases largas/.test(t)) && etiquetasCapas.some((t) => /muletillas/.test(t)),
     `el menú lista las capas con sus cuentas (${etiquetasCapas.length})`
   );
-  await p2.check('#capas-menu input[data-capa="fl"]');
-  await p2.check('#capas-menu input[data-capa="mu"]');
-  await p2.waitForSelector('article.seccion:not([hidden]) span.capa.k-fl');
-  const nMu = (await p2.$$('article.seccion:not([hidden]) span.capa.k-mu')).length;
+  await p.check('#capas-menu input[data-capa="fl"]');
+  await p.check('#capas-menu input[data-capa="mu"]');
+  await p.waitForSelector('article.seccion:not([hidden]) span.capa.k-fl');
+  const nMu = (await p.$$('article.seccion:not([hidden]) span.capa.k-mu')).length;
   check(nMu >= 1, `las capas activas se pintan sobre el texto (muletillas: ${nMu})`);
-  const resumenCapas = await p2.$eval(
+  const resumenCapas = await p.$eval(
     'article.seccion:not([hidden]) .sec-herr span[id^="capas-"]',
     (s) => s.textContent
   );
@@ -75,22 +92,27 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     /frases largas/.test(resumenCapas) && /muletillas/.test(resumenCapas),
     `la sección resume sus señales (${resumenCapas})`
   );
-  await p2.uncheck('#capas-menu input[data-capa="fl"]');
+  await p.uncheck('#capas-menu input[data-capa="fl"]');
   check(
-    (await p2.$$('article.seccion:not([hidden]) span.capa.k-fl')).length === 0,
+    (await p.$$('article.seccion:not([hidden]) span.capa.k-fl')).length === 0,
     'al apagar una capa, sus marcas desaparecen'
   );
-  await p2.keyboard.press('Escape');
-  // qué cambió
+  sinErrores(p, 'con las capas', { consola: true });
+});
+
+test('Qué cambió: el bloque se marca y se cuenta, su diferencia se abre y se cierra, la huella vieja también marca, y la búsqueda no lee el marcador', async ({
+  abrir,
+}) => {
+  const p = await conUnCambio(abrir);
   check(
-    (await p2.$$('article.seccion:not([hidden]) .bloque.cambiado')).length === 1,
+    (await p.$$('article.seccion:not([hidden]) .bloque.cambiado')).length === 1,
     'el bloque cambiado en la última construcción se marca'
   );
-  const chipCambio = await p2.$eval('article.seccion:not([hidden]) .sec-herr .chip', (c) => c.textContent);
+  const chipCambio = await p.$eval('article.seccion:not([hidden]) .sec-herr .chip', (c) => c.textContent);
   check(/1 bloque cambiado/.test(chipCambio), `la sección cuenta sus bloques cambiados (${chipCambio})`);
-  await p2.click('article.seccion:not([hidden]) .marca-cambio');
-  await p2.waitForSelector('.diff');
-  const diff = await p2.$eval('.diff', (d) => ({
+  await p.click('article.seccion:not([hidden]) .marca-cambio');
+  await p.waitForSelector('.diff');
+  const diff = await p.$eval('.diff', (d) => ({
     del: Array.from(d.querySelectorAll('del'))
       .map((x) => x.textContent)
       .join('|'),
@@ -102,30 +124,44 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     /salto/.test(diff.del) && /paso/.test(diff.ins),
     `la diferencia muestra lo quitado y lo añadido (${JSON.stringify(diff).slice(0, 80)})`
   );
-  await p2.click('article.seccion:not([hidden]) .marca-cambio');
-  check((await p2.$$('.diff')).length === 0, 'volver a pulsar oculta la diferencia');
+  await p.click('article.seccion:not([hidden]) .marca-cambio');
+  check((await p.$$('.diff')).length === 0, 'volver a pulsar oculta la diferencia');
   // cambió desde tu última lectura (huella guardada distinta)
-  const pidCap2 = await p2.$eval('article.seccion:not([hidden]) p.bloque[data-pid]:not(.cambiado)', (n) =>
+  const pidCap2 = await p.$eval('article.seccion:not([hidden]) p.bloque[data-pid]:not(.cambiado)', (n) =>
     n.getAttribute('data-pid')
   );
-  await p2.evaluate((pid) => {
+  await p.evaluate((pid) => {
     const k = Object.keys(localStorage).find((x) => x.endsWith(':visto'));
     const v = JSON.parse(localStorage.getItem(k) || '{}');
     v[pid] = 'huellavieja';
     localStorage.setItem(k, JSON.stringify(v));
   }, pidCap2);
-  await p2.reload();
-  await p2.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
   check(
-    await p2.$eval(
+    await p.$eval(
       `[data-pid="${pidCap2}"]`,
       (n) => n.classList.contains('cambiado') && /última lectura/.test(n.querySelector('.marca-cambio').title)
     ),
     'un bloque con huella distinta de la vista se marca como cambiado desde la última lectura'
   );
+  // la búsqueda no lee como texto los marcadores del margen (ahora, los de los dos bloques)
+  await p.fill('#buscar', 'cambió');
+  await p.press('#buscar', 'Enter');
+  await p.waitForSelector('.res');
+  const resCambio = await p.$$eval('.res:not(.anot)', (rs) => rs.map((r) => r.textContent));
+  check(
+    resCambio.length >= 1 && resCambio.every((t) => !/cambióUna/.test(t)),
+    `la búsqueda ignora el marcador «cambió» del margen (${resCambio.length} resultados)`
+  );
+  sinErrores(p, 'al ver qué cambió', { consola: true });
+});
+
+test('Leída con la casilla y con L, concentración (Esc sale), y las teclas 2 y ?', async ({ abrir }) => {
+  const p = await conUnCambio(abrir);
   // progreso y leída
-  await p2.check('article.seccion:not([hidden]) input[data-leida]');
-  const prog = await p2.evaluate(() => ({
+  await p.check('article.seccion:not([hidden]) input[data-leida]');
+  const prog = await p.evaluate(() => ({
     leida: !!document.querySelector('nav a.sec.activa.leida'),
     ancho: document.querySelector('nav .progreso[data-grupo="parte-1"] i').style.width,
   }));
@@ -133,54 +169,58 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     prog.leida && prog.ancho !== '0%' && prog.ancho !== '',
     `marcar leída actualiza el índice y la barra de progreso (${prog.ancho})`
   );
-  await p2.keyboard.press('l');
-  check(!(await p2.$('nav a.sec.activa.leida')), 'la tecla L alterna la marca de leída');
+  await p.keyboard.press('l');
+  check(!(await p.$('nav a.sec.activa.leida')), 'la tecla L alterna la marca de leída');
   // concentración
-  await p2.click('#b-foco');
-  const foco = await p2.evaluate(() => ({
+  await p.click('#b-foco');
+  const foco = await p.evaluate(() => ({
     on: document.querySelector('#app').classList.contains('foco'),
     nav: getComputedStyle(document.querySelector('nav.indice')).display,
     panel: getComputedStyle(document.querySelector('aside.panel')).display,
   }));
   check(foco.on && foco.nav === 'none' && foco.panel === 'none', 'el modo concentración oculta índice y panel');
-  await p2.keyboard.press('Escape');
+  await p.keyboard.press('Escape');
   check(
-    !(await p2.evaluate(() => document.querySelector('#app').classList.contains('foco'))),
+    !(await p.evaluate(() => document.querySelector('#app').classList.contains('foco'))),
     'Esc sale del modo concentración'
   );
   // atajos: 2 subraya en rojo; ? abre la ayuda
-  await seleccionar(p2, 18);
-  await p2.keyboard.press('2');
-  await p2.waitForSelector('article.seccion:not([hidden]) mark.hl.c-cortar');
+  await cortarCon2(p);
   check(true, 'la tecla 2 subraya la selección en «cortar»');
-  await p2.keyboard.press('?');
-  check(await p2.$eval('#atajos', (a) => a.open), 'la tecla ? muestra los atajos');
-  await p2.keyboard.press('Escape');
-  // etiquetas en la nota, filtro por etiqueta, búsqueda en notas
-  await p2.click('.tab[data-tab="todas"]');
-  await p2.fill('.ficha textarea', 'Revisar con #carmen la cinética');
-  await p2.$eval('.ficha textarea', (t) => t.blur());
-  await p2.waitForSelector('.ficha .etiquetas button');
+  await p.keyboard.press('?');
+  check(await p.$eval('#atajos', (a) => a.open), 'la tecla ? muestra los atajos');
+  sinErrores(p, 'con el progreso, la concentración y los atajos', { consola: true });
+});
+
+test('Las #etiquetas de la nota dan chips, selector y filtro; buscar en las notas y abrir el resultado con Enter', async ({
+  abrir,
+}) => {
+  const p = await conUnCambio(abrir);
+  await cortarCon2(p);
+  await p.click('.tab[data-tab="todas"]');
+  await p.fill('.ficha textarea', 'Revisar con #carmen la cinética');
+  await p.$eval('.ficha textarea', (t) => t.blur());
+  await p.waitForSelector('.ficha .etiquetas button');
   check(
-    (await p2.$eval('.ficha .etiquetas button', (b) => b.textContent)) === '#carmen' &&
-      !(await p2.$eval('#f-etiqueta', (s) => s.hidden)),
+    (await p.$eval('.ficha .etiquetas button', (b) => b.textContent)) === '#carmen' &&
+      !(await p.$eval('#f-etiqueta', (s) => s.hidden)),
     'las #etiquetas de la nota se vuelven chips y un selector'
   );
-  await abrirDe(p2, '#f-etiqueta');
-  await p2.selectOption('#f-etiqueta', 'carmen');
-  check((await p2.$$('.ficha')).length === 1, 'el filtro por etiqueta deja las fichas con esa etiqueta');
-  await pulsar(p2, '.filtro[data-f="conservar"]');
-  await p2.fill('#buscar', 'cinética');
-  await p2.press('#buscar', 'Enter');
-  await p2.waitForSelector('.res.anot');
+  await abrirDe(p, '#f-etiqueta');
+  await p.selectOption('#f-etiqueta', 'carmen');
+  check((await p.$$('.ficha')).length === 1, 'el filtro por etiqueta deja las fichas con esa etiqueta');
+  await pulsar(p, '.filtro[data-f="conservar"]');
+  await p.fill('#buscar', 'cinética');
+  await p.press('#buscar', 'Enter');
+  await p.waitForSelector('.res.anot');
   check(true, 'la búsqueda encuentra el texto de una nota');
   // activar el resultado con el teclado deja el foco en la ficha, no en el cuerpo del documento
-  await p2.focus('.res.anot');
-  await p2.keyboard.press('Enter');
-  await p2.waitForSelector('.ficha.foco textarea');
-  const trasEnterRes = await activo(p2);
+  await p.focus('.res.anot');
+  await p.keyboard.press('Enter');
+  await p.waitForSelector('.ficha.foco textarea');
+  const trasEnterRes = await activo(p);
   check(trasEnterRes.enFoco, `Enter en un resultado de búsqueda lleva el foco a la ficha (${trasEnterRes.tag})`);
-  const trasResultado = await p2.evaluate(() => ({
+  const trasResultado = await p.evaluate(() => ({
     tab: document.querySelector('.tab.activa').getAttribute('data-tab'),
     filtro: document.querySelector('.filtro.on').getAttribute('data-f'),
     nota: document.querySelector('.ficha.foco textarea').value,
@@ -189,8 +229,15 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     trasResultado.tab !== 'buscar' && trasResultado.filtro === 'todas' && /cinética/.test(trasResultado.nota),
     `pulsar el resultado abre la ficha, saliendo de la búsqueda y del filtro que la escondía (${trasResultado.tab}, ${trasResultado.filtro})`
   );
-  // copiar una selección que empieza en un marcador del margen o con la palabra «Cambió» del manuscrito
-  const copiaMarcador = await p2.evaluate(async () => {
+  sinErrores(p, 'con las etiquetas y la búsqueda en notas', { consola: true });
+});
+
+// ------------------------------------------------------------ copiar una selección
+test('Copiar una selección omite el marcador «cambió» del margen y conserva la palabra «Cambió» del manuscrito', async ({
+  abrir,
+}) => {
+  const p = await conUnCambio(abrir);
+  const copiaMarcador = await p.evaluate(async () => {
     const p = document.querySelector('article.seccion:not([hidden]) .bloque.cambiado');
     const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
     let tn = w.nextNode();
@@ -211,7 +258,7 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
       copiaMarcador.copia.split('\n')[1] === '«' + copiaMarcador.bruto.replace(/^cambió/, '') + '»',
     `la copia omite el marcador «cambió» del margen (${JSON.stringify(copiaMarcador.copia.split('\n')[1])})`
   );
-  const copiaPalabra = await p2.evaluate(async () => {
+  const copiaPalabra = await p.evaluate(async () => {
     const p = Array.from(document.querySelectorAll('article.seccion:not([hidden]) p.bloque')).find((x) =>
       /^Cambió la frase/.test(x.textContent.replace(/^(p\. \d+)?(cambió)?/, ''))
     );
@@ -230,13 +277,13 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     copiaPalabra.split('\n')[1] === '«Cambió la frase»',
     `y conserva la palabra «Cambió» cuando es del manuscrito (${JSON.stringify(copiaPalabra.split('\n')[1])})`
   );
-  await p2.evaluate(() => window.getSelection().removeAllRanges());
-  // copiar varios ítems de una lista y una fila de una tabla conserva los límites
-  await p2.evaluate(() => {
-    location.hash = '#cap-01';
-  });
-  await p2.waitForSelector('#sec-cap-01:not([hidden]) ul.bloque');
-  const copiaLista = await p2.evaluate(async () => {
+  sinErrores(p, 'al copiar junto al marcador «cambió»', { consola: true });
+});
+
+test('Copiar varios ítems de una lista o una fila de una tabla conserva sus límites', async ({ abrir }) => {
+  const p = await conUnCambio(abrir, '#cap-01');
+  await p.waitForSelector('#sec-cap-01:not([hidden]) ul.bloque');
+  const copiaLista = await p.evaluate(async () => {
     const lis = document.querySelectorAll('#sec-cap-01 ul.bloque li');
     const r = document.createRange();
     r.setStart(lis[0].firstChild, 0);
@@ -253,7 +300,7 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
       '«Dar por hecho lo que alguien contó.\nDar por hecho lo que se infirió de una cifra.»',
     `los ítems copiados van en líneas distintas (${JSON.stringify(copiaLista.split('\n').slice(1).join('|'))})`
   );
-  const copiaTabla = await p2.evaluate(async () => {
+  const copiaTabla = await p.evaluate(async () => {
     const celdas = document.querySelectorAll('#sec-cap-01 .tabla tr:nth-child(2) td');
     const r = document.createRange();
     r.setStart(celdas[0].firstChild, 0);
@@ -269,33 +316,26 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     copiaTabla.split('\n')[1] === '«Hecho · ¿Qué vi? · Fiebre de 38,5 °C»',
     `las celdas copiadas llevan separador (${JSON.stringify(copiaTabla.split('\n')[1])})`
   );
-  await p2.evaluate(() => window.getSelection().removeAllRanges());
-  // selección que termina fuera de los bloques (triple clic en el último párrafo): se subraya y se copia igual
-  const ultimoTexto = await p2.evaluate(() => {
-    const bloques = document.querySelectorAll('#sec-cap-01 .bloque[data-pid]');
-    const p = bloques[bloques.length - 1];
-    const tn = Array.from(p.childNodes).find((x) => x.nodeType === 3 && x.textContent.trim());
-    const r = document.createRange();
-    r.setStart(tn, 0);
-    r.setEnd(document.querySelector('#sig'), 0);
-    const s = window.getSelection();
-    s.removeAllRanges();
-    s.addRange(r);
-    return p.getAttribute('data-pid');
-  });
-  await p2.waitForSelector('#sel-tb', { state: 'visible' });
+  sinErrores(p, 'al copiar una lista y una tabla', { consola: true });
+});
+
+test('Una selección que sale del último bloque se copia y se subraya recortada a ese bloque', async ({ abrir }) => {
+  const p = await conUnCambio(abrir, '#cap-01');
+  await p.waitForSelector('#sec-cap-01:not([hidden]) ul.bloque');
+  const ultimoTexto = await hastaElFinal(p);
+  await p.waitForSelector('#sel-tb', { state: 'visible' });
   // la copia de esa selección trae sólo el bloque visible, no los de las secciones ocultas que siguen en el DOM
-  await p2.click('#sel-copiar');
-  const copiaFinal = await p2.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  const textoUltimo = await p2.$eval(`[data-pid="${ultimoTexto}"]`, (p) => p.textContent.trim());
+  await p.click('#sel-copiar');
+  const copiaFinal = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  const textoUltimo = await p.$eval(`[data-pid="${ultimoTexto}"]`, (b) => b.textContent.trim());
   check(
     copiaFinal.split('\n').slice(1).join('\n') === '«' + textoUltimo + '»' &&
       !/00_preliminares\.md:\d+ →/.test(copiaFinal),
     `copiar una selección que sale del último bloque da sólo ese bloque (${copiaFinal.length} caracteres)`
   );
-  await p2.keyboard.press('1');
-  await p2.waitForSelector(`[data-pid="${ultimoTexto}"] mark.hl.c-revisar`);
-  const subrayadoFinal = await p2.evaluate((pid) => {
+  await p.keyboard.press('1');
+  await p.waitForSelector(`[data-pid="${ultimoTexto}"] mark.hl.c-revisar`);
+  const subrayadoFinal = await p.evaluate((pid) => {
     const k = Object.keys(localStorage).find((x) => /^lector-anotaciones:[a-z0-9-]+$/.test(x));
     const a = Object.values(JSON.parse(localStorage.getItem(k))).find((x) => x.pid === pid);
     return a && { inicio: a.inicio, fin: a.fin, cita: a.cita };
@@ -307,51 +347,13 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
       /separar mejor\.$/.test(subrayadoFinal.cita),
     'una selección que sale del último bloque se recorta a ese bloque entero'
   );
-  await p2.evaluate(() => window.getSelection().removeAllRanges());
-  // el contorno de foco se mueve con la ficha enfocada
-  await p2.click('.tab[data-tab="todas"]');
-  const fichas = await p2.$$eval('.ficha', (fs) => fs.map((f) => f.getAttribute('data-id')));
-  await p2.click(`.ficha[data-id="${fichas[0]}"] .cab button.enlace`);
-  await p2.click('.tab[data-tab="todas"]');
-  await p2.click(`.ficha[data-id="${fichas[1]}"] .cab button.enlace`);
-  check((await p2.$$('mark.hl.foco')).length <= 1, 'sólo el subrayado de la ficha enfocada lleva contorno');
-  // teclado: Enter y Espacio en una marca llevan el foco a su ficha; Enter en un color lo conserva en el botón
-  await p2.focus('article.seccion:not([hidden]) mark.hl');
-  await p2.keyboard.press('Enter');
-  const trasEnterMarca = await activo(p2);
-  check(trasEnterMarca.enFoco, `Enter en una marca del texto lleva el foco a la ficha (${trasEnterMarca.tag})`);
-  await p2.focus('article.seccion:not([hidden]) mark.hl');
-  await p2.keyboard.press(' ');
-  const trasEspacio = await activo(p2);
-  check(trasEspacio.enFoco, `Espacio en una marca del texto también la activa (${trasEspacio.tag})`);
-  const colorAntes = await p2.$eval('.ficha.foco .col-btn.on', (b) => b.getAttribute('data-c'));
-  const colorNuevo = colorAntes === 'duda' ? 'conservar' : 'duda';
-  await p2.focus(`.ficha.foco .col-btn[data-c="${colorNuevo}"]`);
-  await p2.keyboard.press('Enter');
-  await p2.waitForSelector(`.ficha.foco .col-btn[data-c="${colorNuevo}"].on`);
-  const trasColor = await activo(p2);
-  check(
-    trasColor.enFoco && trasColor.tag === 'BUTTON' && /col-btn/.test(trasColor.clase) && /\bon\b/.test(trasColor.clase),
-    `Enter en un color de la ficha cambia el color y el foco sigue en ese botón (${trasColor.tag} ${trasColor.clase})`
-  );
-  await p2.focus('.ficha.foco button:has-text("Borrar")');
-  await p2.keyboard.press('Enter');
-  const trasBorrar = await activo(p2);
-  await p2.keyboard.press('Tab');
-  const trasTab = await activo(p2);
-  await p2.keyboard.press('Enter');
-  const trasNo = await activo(p2);
-  check(
-    trasBorrar.texto === 'Sí' && trasTab.texto === 'No' && trasNo.texto === 'Borrar' && trasNo.enFoco,
-    `Enter en «Borrar» enfoca «Sí»; «No» devuelve el foco a «Borrar» (${trasBorrar.texto} / ${trasTab.texto} / ${trasNo.texto})`
-  );
-  // la barra de selección queda dentro de la ventana aunque la selección sea más alta que la pantalla
-  await p2.setViewportSize({ width: 1280, height: 320 });
-  await p2.evaluate(() => {
-    location.hash = '#cap-01';
-  });
-  await p2.waitForSelector('#sec-cap-01:not([hidden])');
-  await p2.evaluate(() => {
+  sinErrores(p, 'con una selección que sale del último bloque', { consola: true });
+});
+
+test('Con una selección más alta que la ventana, la barra de selección queda a la vista', async ({ abrir }) => {
+  const p = await conUnCambio(abrir, '#cap-01');
+  await p.setViewportSize({ width: 1280, height: 320 });
+  await p.evaluate(() => {
     const bloques = document.querySelectorAll('#sec-cap-01 .bloque[data-pid]');
     const r = document.createRange();
     r.setStart(bloques[0], 0);
@@ -361,9 +363,9 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     s.addRange(r);
     document.querySelector('#lectura').scrollTop = 400;
   });
-  await p2.waitForSelector('#sel-tb', { state: 'visible' });
-  await p2.waitForTimeout(250);
-  const tbRect = await p2.$eval('#sel-tb', (t) => {
+  await p.waitForSelector('#sel-tb', { state: 'visible' });
+  await p.waitForTimeout(250);
+  const tbRect = await p.$eval('#sel-tb', (t) => {
     const r = t.getBoundingClientRect();
     return { top: Math.round(r.top), bottom: Math.round(r.bottom), alto: window.innerHeight };
   });
@@ -371,109 +373,136 @@ test('Capas, cambios, progreso, concentración, atajos, etiquetas, deshacer, bú
     tbRect.top >= 0 && tbRect.bottom <= tbRect.alto,
     `con una selección más alta que la ventana, la barra queda a la vista (top ${tbRect.top}, bottom ${tbRect.bottom}, ventana ${tbRect.alto})`
   );
-  await p2.evaluate(() => window.getSelection().removeAllRanges());
-  await p2.setViewportSize({ width: 1280, height: 900 });
-  await p2.evaluate(() => {
-    location.hash = '#cap-02';
-  });
-  await p2.waitForSelector('#sec-cap-02:not([hidden])');
-  // la búsqueda no lee los marcadores del margen como texto
-  await p2.evaluate(() => {
-    location.hash = '#cap-02';
-  });
-  await p2.waitForSelector('#sec-cap-02:not([hidden])');
-  await p2.fill('#buscar', 'cambió');
-  await p2.press('#buscar', 'Enter');
-  await p2.waitForSelector('.res');
-  const resCambio = await p2.$$eval('.res:not(.anot)', (rs) => rs.map((r) => r.textContent));
+  sinErrores(p, 'con la barra de selección en una ventana baja', { consola: true });
+});
+
+// ------------------------------------------------------------ teclado y borrado, con dos subrayados
+test('Teclado: un solo contorno de foco; Enter y Espacio en una marca llevan a su ficha; el foco sigue en el color y en «Borrar»', async ({
+  abrir,
+}) => {
+  const p = await dosSubrayados(abrir);
+  // el contorno de foco se mueve con la ficha enfocada
+  await p.click('.tab[data-tab="todas"]');
+  const fichas = await p.$$eval('.ficha', (fs) => fs.map((f) => f.getAttribute('data-id')));
+  await p.click(`.ficha[data-id="${fichas[0]}"] .cab button.enlace`);
+  await p.click('.tab[data-tab="todas"]');
+  await p.click(`.ficha[data-id="${fichas[1]}"] .cab button.enlace`);
+  check((await p.$$('mark.hl.foco')).length <= 1, 'sólo el subrayado de la ficha enfocada lleva contorno');
+  // teclado: Enter y Espacio en una marca llevan el foco a su ficha; Enter en un color lo conserva en el botón
+  await p.focus('article.seccion:not([hidden]) mark.hl');
+  await p.keyboard.press('Enter');
+  const trasEnterMarca = await activo(p);
+  check(trasEnterMarca.enFoco, `Enter en una marca del texto lleva el foco a la ficha (${trasEnterMarca.tag})`);
+  await p.focus('article.seccion:not([hidden]) mark.hl');
+  await p.keyboard.press(' ');
+  const trasEspacio = await activo(p);
+  check(trasEspacio.enFoco, `Espacio en una marca del texto también la activa (${trasEspacio.tag})`);
+  const colorAntes = await p.$eval('.ficha.foco .col-btn.on', (b) => b.getAttribute('data-c'));
+  const colorNuevo = colorAntes === 'duda' ? 'conservar' : 'duda';
+  await p.focus(`.ficha.foco .col-btn[data-c="${colorNuevo}"]`);
+  await p.keyboard.press('Enter');
+  await p.waitForSelector(`.ficha.foco .col-btn[data-c="${colorNuevo}"].on`);
+  const trasColor = await activo(p);
   check(
-    resCambio.length >= 1 && resCambio.every((t) => !/cambióUna/.test(t)),
-    `la búsqueda ignora el marcador «cambió» del margen (${resCambio.length} resultados)`
+    trasColor.enFoco && trasColor.tag === 'BUTTON' && /col-btn/.test(trasColor.clase) && /\bon\b/.test(trasColor.clase),
+    `Enter en un color de la ficha cambia el color y el foco sigue en ese botón (${trasColor.tag} ${trasColor.clase})`
   );
-  // deshacer un borrado
-  await p2.click('.tab[data-tab="todas"]');
-  const antesBorrar = (await p2.$$('.ficha')).length;
-  await enFicha(p2, '.ficha', 'button:has-text("Borrar")');
-  await p2.click('.ficha .confirmar button:has-text("Sí")');
-  await p2.waitForSelector('#deshacer');
-  check((await p2.$$('.ficha')).length === antesBorrar - 1, 'borrar quita la ficha y ofrece deshacer');
-  await p2.click('#deshacer');
-  await p2.waitForFunction((n) => document.querySelectorAll('.ficha').length === n, antesBorrar);
+  await p.focus('.ficha.foco button:has-text("Borrar")');
+  await p.keyboard.press('Enter');
+  const trasBorrar = await activo(p);
+  await p.keyboard.press('Tab');
+  const trasTab = await activo(p);
+  await p.keyboard.press('Enter');
+  const trasNo = await activo(p);
+  check(
+    trasBorrar.texto === 'Sí' && trasTab.texto === 'No' && trasNo.texto === 'Borrar' && trasNo.enFoco,
+    `Enter en «Borrar» enfoca «Sí»; «No» devuelve el foco a «Borrar» (${trasBorrar.texto} / ${trasTab.texto} / ${trasNo.texto})`
+  );
+  sinErrores(p, 'con el teclado en marcas y fichas', { consola: true });
+});
+
+test('Borrar una ficha la quita y ofrece deshacer; deshacer la recupera', async ({ abrir }) => {
+  const p = await dosSubrayados(abrir);
+  await p.click('.tab[data-tab="todas"]');
+  const antesBorrar = (await p.$$('.ficha')).length;
+  await enFicha(p, '.ficha', 'button:has-text("Borrar")');
+  await p.click('.ficha .confirmar button:has-text("Sí")');
+  await p.waitForSelector('#deshacer');
+  check((await p.$$('.ficha')).length === antesBorrar - 1, 'borrar quita la ficha y ofrece deshacer');
+  await p.click('#deshacer');
+  await p.waitForFunction((n) => document.querySelectorAll('.ficha').length === n, antesBorrar);
   check(true, 'deshacer la recupera');
-  // figura ampliable y lectura en voz alta
-  await p2.goto(base + '#cap-01');
-  await p2.waitForSelector('article.seccion:not([hidden]) figure img');
-  await p2.click('article.seccion:not([hidden]) figure img');
-  check(await p2.$eval('#lightbox', (l) => l.open), 'clic en una figura la amplía');
-  await p2.keyboard.press('Escape');
-  check(!(await p2.$eval('#lightbox', (l) => l.open)), 'Esc cierra la figura');
-  await p2.click('article.seccion:not([hidden]) button[data-escuchar]');
-  await p2.waitForTimeout(400); // en un navegador sin voces, el error llega enseguida y el botón vuelve solo
-  const txtVoz = await p2.$eval('article.seccion:not([hidden]) button[data-escuchar]', (b) => b.textContent);
-  const estadoVoz = await p2.$eval('#estado', (e) => e.textContent);
+  sinErrores(p, 'al borrar y deshacer', { consola: true });
+});
+
+// ------------------------------------------------------------ figura y voz
+test('Una figura se amplía con un clic y Esc la cierra; «Escuchar» lee o avisa que no hay voz', async ({ abrir }) => {
+  const p = await conUnCambio(abrir, '#cap-01');
+  await p.waitForSelector('article.seccion:not([hidden]) figure img');
+  await p.click('article.seccion:not([hidden]) figure img');
+  check(await p.$eval('#lightbox', (l) => l.open), 'clic en una figura la amplía');
+  await p.keyboard.press('Escape');
+  check(!(await p.$eval('#lightbox', (l) => l.open)), 'Esc cierra la figura');
+  await p.click('article.seccion:not([hidden]) button[data-escuchar]');
+  await p.waitForTimeout(400); // en un navegador sin voces, el error llega enseguida y el botón vuelve solo
+  const txtVoz = await p.$eval('article.seccion:not([hidden]) button[data-escuchar]', (b) => b.textContent);
+  const estadoVoz = await p.$eval('#estado', (e) => e.textContent);
   check(
     txtVoz === 'Detener' || /voz alta/.test(estadoVoz),
     `escuchar arranca la lectura o avisa que no hay voz (${txtVoz} · ${estadoVoz.slice(0, 50)})`
   );
   if (txtVoz === 'Detener') {
-    await p2.click('article.seccion:not([hidden]) button[data-escuchar]');
+    await p.click('article.seccion:not([hidden]) button[data-escuchar]');
     check(
-      (await p2.$eval('article.seccion:not([hidden]) button[data-escuchar]', (b) => b.textContent)) === 'Escuchar',
+      (await p.$eval('article.seccion:not([hidden]) button[data-escuchar]', (b) => b.textContent)) === 'Escuchar',
       'detener vuelve al estado inicial'
     );
   }
-  check(
-    errores2.length === 0,
-    `sin errores de consola en el segundo recorrido${errores2.length ? ': ' + errores2.join(' | ') : ''}`
-  );
-  await ctx2.close();
+  sinErrores(p, 'con la figura y la voz', { consola: true });
 });
 
-test('Lectura en voz alta: cambiar de sección mientras suena', async ({ browser }) => {
-  const ctxVoz = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctxVoz.addInitScript(sinBase);
-  await ctxVoz.addInitScript(() => {
-    // Un sintetizador que acepta hablar y nunca termina, para probar el estado sin depender de voces reales.
-    window.SpeechSynthesisUtterance = function (t) {
-      this.text = t;
-    };
-    // cancel() dispara «interrupted» en la locución en curso, como hace Chromium
-    Object.defineProperty(window, 'speechSynthesis', {
-      value: {
-        speak: function (u) {
-          this.actual = u;
-          if (u.onstart) u.onstart();
-        },
-        cancel: function () {
-          var u = this.actual;
-          this.actual = null;
-          if (u && u.onerror)
-            setTimeout(function () {
-              u.onerror({ error: 'interrupted' });
-            }, 0);
-        },
-        getVoices: function () {
-          return [];
-        },
+// Un sintetizador que acepta hablar y nunca termina, para probar el estado sin depender de voces reales.
+const sintetizador = () => {
+  window.SpeechSynthesisUtterance = function (t) {
+    this.text = t;
+  };
+  // cancel() dispara «interrupted» en la locución en curso, como hace Chromium
+  Object.defineProperty(window, 'speechSynthesis', {
+    value: {
+      speak: function (u) {
+        this.actual = u;
+        if (u.onstart) u.onstart();
       },
-      configurable: true,
-    });
+      cancel: function () {
+        var u = this.actual;
+        this.actual = null;
+        if (u && u.onerror)
+          setTimeout(function () {
+            u.onerror({ error: 'interrupted' });
+          }, 0);
+      },
+      getVoices: function () {
+        return [];
+      },
+    },
+    configurable: true,
   });
-  const pv = await ctxVoz.newPage();
-  await pv.goto(base + '#cap-01');
-  await pv.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
-  await pv.click('#sec-cap-01 button[data-escuchar]');
+};
+
+test('Lectura en voz alta: cambiar de sección mientras suena', async ({ abrir }) => {
+  const p = await abrir({ previo: [sintetizador] });
+  await p.click('#sec-cap-01 button[data-escuchar]');
   check(
-    (await pv.$eval('#sec-cap-01 button[data-escuchar]', (b) => b.textContent)) === 'Detener' &&
-      (await pv.$$('#sec-cap-01 .bloque.leyendo')).length === 1,
+    (await p.$eval('#sec-cap-01 button[data-escuchar]', (b) => b.textContent)) === 'Detener' &&
+      (await p.$$('#sec-cap-01 .bloque.leyendo')).length === 1,
     'escuchar ilumina el párrafo que suena'
   );
-  await pv.evaluate(() => {
+  await p.evaluate(() => {
     location.hash = '#cap-02';
   });
-  await pv.waitForSelector('#sec-cap-02:not([hidden])');
-  await pv.click('#sec-cap-02 button[data-escuchar]');
-  const botones = await pv.evaluate(() => ({
+  await p.waitForSelector('#sec-cap-02:not([hidden])');
+  await p.click('#sec-cap-02 button[data-escuchar]');
+  const botones = await p.evaluate(() => ({
     uno: document.querySelector('#sec-cap-01 button[data-escuchar]').textContent,
     dos: document.querySelector('#sec-cap-02 button[data-escuchar]').textContent,
     leyendo: document.querySelectorAll('#sec-cap-02 .bloque.leyendo').length,
@@ -482,43 +511,35 @@ test('Lectura en voz alta: cambiar de sección mientras suena', async ({ browser
     botones.uno === 'Escuchar' && botones.dos === 'Detener' && botones.leyendo === 1,
     `escuchar otra sección cambia la lectura en vez de sólo detenerla (${botones.uno} / ${botones.dos})`
   );
-  await pv.waitForTimeout(50);
+  await p.waitForTimeout(50);
   check(
-    !/No se pudo leer/.test(await pv.$eval('#estado', (e) => e.textContent)) &&
-      (await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Detener',
+    !/No se pudo leer/.test(await p.$eval('#estado', (e) => e.textContent)) &&
+      (await p.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Detener',
     'la interrupción que provoca cancelar no se toma por un fallo'
   );
-  await pv.click('#sec-cap-02 button[data-escuchar]');
+  await p.click('#sec-cap-02 button[data-escuchar]');
   check(
-    (await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar',
+    (await p.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar',
     'pulsar en la misma sección detiene'
   );
-  await pv.click('#sec-cap-02 button[data-escuchar]');
-  await pv.evaluate(() => {
+  await p.click('#sec-cap-02 button[data-escuchar]');
+  await p.evaluate(() => {
     location.hash = '#cap-01';
   });
-  await pv.waitForSelector('#sec-cap-01:not([hidden])');
+  await p.waitForSelector('#sec-cap-01:not([hidden])');
   check(
-    (await pv.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar' &&
-      (await pv.$$('.bloque.leyendo')).length === 0,
+    (await p.$eval('#sec-cap-02 button[data-escuchar]', (b) => b.textContent)) === 'Escuchar' &&
+      (await p.$$('.bloque.leyendo')).length === 0,
     'cambiar de sección detiene la lectura'
   );
-  await ctxVoz.close();
 });
 
-test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => {
-  const ctxA = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctxA.addInitScript(sinBase);
-  const pa = await ctxA.newPage();
-  const erroresA = [];
-  pa.on('pageerror', (e) => erroresA.push(String(e)));
-  pa.on('console', (m) => {
-    if (m.type() === 'error') erroresA.push(m.text());
-  });
-  await pa.goto(base + '#cap-01');
-  await pa.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
-  await pa.waitForFunction(() => /Sin base compartida/.test(document.querySelector('#estado').textContent));
-  const aria = await pa.evaluate(() => ({
+// ------------------------------------------------------------ accesibilidad y salir de las fichas (escritorio)
+test('Accesibilidad: el estado se anuncia, pestañas y filtros dicen su estado, y lo primero de Tab es «Saltar al texto»', async ({
+  abrir,
+}) => {
+  const p = await sinBaseLista(abrir);
+  const aria = await p.evaluate(() => ({
     estado:
       document.querySelector('#anuncio') && !document.querySelector('#anuncio').closest('#app')
         ? document.querySelector('#anuncio').getAttribute('role')
@@ -538,7 +559,7 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
       aria.filtros >= 9,
     `el estado se anuncia, pestañas y filtros exponen su estado y el índice marca la sección actual (${JSON.stringify(aria)})`
   );
-  const salto = await pa.evaluate(() => {
+  const salto = await p.evaluate(() => {
     const s = document.querySelector('a.saltar');
     const primero = document.querySelector(
       'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'
@@ -546,17 +567,23 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
     return !!s && primero === s;
   });
   if (salto) {
-    await pa.focus('a.saltar');
-    await pa.keyboard.press('Enter');
+    await p.focus('a.saltar');
+    await p.keyboard.press('Enter');
   }
   check(
-    salto && (await pa.evaluate(() => document.activeElement.id)) === 'lectura',
+    salto && (await p.evaluate(() => document.activeElement.id)) === 'lectura',
     'lo primero del orden de Tab es «Saltar al texto», que lleva el foco a la lectura'
   );
-  // pestañas con flechas
-  await pa.focus('.tab.activa');
-  await pa.keyboard.press('ArrowRight');
-  const tabTras = await pa.evaluate(() => ({
+  sinErrores(p, 'en los roles y «Saltar al texto»', { consola: true });
+});
+
+test('Las pestañas se recorren con flechas; un filtro sin resultados se resume y ofrece quitarlo', async ({
+  abrir,
+}) => {
+  const p = await sinBaseLista(abrir);
+  await p.focus('.tab.activa');
+  await p.keyboard.press('ArrowRight');
+  const tabTras = await p.evaluate(() => ({
     foco: document.activeElement.getAttribute('data-tab'),
     sel: (document.querySelector('.tab[aria-selected="true"]') || { getAttribute: () => null }).getAttribute(
       'data-tab'
@@ -567,9 +594,9 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
     tabTras.foco === 'todas' && tabTras.sel === 'todas' && tabTras.lista === 'tab-todas',
     `→ pasa a la pestaña siguiente y la selecciona (${JSON.stringify(tabTras)})`
   );
-  // un filtro sin resultados lo dice y ofrece quitarlo
-  await pulsar(pa, '.filtro[data-f="duda"]');
-  const filtrada = await pa.evaluate(() => ({
+  // un filtro sin resultados (en «Todas», sin anotaciones) lo dice y ofrece quitarlo
+  await pulsar(p, '.filtro[data-f="duda"]');
+  const filtrada = await p.evaluate(() => ({
     pulsado: document.querySelector('.filtro[data-f="duda"]').getAttribute('aria-pressed'),
     resumen: (document.querySelector('#filtro-resumen') || {}).textContent || '',
     quitar: !!Array.from(document.querySelectorAll('#lista button')).find((b) => /Quitar filtros/.test(b.textContent)),
@@ -578,22 +605,53 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
     filtrada.pulsado === 'true' && /duda/.test(filtrada.resumen) && filtrada.quitar,
     `el filtro activo se anuncia, se resume junto a «Filtros» y, sin resultados, ofrece quitarlo (${JSON.stringify(filtrada)})`
   );
-  if (filtrada.quitar) await pa.click('#lista button.enlace');
+  if (filtrada.quitar) await p.click('#lista button.enlace');
   check(
-    (await pa.$eval('.filtro.on', (b) => b.getAttribute('data-f'))) === 'todas',
+    (await p.$eval('.filtro.on', (b) => b.getAttribute('data-f'))) === 'todas',
     '«Quitar filtros» vuelve a mostrarlo todo'
   );
-  // subrayar con nota y salir con un clic en el texto
-  await pa.click('.tab[data-tab="capitulo"]');
-  await seleccionar(pa, 25);
-  await pa.keyboard.press('n');
-  await pa.waitForSelector('.ficha.foco textarea');
+  sinErrores(p, 'en las pestañas y los filtros', { consola: true });
+});
+
+// N con los primeros 25 caracteres del primer párrafo seleccionados: subraya y abre la nota.
+async function notaConN(p) {
+  await seleccionar(p, 25);
+  await p.keyboard.press('n');
+  await p.waitForSelector('.ficha.foco textarea');
+}
+// Un clic en el centro del último párrafo sin subrayados de la sección: en el texto, fuera de la ficha.
+async function clicFuera(p) {
+  const pOtro = await p.evaluate(() => {
+    const ps = Array.from(document.querySelectorAll('article.seccion:not([hidden]) p.bloque[data-pid]')).filter(
+      (b) => !b.querySelector('mark')
+    );
+    const b = ps[ps.length - 1];
+    b.scrollIntoView({ block: 'center' });
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await p.mouse.click(pOtro.x, pOtro.y);
+}
+// Un subrayado con su nota, hecho con N, y ya fuera de su ficha (con la nota guardada).
+async function conNota(abrir) {
+  const p = await sinBaseLista(abrir);
+  await notaConN(p);
+  await p.keyboard.type('Nota que se guarda al salir');
+  await clicFuera(p);
+  return p;
+}
+
+test('N abre la nota del subrayado; la ficha nombra su categoría; un clic en el texto sale y la guarda', async ({
+  abrir,
+}) => {
+  const p = await sinBaseLista(abrir);
+  await notaConN(p);
   check(
-    await pa.evaluate(() => document.activeElement.tagName === 'TEXTAREA'),
+    await p.evaluate(() => document.activeElement.tagName === 'TEXTAREA'),
     'N abre la nota del subrayado con el cursor en ella'
   );
-  await pa.keyboard.type('Nota que se guarda al salir');
-  const cab = await pa.evaluate(() => ({
+  await p.keyboard.type('Nota que se guarda al salir');
+  const cab = await p.evaluate(() => ({
     cat: (document.querySelector('.ficha.foco .cab .cat') || {}).textContent || '',
     pulsados: document.querySelectorAll('.ficha.foco .col-btn[aria-pressed="true"]').length,
   }));
@@ -601,47 +659,43 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
     cab.cat === 'revisar' && cab.pulsados === 1,
     `la ficha nombra su categoría (no sólo el color) y el color actual se anuncia pulsado (${JSON.stringify(cab)})`
   );
-  // el centro de otro párrafo, sin subrayados
-  const pOtro = await pa.evaluate(() => {
-    const ps = Array.from(document.querySelectorAll('article.seccion:not([hidden]) p.bloque[data-pid]')).filter(
-      (p) => !p.querySelector('mark')
-    );
-    const p = ps[ps.length - 1];
-    p.scrollIntoView({ block: 'center' });
-    const r = p.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  });
-  await pa.mouse.click(pOtro.x, pOtro.y);
-  const fuera = await pa.evaluate(() => ({
+  await clicFuera(p);
+  const fuera = await p.evaluate(() => ({
     ficha: document.querySelectorAll('.ficha.foco').length,
     marca: document.querySelectorAll('mark.hl.foco').length,
   }));
   check(
-    fuera.ficha === 0 && fuera.marca === 0 && (await guardadoLocal(pa, 'Nota que se guarda al salir')),
+    fuera.ficha === 0 && fuera.marca === 0 && (await guardadoLocal(p, 'Nota que se guarda al salir')),
     `un clic en el texto, fuera de la ficha, sale de ella y la nota queda guardada (${JSON.stringify(fuera)})`
   );
-  // Esc en la nota guarda, sale y devuelve el foco al pasaje
-  await pa.click('article.seccion:not([hidden]) mark.hl');
-  check((await pa.$$('.ficha.foco')).length === 1, 'clic en el subrayado vuelve a su ficha');
-  await pa.click('.ficha.foco textarea');
-  await pa.keyboard.press('End');
-  await pa.keyboard.type(' (y más)');
-  await pa.keyboard.press('Escape');
-  const trasEsc = await pa.evaluate(() => ({
+  sinErrores(p, 'al anotar con N y salir con un clic', { consola: true });
+});
+
+test('Esc y Ctrl+Enter en la nota la guardan y devuelven el foco al pasaje; Esc en la ficha también sale', async ({
+  abrir,
+}) => {
+  const p = await conNota(abrir);
+  await p.click('article.seccion:not([hidden]) mark.hl');
+  check((await p.$$('.ficha.foco')).length === 1, 'clic en el subrayado vuelve a su ficha');
+  await p.click('.ficha.foco textarea');
+  await p.keyboard.press('End');
+  await p.keyboard.type(' (y más)');
+  await p.keyboard.press('Escape');
+  const trasEsc = await p.evaluate(() => ({
     tag: document.activeElement.tagName,
     foco: document.querySelectorAll('.ficha.foco, mark.hl.foco').length,
   }));
   check(
-    trasEsc.tag === 'MARK' && trasEsc.foco === 0 && (await guardadoLocal(pa, '(y más)')),
+    trasEsc.tag === 'MARK' && trasEsc.foco === 0 && (await guardadoLocal(p, '(y más)')),
     `Esc en la nota la guarda, sale de la ficha y devuelve el foco al pasaje (${JSON.stringify(trasEsc)})`
   );
   // Enter en el pasaje vuelve a la ficha; Ctrl+Enter en la nota sale igual; Esc fuera de la nota también sale
-  await pa.keyboard.press('Enter');
-  await pa.focus('.ficha.foco textarea');
-  await pa.keyboard.press('End');
-  await pa.keyboard.type('!');
-  await pa.keyboard.press('Control+Enter');
-  const trasCtrl = await pa.evaluate(() => ({
+  await p.keyboard.press('Enter');
+  await p.focus('.ficha.foco textarea');
+  await p.keyboard.press('End');
+  await p.keyboard.type('!');
+  await p.keyboard.press('Control+Enter');
+  const trasCtrl = await p.evaluate(() => ({
     tag: document.activeElement.tagName,
     foco: document.querySelectorAll('.ficha.foco').length,
     nota: (document.querySelector('.ficha textarea') || {}).value,
@@ -650,67 +704,74 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
     trasCtrl.tag === 'MARK' && trasCtrl.foco === 0 && /!$/.test(trasCtrl.nota || ''),
     `Ctrl+Enter en la nota guarda y vuelve al texto (${JSON.stringify(trasCtrl)})`
   );
-  await pa.keyboard.press('Enter');
-  await pa.keyboard.press('Escape');
-  check((await pa.$$('.ficha.foco')).length === 0, 'Esc con la ficha enfocada (fuera de la nota) sale de ella');
-  // atajos: diálogo modal que se cierra con un clic en el fondo o con Esc, y devuelve el foco
-  await pa.keyboard.press('?');
-  const dlg = await pa.evaluate(() => {
+  await p.keyboard.press('Enter');
+  await p.keyboard.press('Escape');
+  check((await p.$$('.ficha.foco')).length === 0, 'Esc con la ficha enfocada (fuera de la nota) sale de ella');
+  sinErrores(p, 'al salir de la ficha con el teclado', { consola: true });
+});
+
+test('Atajos y figura ampliada como diálogos modales: un clic fuera o Esc los cierran y el foco vuelve', async ({
+  abrir,
+}) => {
+  const p = await sinBaseLista(abrir);
+  await p.keyboard.press('?');
+  const dlg = await p.evaluate(() => {
     const d = document.querySelector('#atajos');
     return { abierto: !!d.open, modal: d.matches(':modal'), foco: !!document.activeElement.closest('#atajos') };
   });
-  await pa.mouse.click(5, 5);
+  await p.mouse.click(5, 5);
   check(
-    dlg.abierto && dlg.modal && dlg.foco && !(await pa.$eval('#atajos', (d) => !!d.open)),
+    dlg.abierto && dlg.modal && dlg.foco && !(await p.$eval('#atajos', (d) => !!d.open)),
     `? abre los atajos como diálogo modal con el foco adentro, y un clic en el fondo lo cierra (${JSON.stringify(dlg)})`
   );
-  await pa.click('#b-atajos');
-  const bordeAtajos = await pa.$eval('#atajos', (d) => {
+  await p.click('#b-atajos');
+  const bordeAtajos = await p.$eval('#atajos', (d) => {
     const r = d.getBoundingClientRect();
     return { x: r.left + 4, y: r.top + 4 };
   });
-  await pa.mouse.click(bordeAtajos.x, bordeAtajos.y);
+  await p.mouse.click(bordeAtajos.x, bordeAtajos.y);
   check(
-    await pa.$eval('#atajos', (d) => !!d.open),
+    await p.$eval('#atajos', (d) => !!d.open),
     'un clic en el relleno del diálogo (dentro de su recuadro) no lo cierra'
   );
-  await pa.keyboard.press('Escape');
+  await p.keyboard.press('Escape');
   check(
-    !(await pa.$eval('#atajos', (d) => !!d.open)) &&
-      (await pa.evaluate(() => document.activeElement.id)) === 'b-atajos',
+    !(await p.$eval('#atajos', (d) => !!d.open)) && (await p.evaluate(() => document.activeElement.id)) === 'b-atajos',
     'Esc cierra los atajos y el foco vuelve a su botón'
   );
   // figura ampliada con texto alternativo; un clic la cierra
-  await pa.click('article.seccion:not([hidden]) figure img');
-  const lb = await pa.evaluate(() => ({
+  await p.click('article.seccion:not([hidden]) figure img');
+  const lb = await p.evaluate(() => ({
     abierto: !!document.querySelector('#lightbox').open,
     alt: document.querySelector('#lightbox img').alt,
   }));
-  await pa.mouse.click(640, 450);
+  await p.mouse.click(640, 450);
   check(
-    lb.abierto && lb.alt.length > 3 && !(await pa.$eval('#lightbox', (d) => !!d.open)),
+    lb.abierto && lb.alt.length > 3 && !(await p.$eval('#lightbox', (d) => !!d.open)),
     `la figura ampliada lleva su leyenda como texto alternativo y un clic la cierra (${lb.alt.slice(0, 40)})`
   );
-  // ajustes de lectura: tamaño, tema y letra, recordados al recargar
-  const tamTexto = () =>
-    pa.$eval('article.seccion:not([hidden]) p.bloque', (p) => parseFloat(getComputedStyle(p).fontSize));
-  const tam0 = await tamTexto();
-  let ajustesOk = false;
+  sinErrores(p, 'en los atajos y la figura', { consola: true });
+});
+
+// ------------------------------------------------------------ ajustes de lectura
+const tamTexto = (p) =>
+  p.$eval('article.seccion:not([hidden]) p.bloque', (b) => parseFloat(getComputedStyle(b).fontSize));
+// «Aa»: A+ dos veces (de 100 a 120 %), tema oscuro y letra sans, con el menú abierto; dice si el menú respondió.
+async function ajustarLectura(p) {
   try {
-    await pa.click('#ajustes > summary');
-    await pa.click('#aj-mas');
-    await pa.click('#aj-mas');
-    await pa.check('input[name="aj-tema"][value="dark"]');
-    await pa.check('input[name="aj-letra"][value="sans"]');
-    ajustesOk = true;
+    await p.click('#ajustes > summary');
+    await p.click('#aj-mas');
+    await p.click('#aj-mas');
+    await p.check('input[name="aj-tema"][value="dark"]');
+    await p.check('input[name="aj-letra"][value="sans"]');
+    return true;
   } catch {
-    ajustesOk = false;
+    return false;
   }
-  const tam1 = await tamTexto();
-  const oscuro = await pa.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const letra = await pa.$eval('article.seccion:not([hidden]) p.bloque', (p) => getComputedStyle(p).fontFamily);
-  // contraste del texto sobre la tinta (pestaña activa, sección activa, botón primario) en tema oscuro
-  const contrasteOscuro = await pa.evaluate(() => {
+}
+// El menor contraste (WCAG) entre el texto y su fondo de los elementos dados.
+const contrasteMinimo = (p, sels) =>
+  p.evaluate((sels) => {
     const lum = (c) => {
       const v = c
         .match(/\d+(\.\d+)?/g)
@@ -728,58 +789,83 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
         b = lum(cs.backgroundColor);
       return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
     };
-    return Math.min(...['.tab.activa', 'nav a.sec.activa'].map((q) => ratio(document.querySelector(q))));
-  });
+    return Math.min(...sels.map((q) => ratio(document.querySelector(q))));
+  }, sels);
+
+test('«Aa» agranda el texto y el título y cambia tema y letra, con contraste en oscuro; A+ se detiene en el tope; Esc cierra el menú', async ({
+  abrir,
+}) => {
+  const p = await sinBaseLista(abrir);
+  const tam0 = await tamTexto(p);
+  const ajustesOk = await ajustarLectura(p);
+  const tam1 = await tamTexto(p);
+  const oscuro = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const letra = await p.$eval('article.seccion:not([hidden]) p.bloque', (b) => getComputedStyle(b).fontFamily);
+  // contraste del texto sobre la tinta (pestaña activa, sección activa) en tema oscuro
+  const contrasteOscuro = await contrasteMinimo(p, ['.tab.activa', 'nav a.sec.activa']);
   check(
     contrasteOscuro >= 4.5,
     `en tema oscuro el texto sobre la tinta tiene contraste suficiente (${contrasteOscuro.toFixed(2)}:1)`
   );
-  for (let i = 0; i < 2; i++) await pa.click('#aj-mas'); // de 120 % al tope (145 %)
+  for (let i = 0; i < 2; i++) await p.click('#aj-mas'); // de 120 % al tope (145 %)
   check(
-    (await pa.evaluate(() => document.activeElement.id)) === 'aj-mas' &&
-      (await pa.$eval('#aj-mas', (b) => b.getAttribute('aria-disabled'))) === 'true',
+    (await p.evaluate(() => document.activeElement.id)) === 'aj-mas' &&
+      (await p.$eval('#aj-mas', (b) => b.getAttribute('aria-disabled'))) === 'true',
     'A+ al tope queda deshabilitado sin perder el foco'
   );
-  for (let i = 0; i < 2; i++) await pa.click('#aj-menos');
-  await pa.keyboard.press('Escape');
-  const menuCerrado = await pa.evaluate(
+  for (let i = 0; i < 2; i++) await p.click('#aj-menos');
+  await p.keyboard.press('Escape');
+  const menuCerrado = await p.evaluate(
     () => !document.querySelector('#ajustes').open && document.activeElement.tagName === 'SUMMARY'
   );
   check(
     ajustesOk && tam1 > tam0 && oscuro === 'rgb(21, 23, 27)' && /Plex/.test(letra) && menuCerrado,
     `«Aa» agranda el texto, cambia tema y letra, y Esc cierra el menú con el foco en su botón (${tam0} → ${tam1} px, ${oscuro})`
   );
-  const subtitulo = await pa.$eval('article.seccion:not([hidden]) h1.sec-titulo', (h) =>
+  const subtitulo = await p.$eval('article.seccion:not([hidden]) h1.sec-titulo', (h) =>
     parseFloat(getComputedStyle(h).fontSize)
   );
   check(subtitulo > 28, `el título de la sección también crece con «Aa» (${subtitulo} px)`);
-  await pa.reload();
-  await pa.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  sinErrores(p, 'con los ajustes de lectura', { consola: true });
+});
+
+test('Los ajustes de lectura se recuerdan al recargar, y «sistema» devuelve el tema', async ({ abrir }) => {
+  const p = await sinBaseLista(abrir);
+  const ajustesOk = await ajustarLectura(p);
+  const tam1 = await tamTexto(p);
+  await p.keyboard.press('Escape');
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   check(
-    (await tamTexto()) === tam1 &&
-      (await pa.evaluate(() => document.documentElement.getAttribute('data-tema-lector'))) === 'dark',
+    (await tamTexto(p)) === tam1 &&
+      (await p.evaluate(() => document.documentElement.getAttribute('data-tema-lector'))) === 'dark',
     'los ajustes de lectura se recuerdan al recargar'
   );
   if (ajustesOk) {
-    await pa.click('#ajustes > summary');
-    await pa.check('input[name="aj-tema"][value=""]');
+    await p.click('#ajustes > summary');
+    await p.check('input[name="aj-tema"][value=""]');
   }
   check(
-    !(await pa.evaluate(() => document.documentElement.hasAttribute('data-tema-lector'))),
+    !(await p.evaluate(() => document.documentElement.hasAttribute('data-tema-lector'))),
     '«sistema» devuelve el tema al del sistema'
   );
-  await pa.mouse.click(640, 450);
-  // concentración anuncia su estado; borrar no deja el foco perdido
-  await pa.click('#b-foco');
-  const focoPulsado = await pa.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'));
-  await pa.click('#b-foco');
+  sinErrores(p, 'al recordar los ajustes', { consola: true });
+});
+
+test('El botón de concentración dice si está activo; al borrar, el foco queda en el panel, y al deshacer, en la anotación', async ({
+  abrir,
+}) => {
+  const p = await conNota(abrir);
+  await p.click('#b-foco');
+  const focoPulsado = await p.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'));
+  await p.click('#b-foco');
   check(
-    focoPulsado === 'true' && (await pa.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'))) === 'false',
+    focoPulsado === 'true' && (await p.$eval('#b-foco', (b) => b.getAttribute('aria-pressed'))) === 'false',
     'el botón de concentración anuncia si está activo'
   );
-  await enFicha(pa, '.ficha', 'button[data-accion="borrar"]');
-  await pa.click('.ficha button[data-accion="si"]');
-  const trasBorrarA = await pa.evaluate(() => ({
+  await enFicha(p, '.ficha', 'button[data-accion="borrar"]');
+  await p.click('.ficha button[data-accion="si"]');
+  const trasBorrarA = await p.evaluate(() => ({
     foco: document.activeElement !== document.body && !!document.activeElement.closest('#panel'),
     deshacer: !!document.querySelector('#deshacer'),
   }));
@@ -787,16 +873,12 @@ test('Accesibilidad y salir de las fichas (escritorio)', async ({ browser }) => 
     trasBorrarA.foco && trasBorrarA.deshacer,
     `al borrar, el foco queda en el panel y aparece «Deshacer» (${JSON.stringify(trasBorrarA)})`
   );
-  await pa.click('#deshacer');
+  await p.click('#deshacer');
   check(
-    await pa.evaluate(
+    await p.evaluate(
       () => document.activeElement !== document.body && !!document.activeElement.closest('.ficha, mark')
     ),
     'tras deshacer, el foco queda en la anotación recuperada'
   );
-  check(
-    erroresA.length === 0,
-    `sin errores de consola en el recorrido de accesibilidad${erroresA.length ? ': ' + erroresA.join(' | ') : ''}`
-  );
-  await ctxA.close();
+  sinErrores(p, 'al borrar y deshacer con el foco', { consola: true });
 });
