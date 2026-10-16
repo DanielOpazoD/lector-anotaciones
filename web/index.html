@@ -663,8 +663,10 @@
   });
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
-  // Subsecuencia común más larga sobre palabras y espacios; devuelve tramos [op, texto] con op '=', '-' o '+'.
-  // Por encima de 250 000 celdas no compara: devuelve el bloque viejo entero quitado y el nuevo añadido.
+  // Subsecuencia común más larga sobre palabras y espacios; devuelve tramos [op, texto] con op '=', '-' o '+'. Lo común
+  // al principio y al final se aparta antes de comparar (un cambio de una palabra en un párrafo largo cuesta lo que
+  // mide el párrafo, no su cuadrado). Si lo que queda en medio pasa de 250 000 celdas, no se compara: sale quitado
+  // entero y añadido entero, entre lo común.
   function diffPalabras(a, b) {
     var A = a.split(/(\s+)/).filter(function (x) {
         return x !== '';
@@ -672,28 +674,42 @@
       B = b.split(/(\s+)/).filter(function (x) {
         return x !== '';
       });
-    if (A.length * B.length > 250000)
-      return [
-        ['-', a],
-        ['+', b],
-      ];
+    var ini = 0;
+    while (ini < A.length && ini < B.length && A[ini] === B[ini]) ini++;
+    var fa = A.length,
+      fb = B.length;
+    while (fa > ini && fb > ini && A[fa - 1] === B[fb - 1]) {
+      fa--;
+      fb--;
+    }
+    var out = [];
+    var push = function (op, t) {
+      if (!t) return;
+      if (out.length && out[out.length - 1][0] === op) out[out.length - 1][1] += t;
+      else out.push([op, t]);
+    };
+    push('=', A.slice(0, ini).join(''));
+    var sufijo = A.slice(fa).join('');
+    A = A.slice(ini, fa);
+    B = B.slice(ini, fb);
     var n = A.length,
       m = B.length,
-      L = [],
       i,
       j;
+    if (n * m > 250000) {
+      push('-', A.join(''));
+      push('+', B.join(''));
+      push('=', sufijo);
+      return out;
+    }
+    var L = [];
     for (i = 0; i <= n; i++) {
       L.push(new Uint16Array(m + 1));
     }
     for (i = n - 1; i >= 0; i--)
       for (j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
-    var out = [];
     i = 0;
     j = 0;
-    var push = function (op, t) {
-      if (out.length && out[out.length - 1][0] === op) out[out.length - 1][1] += t;
-      else out.push([op, t]);
-    };
     while (i < n && j < m) {
       if (A[i] === B[j]) {
         push('=', A[i]);
@@ -713,6 +729,7 @@
     while (j < m) {
       push('+', B[j++]);
     }
+    push('=', sufijo);
     return out;
   }
   return { diffPalabras: diffPalabras };
@@ -795,7 +812,7 @@
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Lo que el lector edita en la página; el resto (respuesta, cierre, commit…) lo escribe quien edita las fuentes.
-  var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado', 'revisado'];
+  var CAMPOS_LECTOR = ['nota', 'replica', 'sugerencia', 'color', 'estado', 'revisado'];
   // Suma a `marcas` (objeto campo → true) los campos del lector que difieren entre `antes` y `despues`.
   function marcarCampos(marcas, antes, despues) {
     CAMPOS_LECTOR.forEach(function (k) {
@@ -865,9 +882,10 @@
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;
     return j >= 0 && j < lista.length ? j : -1;
   }
-  // Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
+  // Respondida (sin pregunta: atendida, descartada o sin cierre) y devuelta por el autor desde «Por revisar» (como
+  // `reabierta` en exportar.py).
   function reabierta(a) {
-    return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta';
+    return !!a.revisado && !!(a.respuesta || a.cierre) && a.cierre !== 'pregunta' && a.estado !== 'resuelta';
   }
   // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
   function lineaHilo(h) {
@@ -3314,13 +3332,10 @@ function rechazoEscritura(e, id, previa, verbo) {
     if (ub) UBIC[id] = ub;
     pintar(r.restaurada);
   }
+  // el borrado o el cambio no ocurrió: no hay nada que deshacer (salvo que el aviso ya sea de otra anotación)
+  retirarDeshacer(id);
   if (verbo === 'borrar') {
-    // el borrado no ocurrió: no hay nada que deshacer (salvo que el enlace ya sea de otro borrado posterior)
-    if (ultimoBorrado && ultimoBorrado.id === id) {
-      ultimoBorrado = null;
-      var z = $('#deshacer-zona');
-      if (z) z.innerHTML = '';
-    }
+    // nada más: la anotación volvió a la memoria
   } else if (r.restaurada) escribirCampos([id]);
   else if (r.conservada) guardarLocal([id]);
   renderPanel();
@@ -3346,6 +3361,7 @@ function activarSoloLectura() {
   if (SOLO_LECTURA) return;
   SOLO_LECTURA = true;
   document.body.classList.add('solo-lectura');
+  retirarDeshacer();
   ocultarTb();
   // El modo se señala en sitios que el eco de la base no pisa: el chip de la cabecera, el nombre de la barra de
   // selección (que sólo ofrece copiar), la ayuda sin los atajos de anotar, y los números de página sin acción.
@@ -3733,9 +3749,24 @@ function pintar(a) {
   if (pid) pintarPid(pid);
   marcasPagina();
 }
+// Repintar un bloque rehace sus marcas: si el foco del teclado estaba en una (o en la marca de párrafo), vuelve a la
+// marca equivalente en vez de caer al cuerpo del documento.
 function pintarPid(pid) {
   var n = $('[data-pid="' + pid + '"]');
   if (!n) return;
+  var act = /** @type {Element} */ (document.activeElement),
+    volver = null;
+  if (act && act !== n && n.contains(act))
+    volver = act.classList.contains('marca-anot')
+      ? '.marca-anot'
+      : act.getAttribute('data-aids')
+        ? 'mark.hl[data-aids="' + act.getAttribute('data-aids') + '"]'
+        : null;
+  repintar(n, pid);
+  var x = volver && $(volver, n);
+  if (x) x.focus({ preventScroll: true });
+}
+function repintar(n, pid) {
   // Los marcadores del margen (página, «cambió») viven dentro del bloque pero no son texto del libro:
   // se apartan, se repone el HTML original y se vuelven a poner, con sus escuchas intactas. La marca de párrafo con la
   // cuenta de anotaciones se rehace cada vez.
@@ -3773,10 +3804,13 @@ function pintarPid(pid) {
         fin: UBIC[a.id].fin,
       };
     });
-  if (lista.length) {
-    var marca = marcaParrafo(lista);
+  // la marca de párrafo: no en los títulos (cambiaría su nombre accesible); en una lista, dentro del primer ítem
+  if (lista.length && !/^H\d$/.test(n.tagName)) {
+    var marca = marcaParrafo(lista, n.tagName);
     extras.push(marca); // `pgn` mira `extras`: el texto de la marca (ninguno) tampoco se pinta
-    n.insertBefore(marca, extras.length > 1 ? extras[extras.length - 2].nextSibling : n.firstChild);
+    var item = /^(UL|OL)$/.test(n.tagName) ? $('li', n) : null;
+    if (item) item.insertBefore(marca, item.firstChild);
+    else n.insertBefore(marca, extras.length > 1 ? extras[extras.length - 2].nextSibling : n.firstChild);
   }
   var capas = capasActivas(pid);
   if (!lista.length && !capas.length) return;
@@ -3879,28 +3913,52 @@ function pintarPid(pid) {
 function esMarcador(c) {
   return !!c.classList && /(^|\s)(pg|marca-cambio|marca-anot)(\s|$)/.test(c.className);
 }
-// La marca de párrafo (en pantalla estrecha, donde no hay notas al margen): cuántas anotaciones tiene el párrafo, con
+// La marca de párrafo (en pantalla estrecha, donde no hay notas al margen): cuántas anotaciones tiene el bloque, con
 // el color de la primera y un punto si alguna tiene una respuesta por revisar; tocarla abre la primera. La cuenta va
 // en un atributo que el estilo muestra: no es texto del bloque, así que no cambia los desplazamientos de las citas,
-// lo que se copia ni lo que se lee en voz alta.
-function marcaParrafo(lista) {
+// lo que se copia ni lo que se lee en voz alta. Las ids van en `data-ids`, para poner al día el punto sin repintar.
+var NOMBRE_BLOQUE = { P: 'párrafo', BLOCKQUOTE: 'cita', UL: 'lista', OL: 'lista' };
+function marcaParrafo(lista, etiquetaHtml) {
   var orden = lista.slice().sort(function (x, y) {
-      return x.inicio - y.inicio;
-    }),
-    n = orden.length,
-    pend = orden.some(function (x) {
-      return porRevisar(anots[x.id]);
-    });
-  var b = el('button', {
-    'class': 'marca-anot c-' + (orden[0].color || 'revisar') + (pend ? ' por-revisar' : ''),
-    type: 'button',
-    'data-n': String(n),
-    'aria-label':
-      n + (n === 1 ? ' anotación' : ' anotaciones') + ' en este párrafo' + (pend ? ', con respuesta por revisar' : ''),
-    title: n + (n === 1 ? ' anotación' : ' anotaciones') + (pend ? ' (respuesta por revisar)' : ''),
+    return x.inicio - y.inicio;
   });
+  var b = el('button', {
+    'class': 'marca-anot c-' + (orden[0].color || 'revisar'),
+    type: 'button',
+    'data-n': String(orden.length),
+    'data-ids': orden
+      .map(function (x) {
+        return x.id;
+      })
+      .join(' '),
+    'data-que': NOMBRE_BLOQUE[etiquetaHtml] || 'bloque',
+  });
+  ponerAlDiaMarca(b);
   abrirConMarca(b, orden[0].id);
   return b;
+}
+function ponerAlDiaMarca(b) {
+  var ids = (b.getAttribute('data-ids') || '').split(' '),
+    n = ids.length,
+    que = b.getAttribute('data-que') || 'bloque',
+    pend = ids.some(function (id) {
+      return !!anots[id] && porRevisar(anots[id]);
+    });
+  b.classList.toggle('por-revisar', pend);
+  var cuenta = n + (n === 1 ? ' anotación' : ' anotaciones');
+  b.setAttribute(
+    'aria-label',
+    cuenta +
+      ' en ' +
+      (que === 'cita' || que === 'lista' ? 'esta ' : 'este ') +
+      que +
+      (pend ? ', con respuesta por revisar' : '')
+  );
+  b.title = cuenta + (pend ? ' (respuesta por revisar)' : '');
+}
+// El punto «por revisar» de las marcas, al día con quién lee y con lo revisado (sin repintar los bloques).
+function refrescarMarcas() {
+  $$('.marca-anot').forEach(ponerAlDiaMarca);
 }
 // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo
 // abrían la última pintada.)
@@ -4048,7 +4106,8 @@ function ordenKey(a) {
 // anotación, cambia lo que muestra (activa, por revisar, revisada, sin guardar, dónde quedó, si su pasaje cambió, sólo
 // lectura, quién es el lector y su perfil, si hay varios lectores, la huella de su bloque). Un redibujo reutiliza el
 // nodo si las dos siguen iguales.
-var FICHAS = {}, // id → { a, firma, nodo }
+var PROPUESTA_ABIERTA = {}, // ids con el cuadro de la propuesta abierto sin propuesta guardada todavía
+  FICHAS = {}, // id → { a, firma, nodo }
   MEDIDAS = new WeakMap(); // nodo de ficha → ancho de la lista y modo con que se midieron sus notas
 function firmaFicha(a, varios) {
   var u = UBIC[a.id],
@@ -4193,7 +4252,8 @@ function renderPanel() {
     if (ta) {
       if (ta.value !== foco.valor) {
         ta.value = foco.valor;
-        ajustarAlto(ta);
+        // como si se hubiera escrito: la diferencia de la propuesta, el alto, el margen y el guardado lo siguen
+        ta.dispatchEvent(new Event('input'));
       }
       ta.focus({ preventScroll: true });
       try {
@@ -4267,6 +4327,7 @@ function cabezaBandeja(L) {
   return c;
 }
 function renderCuentaRevisar() {
+  refrescarMarcas();
   var n = cuantasPorRevisar();
   $('#n-revisar').textContent = n ? String(n) : '';
   // en el botón del teléfono el número va con su significado para quien usa lector de pantalla
@@ -4517,7 +4578,7 @@ function fichaPropuesta(a, editable) {
     var s = N.propuesta({ id: a.id, tipo: 'subrayado', cita: a.cita, sugerencia: texto });
     caja.classList.toggle('vacia', !s);
     dif.textContent = '';
-    dif.appendChild(s ? renderDiff(a.cita.trim(), s) : el('span', { 'class': 'sin', text: 'Igual a la cita' }));
+    dif.appendChild(s ? difRecortada(a.cita.trim(), s) : el('span', { 'class': 'sin', text: 'Igual a la cita' }));
   };
   mostrarDif(a.sugerencia);
   if (!editable) return caja;
@@ -4556,11 +4617,40 @@ function fichaPropuesta(a, editable) {
   caja.appendChild(ta);
   return caja;
 }
+// La diferencia de una propuesta con lo que no cambia recortado: de un tramo igual largo quedan unas palabras a cada
+// lado del cambio y «…» en lugar del resto, para que en una cita larga se vea el cambio y no el párrafo.
+function difRecortada(antes, ahora) {
+  var w = el('div'),
+    tramos = diffPalabras(antes, ahora),
+    MAX = 14,
+    LADO = 6;
+  tramos.forEach(function (p, i) {
+    if (p[0] !== '=') {
+      w.appendChild(el(p[0] === '-' ? 'del' : 'ins', { text: p[1] }));
+      return;
+    }
+    var pal = p[1].split(/(\s+)/),
+      palabras = pal.filter(function (x) {
+        return /\S/.test(x);
+      }).length,
+      t = p[1];
+    if (palabras > MAX) {
+      var cabeza = pal.slice(0, LADO * 2).join(''),
+        cola = pal.slice(-LADO * 2).join('');
+      if (i === 0) t = '… ' + cola.replace(/^\s+/, '');
+      else if (i === tramos.length - 1) t = cabeza.replace(/\s+$/, '') + ' …';
+      else t = cabeza.replace(/\s+$/, '') + ' … ' + cola.replace(/^\s+/, '');
+    }
+    w.appendChild(document.createTextNode(t));
+  });
+  return w;
+}
 // Abre el cuadro de la propuesta en la ficha de un subrayado (lo crea con la cita si no lo tiene) y lo enfoca.
 function abrirPropuesta(id) {
   var a = anots[id],
     f = $('.ficha[data-id="' + id + '"]');
   if (!a || !f || a.tipo !== 'subrayado' || SOLO_LECTURA) return;
+  PROPUESTA_ABIERTA[id] = 1; // un redibujo antes de guardar nada lo vuelve a dibujar
   activar(id);
   var ta = $('textarea.sugerencia', f);
   if (!ta) {
@@ -4681,7 +4771,8 @@ function fichaEdicion(ctx) {
   ta.addEventListener('keydown', salirConTecla);
   f.appendChild(ta);
   pintarEtiquetas(f, a);
-  if (a.tipo === 'subrayado' && typeof a.sugerencia === 'string') f.appendChild(fichaPropuesta(a, true));
+  if (a.tipo === 'subrayado' && (typeof a.sugerencia === 'string' || PROPUESTA_ABIERTA[a.id]))
+    f.appendChild(fichaPropuesta(a, true));
   var hilo = fichaHilo(a);
   if (hilo) f.appendChild(hilo);
   if (a.respuesta || a.cierre) {
@@ -4765,7 +4856,7 @@ function fichaAcciones(ctx) {
       b.addEventListener('click', function () {
         var ac = actual();
         guardar(Object.assign({}, ac, { color: c }));
-        if (ac.color !== c) ofrecerDeshacerCambio(a.id, { color: ac.color }, 'Color: ' + c + '.');
+        if (ac.color !== c) ofrecerDeshacerCambio(a.id, { color: ac.color }, { color: c }, 'Color: ' + c + '.');
       });
       cols.appendChild(b);
     });
@@ -4806,11 +4897,16 @@ function fichaAcciones(ctx) {
       var ac = actual(),
         nuevo = ac.estado === 'resuelta' ? 'abierta' : 'resuelta';
       guardar(Object.assign({}, ac, { estado: nuevo }));
-      ofrecerDeshacerCambio(a.id, { estado: ac.estado }, nuevo === 'resuelta' ? 'Marcada resuelta.' : 'Reabierta.');
+      ofrecerDeshacerCambio(
+        a.id,
+        { estado: ac.estado || 'abierta' },
+        { estado: nuevo },
+        nuevo === 'resuelta' ? 'Marcada resuelta.' : 'Reabierta.'
+      );
     });
     acc.appendChild(res);
   }
-  if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string') {
+  if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string' && !PROPUESTA_ABIERTA[a.id]) {
     var pr = el('button', {
       'class': 'btn peq',
       type: 'button',
@@ -4943,7 +5039,8 @@ function revisar(id, accion) {
   var enBandeja = V.tab === 'revisar';
   if (enBandeja) VISTA.revisada(id);
   // lo de antes, para deshacer: sin revisión previa, `revisado` vacío (la base no borra campos; vacío no cuenta)
-  var antes = { estado: a.estado, revisado: a.revisado || '' };
+  var antes = { estado: a.estado || 'abierta', revisado: a.revisado || '' },
+    marca = N.marcaRevision(a, ahora());
   if (accion === 'atendida') {
     // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
     // (en «Sección» o «Todas») se queda en la ficha
@@ -4961,8 +5058,8 @@ function revisar(id, accion) {
       pend.filter(function (x) {
         return ordenKey(x) > ordenKey(a);
       })[0] || pend[0];
-    guardar(Object.assign({}, a, { estado: 'resuelta', revisado: N.marcaRevision(a, ahora()) }));
-    ofrecerDeshacerCambio(id, antes, 'Atendida.');
+    guardar(Object.assign({}, a, { estado: 'resuelta', revisado: marca }));
+    ofrecerDeshacerCambio(id, antes, { estado: 'resuelta', revisado: marca }, 'Atendida.');
     if (enBandeja && sig) {
       irARevisar(sig);
       return;
@@ -4975,8 +5072,8 @@ function revisar(id, accion) {
     }
     return;
   }
-  guardar(Object.assign({}, a, { estado: 'abierta', revisado: N.marcaRevision(a, ahora()) }));
-  ofrecerDeshacerCambio(id, antes, 'Reabierta.');
+  guardar(Object.assign({}, a, { estado: 'abierta', revisado: marca }));
+  ofrecerDeshacerCambio(id, antes, { estado: 'abierta', revisado: marca }, 'Reabierta.');
   var f = $('.ficha[data-id="' + id + '"]'),
     ta = f && ($('textarea.replica', f) || $('textarea.nota', f));
   if (ta) {
@@ -6676,15 +6773,20 @@ function detenerLectura() {
 // La zona de «Deshacer», abajo y durante ocho segundos, para un borrado o para un cambio de color o de estado. Vive en
 // su propia zona, no en el texto de estado: el eco de la base que confirma la escritura reescribe ese texto y se
 // llevaría el enlace antes de tiempo. La última acción manda: un aviso nuevo reemplaza al anterior. Al pulsarlo, la
-// zona se vacía y luego se deshace (`alDeshacer` decide adónde va el foco).
-function mostrarDeshacer(texto, boton, titulo, alDeshacer) {
+// zona se vacía y luego se deshace (`alDeshacer` decide adónde va el foco). `deshacerDe` dice de qué anotación es el
+// aviso que se ve y de qué tipo, para retirarlo cuando ya no hay qué deshacer.
+var deshacerDe = null; // { id, tipo: 'borrado' | 'cambio' }
+function mostrarDeshacer(id, tipo, texto, boton, titulo, alDeshacer) {
   var z = $('#deshacer-zona');
   z.innerHTML = '';
   z.appendChild(el('span', { text: texto }));
   var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: boton, title: titulo });
+  var mio = { id: id, tipo: tipo };
+  deshacerDe = mio;
   u.addEventListener('click', function () {
     if (!z.contains(u)) return;
     z.innerHTML = '';
+    deshacerDe = null;
     alDeshacer();
   });
   z.appendChild(u);
@@ -6692,11 +6794,23 @@ function mostrarDeshacer(texto, boton, titulo, alDeshacer) {
     if (!z.contains(u)) return;
     var tenia = z.contains(document.activeElement);
     z.innerHTML = '';
+    if (deshacerDe === mio) deshacerDe = null;
     if (tenia) {
       var t = $('.tab.activa');
       (enfocable(t) ? t : $('#lectura')).focus({ preventScroll: true });
     }
   }, 8000);
+}
+// Retira el aviso de esa anotación (sin `id`, el que haya; con `soloCambios`, sólo si no es de un borrado): la base
+// rechazó la escritura, la anotación se borró en otra sesión o la página pasó a sólo lectura.
+function retirarDeshacer(id, soloCambios) {
+  if (!deshacerDe || (id && deshacerDe.id !== id) || (soloCambios && deshacerDe.tipo !== 'cambio')) return;
+  var z = $('#deshacer-zona'),
+    tenia = z.contains(document.activeElement);
+  z.innerHTML = '';
+  if (deshacerDe.tipo === 'borrado') ultimoBorrado = null;
+  deshacerDe = null;
+  if (tenia) $('#lectura').focus({ preventScroll: true });
 }
 // El foco, tras deshacer, a la anotación; si no se pudo (el panel no se ve), a la lectura.
 function enfocarTrasDeshacer(id) {
@@ -6707,28 +6821,55 @@ function ofrecerDeshacer(a, campos) {
   // Deshacer devuelve también la lista de campos que el lector había cambiado y la base todavía no tiene.
   ultimoBorrado = a;
   estado('Anotación borrada', true);
-  mostrarDeshacer('Anotación borrada.', 'Deshacer borrado', 'Recuperar la anotación borrada', function () {
-    if (ultimoBorrado) {
-      if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
-      guardar(ultimoBorrado);
-      ultimoBorrado = null;
-      estado('Anotación recuperada');
+  mostrarDeshacer(
+    a.id,
+    'borrado',
+    'Anotación borrada.',
+    'Deshacer borrado',
+    'Recuperar la anotación borrada',
+    function () {
+      if (ultimoBorrado) {
+        if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
+        guardar(ultimoBorrado);
+        ultimoBorrado = null;
+        estado('Anotación recuperada');
+      }
+      enfocarTrasDeshacer(a.id); // el foco pasa a la anotación recuperada
     }
-    enfocarTrasDeshacer(a.id); // el foco pasa a la anotación recuperada
-  });
+  );
   setTimeout(function () {
     if (ultimoBorrado === a) ultimoBorrado = null;
   }, 8000);
 }
-// Un cambio de color o de estado (también «Atendida» y «Reabrir» al revisar) se puede deshacer: vuelve a los valores
-// de antes (`antes`: campo → valor previo). Un borrado que se estaba ofreciendo deshacer deja de ofrecerse.
-function ofrecerDeshacerCambio(id, antes, texto) {
+// Un cambio de color o de estado (también «Atendida» y «Reabrir» al revisar) se puede deshacer: vuelven a lo de antes
+// (`antes`) los campos que siguen como el cambio los dejó (`despues`); lo que se cambió después, aquí o en otra sesión,
+// no se pisa. Un borrado que se estaba ofreciendo deshacer deja de ofrecerse.
+function ofrecerDeshacerCambio(id, antes, despues, texto) {
   ultimoBorrado = null;
-  mostrarDeshacer(texto, 'Deshacer', 'Volver a como estaba', function () {
+  anunciar(texto + ' Se puede deshacer.');
+  mostrarDeshacer(id, 'cambio', texto, 'Deshacer', 'Volver a como estaba', function () {
     var a = anots[id];
-    if (!a || SOLO_LECTURA) return;
-    guardar(Object.assign({}, a, antes));
+    if (!a || SOLO_LECTURA) {
+      estado(SOLO_LECTURA ? 'Sólo lectura: no se puede deshacer' : 'La anotación ya no está: nada que deshacer', true);
+      $('#lectura').focus({ preventScroll: true });
+      return;
+    }
+    var parche = {},
+      n = 0;
+    Object.keys(antes).forEach(function (k) {
+      if (a[k] === despues[k]) {
+        parche[k] = antes[k];
+        n++;
+      }
+    });
+    if (!n) {
+      estado('No se deshizo: la anotación cambió después', true);
+      enfocarTrasDeshacer(id);
+      return;
+    }
+    guardar(Object.assign({}, a, parche));
     estado('Cambio deshecho');
+    anunciar('Cambio deshecho');
     enfocarTrasDeshacer(id);
   });
 }
@@ -7850,11 +7991,14 @@ function arrancar() {
       col.onSnapshot(
         function (snap) {
           // lo que llega de la base entra en la memoria; un borrador sin guardar de esa anotación queda encima
-          var cambio = SINC.alFoto(
-            snap.docChanges().map(function (ch) {
-              return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
-            })
-          );
+          var cambios = snap.docChanges().map(function (ch) {
+            return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
+          });
+          var cambio = SINC.alFoto(cambios);
+          // borrada en otra sesión: su cambio ya no se puede deshacer (el eco de un borrado propio no retira su aviso)
+          cambios.forEach(function (ch) {
+            if (ch.tipo === 'removed') retirarDeshacer(ch.id, true);
+          });
           // qué es propio se sabe cuando se conoce al usuario: la cuenta y el aviso esperan a saberlo (y se registran antes
           // que la recuperación de lo que quedó en el navegador, para que su aviso, si lo hay, quede encima)
           if (!snap.metadata.fromCache)

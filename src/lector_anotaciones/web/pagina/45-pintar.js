@@ -4,9 +4,24 @@ function pintar(a) {
   if (pid) pintarPid(pid);
   marcasPagina();
 }
+// Repintar un bloque rehace sus marcas: si el foco del teclado estaba en una (o en la marca de párrafo), vuelve a la
+// marca equivalente en vez de caer al cuerpo del documento.
 function pintarPid(pid) {
   var n = $('[data-pid="' + pid + '"]');
   if (!n) return;
+  var act = /** @type {Element} */ (document.activeElement),
+    volver = null;
+  if (act && act !== n && n.contains(act))
+    volver = act.classList.contains('marca-anot')
+      ? '.marca-anot'
+      : act.getAttribute('data-aids')
+        ? 'mark.hl[data-aids="' + act.getAttribute('data-aids') + '"]'
+        : null;
+  repintar(n, pid);
+  var x = volver && $(volver, n);
+  if (x) x.focus({ preventScroll: true });
+}
+function repintar(n, pid) {
   // Los marcadores del margen (página, «cambió») viven dentro del bloque pero no son texto del libro:
   // se apartan, se repone el HTML original y se vuelven a poner, con sus escuchas intactas. La marca de párrafo con la
   // cuenta de anotaciones se rehace cada vez.
@@ -44,10 +59,13 @@ function pintarPid(pid) {
         fin: UBIC[a.id].fin,
       };
     });
-  if (lista.length) {
-    var marca = marcaParrafo(lista);
+  // la marca de párrafo: no en los títulos (cambiaría su nombre accesible); en una lista, dentro del primer ítem
+  if (lista.length && !/^H\d$/.test(n.tagName)) {
+    var marca = marcaParrafo(lista, n.tagName);
     extras.push(marca); // `pgn` mira `extras`: el texto de la marca (ninguno) tampoco se pinta
-    n.insertBefore(marca, extras.length > 1 ? extras[extras.length - 2].nextSibling : n.firstChild);
+    var item = /^(UL|OL)$/.test(n.tagName) ? $('li', n) : null;
+    if (item) item.insertBefore(marca, item.firstChild);
+    else n.insertBefore(marca, extras.length > 1 ? extras[extras.length - 2].nextSibling : n.firstChild);
   }
   var capas = capasActivas(pid);
   if (!lista.length && !capas.length) return;
@@ -150,28 +168,52 @@ function pintarPid(pid) {
 function esMarcador(c) {
   return !!c.classList && /(^|\s)(pg|marca-cambio|marca-anot)(\s|$)/.test(c.className);
 }
-// La marca de párrafo (en pantalla estrecha, donde no hay notas al margen): cuántas anotaciones tiene el párrafo, con
+// La marca de párrafo (en pantalla estrecha, donde no hay notas al margen): cuántas anotaciones tiene el bloque, con
 // el color de la primera y un punto si alguna tiene una respuesta por revisar; tocarla abre la primera. La cuenta va
 // en un atributo que el estilo muestra: no es texto del bloque, así que no cambia los desplazamientos de las citas,
-// lo que se copia ni lo que se lee en voz alta.
-function marcaParrafo(lista) {
+// lo que se copia ni lo que se lee en voz alta. Las ids van en `data-ids`, para poner al día el punto sin repintar.
+var NOMBRE_BLOQUE = { P: 'párrafo', BLOCKQUOTE: 'cita', UL: 'lista', OL: 'lista' };
+function marcaParrafo(lista, etiquetaHtml) {
   var orden = lista.slice().sort(function (x, y) {
-      return x.inicio - y.inicio;
-    }),
-    n = orden.length,
-    pend = orden.some(function (x) {
-      return porRevisar(anots[x.id]);
-    });
-  var b = el('button', {
-    'class': 'marca-anot c-' + (orden[0].color || 'revisar') + (pend ? ' por-revisar' : ''),
-    type: 'button',
-    'data-n': String(n),
-    'aria-label':
-      n + (n === 1 ? ' anotación' : ' anotaciones') + ' en este párrafo' + (pend ? ', con respuesta por revisar' : ''),
-    title: n + (n === 1 ? ' anotación' : ' anotaciones') + (pend ? ' (respuesta por revisar)' : ''),
+    return x.inicio - y.inicio;
   });
+  var b = el('button', {
+    'class': 'marca-anot c-' + (orden[0].color || 'revisar'),
+    type: 'button',
+    'data-n': String(orden.length),
+    'data-ids': orden
+      .map(function (x) {
+        return x.id;
+      })
+      .join(' '),
+    'data-que': NOMBRE_BLOQUE[etiquetaHtml] || 'bloque',
+  });
+  ponerAlDiaMarca(b);
   abrirConMarca(b, orden[0].id);
   return b;
+}
+function ponerAlDiaMarca(b) {
+  var ids = (b.getAttribute('data-ids') || '').split(' '),
+    n = ids.length,
+    que = b.getAttribute('data-que') || 'bloque',
+    pend = ids.some(function (id) {
+      return !!anots[id] && porRevisar(anots[id]);
+    });
+  b.classList.toggle('por-revisar', pend);
+  var cuenta = n + (n === 1 ? ' anotación' : ' anotaciones');
+  b.setAttribute(
+    'aria-label',
+    cuenta +
+      ' en ' +
+      (que === 'cita' || que === 'lista' ? 'esta ' : 'este ') +
+      que +
+      (pend ? ', con respuesta por revisar' : '')
+  );
+  b.title = cuenta + (pend ? ' (respuesta por revisar)' : '');
+}
+// El punto «por revisar» de las marcas, al día con quién lee y con lo revisado (sin repintar los bloques).
+function refrescarMarcas() {
+  $$('.marca-anot').forEach(ponerAlDiaMarca);
 }
 // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo
 // abrían la última pintada.)

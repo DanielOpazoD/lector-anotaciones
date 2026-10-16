@@ -130,6 +130,8 @@ def test_la_conversacion_y_lo_reabierto_se_escriben_igual_en_python_y_en_la_pagi
         {"cierre": "atendida", "revisado": "r", "estado": "resuelta"},
         {"cierre": "pregunta", "revisado": "r"},
         {"cierre": "descartada"},
+        {"respuesta": "Hecho.", "revisado": "r", "estado": "abierta"},
+        {"respuesta": "¿Seguro?", "cierre": "pregunta", "revisado": "r", "estado": "abierta"},
     ]
     js = _evaluar_js([["lineaHilo", [h]] for h in hilos] + [["reabierta", [a]] for a in anots])
     assert js == [linea_hilo(h) for h in hilos] + [reabierta(a) for a in anots]

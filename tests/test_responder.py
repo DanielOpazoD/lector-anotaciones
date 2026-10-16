@@ -252,3 +252,42 @@ def test_cli_responder_en_varios_lotes(tmp_path: Path, capsys):
     assert main(["responder", str(ruta), str(resp), "--versiones", str(vers), "--salida", str(salida)]) == 0
     assert [len(json.loads((tmp_path / f"lote-{i}.json").read_text("utf-8"))) for i in (1, 2)] == [50, 10]
     assert "lote 2 de 2" in capsys.readouterr().out
+
+
+def test_leer_versiones_sólo_las_líneas_de_la_lectura(tmp_path: Path):
+    texto = tmp_path / "lectura.txt"
+    texto.write_text(
+        '3 documents from collection "anotaciones" saved as JSON files under "/x":\n'
+        '- "a.b"  2,772 bytes  version 20  "/x/a.b.json"\n'
+        '- "c"  2.7 KB  version 3  "/x/c.json"\n'
+        "- abc: version 9\n",
+        encoding="utf-8",
+    )
+    assert leer_versiones(texto) == {"a.b": 20, "c": 3}, "sin claves basura; la id con punto, entera"
+    texto.write_text('- "a"  1 bytes  version 2  "/x"\n- "a"  1 bytes  version 3  "/x"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="dos versiones"):
+        leer_versiones(texto)
+    js = tmp_path / "v.json"
+    js.write_text('{"a": true}', encoding="utf-8")
+    with pytest.raises(ValueError):
+        leer_versiones(js)
+
+
+def test_una_escritura_que_no_cabe_en_un_lote_es_un_error():
+    with pytest.raises(ValueError, match="más de lo que cabe"):
+        en_lotes([{"doc_id": "x", "data": {"respuesta": "ñ" * 200_000}}])
+
+
+def test_responder_no_acepta_lo_que_copia_la_pagina(tmp_path: Path):
+    ruta = tmp_path / "copia.json"
+    ruta.write_text(json.dumps({"formato": 2, "anotaciones": TODAS}), encoding="utf-8")
+    assert cargar_coleccion(ruta) == TODAS, "para leer, sí"
+    with pytest.raises(ValueError, match="lo que copia la página"):
+        cargar_coleccion(ruta, de_la_base=True)
+
+
+def test_en_un_directorio_la_id_es_el_nombre_del_archivo(tmp_path: Path):
+    carpeta = tmp_path / "db" / "anotaciones"
+    carpeta.mkdir(parents=True)
+    (carpeta / "doc1.json").write_text(json.dumps({**NUEVA, "id": "otra"}), encoding="utf-8")
+    assert [a["id"] for a in cargar_coleccion(tmp_path / "db")] == ["doc1"]

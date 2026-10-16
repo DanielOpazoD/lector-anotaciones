@@ -90,7 +90,8 @@ def test_el_contexto_decide_entre_dos_coincidencias(fuentes: Path):
 
 def test_reubicada_si_la_linea_ya_no_es_la_suya_y_lo_que_no_se_puede(fuentes: Path):
     anots = [
-        anot("movida", "La diferencia parece obvia", "La diferencia no es obvia", 6),
+        anot("movida", "La diferencia parece obvia", "La diferencia no es obvia", 6, antes="la observación. "),
+        anot("sin-contexto", "La diferencia parece obvia", "Una diferencia menor", 6),
         anot("perdida", "esto no está", "nada", 3),
         anot("lejos", "algo", "nada", 3, src="99_otro.md:1"),
         anot("libro-importado", "algo", "nada", 3, src="cap-uno:4"),
@@ -99,6 +100,7 @@ def test_reubicada_si_la_linea_ya_no_es_la_suya_y_lo_que_no_se_puede(fuentes: Pa
     res, _ = aplicar(anots, fuentes)
     assert _estados(res) == {
         "movida": "reubicada",
+        "sin-contexto": "no encontrada",
         "perdida": "no encontrada",
         "lejos": "sin archivo",
         "libro-importado": "sin archivo",

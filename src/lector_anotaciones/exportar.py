@@ -102,8 +102,13 @@ def propuesta(a: dict) -> str:
 
 
 def reabierta(a: dict) -> bool:
-    """Respondida como atendida o descartada y devuelta por el autor desde «Por revisar»."""
-    return bool(a.get("revisado")) and a.get("cierre") in ("atendida", "descartada") and a.get("estado") != "resuelta"
+    """Respondida (sin pregunta: atendida, descartada o sin cierre) y devuelta por el autor desde «Por revisar»."""
+    return (
+        bool(a.get("revisado"))
+        and bool(a.get("respuesta") or a.get("cierre"))
+        and a.get("cierre") != "pregunta"
+        and a.get("estado") != "resuelta"
+    )
 
 
 def _linea(a: dict) -> list[str]:

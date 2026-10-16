@@ -23,20 +23,46 @@ MAX_BYTES = 900_000
 BORRAR = {"__delete__": True}
 
 
-def cargar_coleccion(ruta: Path) -> list[dict]:
+def cargar_coleccion(ruta: Path, de_la_base: bool = False) -> list[dict]:
     """Las anotaciones de un JSON (cualquiera de las formas de `exportar.normalizar`) o de un directorio con un
-    documento por archivo, como lo deja `ArtifactData` con `out_dir` (`<dir>/anotaciones/<id>.json`)."""
+    documento por archivo, como lo deja `ArtifactData` con `out_dir` (`<dir>/anotaciones/<id>.json`); ahí la id es el
+    nombre del archivo, que es la del documento. Con `de_la_base`, lo copiado de la página («Copiar todo») no sirve:
+    las escrituras se fijan a versiones de una lectura de la base, y su contenido tiene que ser el de esa lectura.
+    Una id repetida es un error."""
     ruta = Path(ruta)
-    if not ruta.is_dir():
-        return normalizar(json.loads(ruta.read_text(encoding="utf-8-sig")))
-    docs = {}
-    for f in sorted(ruta.rglob("*.json")):
-        d = json.loads(f.read_text(encoding="utf-8-sig"))
-        if isinstance(d, dict):
-            docs[f.stem] = d
-    if not docs:
-        raise ValueError(f"{ruta} no tiene documentos .json")
-    return normalizar(docs)
+    if ruta.is_dir():
+        docs: dict[str, dict] = {}
+        for f in sorted(ruta.rglob("*.json")):
+            d = json.loads(f.read_text(encoding="utf-8-sig"))
+            if not isinstance(d, dict):
+                continue
+            if f.stem in docs:
+                raise ValueError(f"la id {f.stem} está en dos archivos del directorio ({f})")
+            docs[f.stem] = dict(d, id=f.stem)
+        if not docs:
+            raise ValueError(f"{ruta} no tiene documentos .json")
+        return list(docs.values())
+    datos = json.loads(ruta.read_text(encoding="utf-8-sig"))
+    anots = normalizar(datos)
+    if de_la_base and (
+        (isinstance(datos, dict) and ("formato" in datos or "anotaciones" in datos))
+        or any("sin_guardar" in a for a in anots)
+    ):
+        raise ValueError(
+            "eso es lo que copia la página, no una lectura de la base: responder necesita la colección y sus versiones "
+            "de la misma lectura (el directorio de `ArtifactData` con out_dir y el texto que devolvió)"
+        )
+    _por_id(anots)
+    return anots
+
+
+def _por_id(anots: list[dict]) -> dict[str, dict]:
+    por_id: dict[str, dict] = {}
+    for a in anots:
+        if a["id"] in por_id:
+            raise ValueError(f"la id {a['id']} está dos veces en la colección")
+        por_id[a["id"]] = a
+    return por_id
 
 
 def motivo(a: dict) -> str | None:
@@ -71,31 +97,39 @@ def a_texto(lista: list[tuple[str, dict]]) -> str:
     return "\n".join(out) + "\n"
 
 
-_VERSION_TEXTO = re.compile(
-    r"""["']?([A-Za-z0-9_\-.~:@+]+?)(?:\.json)?["']?\s+(?:\d+\s+bytes\s+)?version\s*[:=]?\s*(\d+)"""
-)
+# Una línea del texto de una lectura de `ArtifactData`: `- "id"  2772 bytes  version 20  "ruta"`.
+_VERSION_TEXTO = re.compile(r'^\s*-\s+"([A-Za-z0-9_\-.~:@+]+)"\s.*?\bversion\s+(\d+)\b', re.M)
 
 
 def leer_versiones(ruta: Path) -> dict[str, int]:
-    """Las versiones de los documentos: un JSON `{id: versión}`, o el texto que devuelve una lectura de `ArtifactData`
-    (líneas `- "id"  2772 bytes  version 20  "ruta"`)."""
+    """Las versiones de los documentos: un JSON `{id: versión}`, o el texto que devuelve una lectura de `ArtifactData`.
+    Una id con dos versiones distintas es un error."""
     texto = Path(ruta).read_text(encoding="utf-8-sig")
     try:
         datos = json.loads(texto)
     except json.JSONDecodeError:
-        return {m.group(1): int(m.group(2)) for m in _VERSION_TEXTO.finditer(texto)}
-    if not isinstance(datos, dict) or not all(isinstance(v, int) for v in datos.values()):
-        raise ValueError("las versiones deben ser un objeto {id: versión}")
+        versiones: dict[str, int] = {}
+        for m in _VERSION_TEXTO.finditer(texto):
+            v = int(m.group(2))
+            if versiones.get(m.group(1), v) != v:
+                raise ValueError(f"la id {m.group(1)} aparece con dos versiones") from None
+            versiones[m.group(1)] = v
+        return versiones
+    if not isinstance(datos, dict) or not all(type(v) is int and v > 0 for v in datos.values()):
+        raise ValueError("las versiones deben ser un objeto {id: versión}, con versiones enteras")
     return datos
 
 
 def leer_respuestas(ruta: Path) -> list[dict]:
     """Las respuestas: una lista de `{id, respuesta, cierre, commit?}` o un objeto `{id: {respuesta, cierre, …}}`."""
     datos = json.loads(Path(ruta).read_text(encoding="utf-8-sig"))
+    forma = "las respuestas deben ser una lista de {id, respuesta, cierre, commit?} o un objeto {id: {respuesta, …}}"
     if isinstance(datos, dict):
-        datos = [dict(v, id=v.get("id", k)) for k, v in datos.items() if isinstance(v, dict)]
-    if not isinstance(datos, list):
-        raise ValueError("las respuestas deben ser una lista de {id, respuesta, cierre, commit?}")
+        if not all(isinstance(v, dict) for v in datos.values()):
+            raise ValueError(forma)
+        datos = [dict(v, id=v.get("id", k)) for k, v in datos.items()]
+    if not isinstance(datos, list) or not all(isinstance(r, dict) and isinstance(r.get("id"), str) for r in datos):
+        raise ValueError(forma)
     return datos
 
 
@@ -161,7 +195,7 @@ def escrituras(
     """Las escrituras de `ArtifactData` (acción «batch») que dejan esas respuestas en la base. Lanza ValueError con
     todos los problemas si alguna respuesta no es válida; `avisos` recibe lo que no impide escribir (responder algo
     que no estaba pendiente)."""
-    por_id = {a["id"]: a for a in anots}
+    por_id = _por_id(anots)
     problemas = [p for r in respuestas if (p := _validar(r, por_id, versiones))]
     vistas = [r.get("id") for r in respuestas]
     problemas += [f"{i}: respondida dos veces" for i in sorted({i for i in vistas if vistas.count(i) > 1})]
@@ -186,11 +220,15 @@ def escrituras(
 
 
 def en_lotes(escritas: list[dict]) -> list[list[dict]]:
-    """Reparte las escrituras en lotes que caben en una llamada «batch» (50 escrituras, menos de 1 MiB)."""
+    """Reparte las escrituras en lotes que caben en una llamada «batch» (50 escrituras, menos de 1 MiB). El tamaño se
+    mide con los caracteres no ASCII escapados (lo más que pueden ocupar); una escritura que no cabe sola es un
+    error."""
     lotes: list[list[dict]] = [[]]
     tam = 0
     for e in escritas:
-        n = len(json.dumps(e, ensure_ascii=False).encode())
+        n = len(json.dumps(e))
+        if n > MAX_BYTES:
+            raise ValueError(f"{e.get('doc_id')}: la escritura ocupa {n} bytes, más de lo que cabe en un lote")
         if lotes[-1] and (len(lotes[-1]) >= MAX_ESCRITURAS or tam + n > MAX_BYTES):
             lotes.append([])
             tam = 0

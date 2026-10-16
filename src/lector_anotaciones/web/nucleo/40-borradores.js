@@ -8,7 +8,7 @@
 })(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Lo que el lector edita en la página; el resto (respuesta, cierre, commit…) lo escribe quien edita las fuentes.
-  var CAMPOS_LECTOR = ['nota', 'replica', 'color', 'estado', 'revisado'];
+  var CAMPOS_LECTOR = ['nota', 'replica', 'sugerencia', 'color', 'estado', 'revisado'];
   // Suma a `marcas` (objeto campo → true) los campos del lector que difieren entre `antes` y `despues`.
   function marcarCampos(marcas, antes, despues) {
     CAMPOS_LECTOR.forEach(function (k) {

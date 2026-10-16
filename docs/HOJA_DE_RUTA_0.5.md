@@ -34,6 +34,13 @@ encontraron once problemas; cada uno se comprobó releyendo el código y con una
   15 s por espera; captura y traza de lo que falla.
 - Tipos: el núcleo está declarado entero (sin firma comodín) y `strictNullChecks` está activo.
 
+## Revisión independiente de lo funcional (E7–E8)
+
+Otros dos revisores (línea de órdenes y datos; la página en el navegador) encontraron 25 problemas, todos reproducidos;
+el más grave, encontrado por los dos: la propuesta no llegaba a la base compartida. Las pruebas que escribieron quedan
+en la suite (`tests/test_revision_05.py`, `tests/web/revision-05.spec.mjs`, `tests/js/revision-05.test.js`), y cada
+arreglo se comprobó rompiéndolo y viendo caer su prueba.
+
 ## Etapas
 
 | | Etapa | Estado |
@@ -46,4 +53,4 @@ encontraron once problemas; cada uno se comprobó releyendo el código y con una
 | E5 | Tipos: JSDoc y `tsc --checkJs` en la CI | hecho: 54 avisos resueltos; la API del núcleo, la anotación, la sincronía y la vista tipadas |
 | E7 | Modelo: esquema versionado, ancla estable por bloque, hilo de la conversación | hecho: esquemas JSON con pruebas, ancla por huella, hilo en ficha, copia y exportación |
 | E8 | `pendientes`/`responder`/`aplicar`, sugerencias, marcas en el teléfono, deshacer cambios | hecho: cada función con su prueba (pytest, paridad Python/JS, navegador) y comprobada rompiendo el código |
-| E9 | Revisión independiente, documentación y publicación de la 0.5.0 | pendiente |
+| E9 | Revisión independiente, documentación y publicación de la 0.5.0 | hecho: dos revisiones (lo estructural, lo funcional), 36 arreglos con su prueba |

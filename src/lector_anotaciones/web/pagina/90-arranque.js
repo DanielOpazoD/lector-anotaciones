@@ -168,11 +168,14 @@ function arrancar() {
       col.onSnapshot(
         function (snap) {
           // lo que llega de la base entra en la memoria; un borrador sin guardar de esa anotación queda encima
-          var cambio = SINC.alFoto(
-            snap.docChanges().map(function (ch) {
-              return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
-            })
-          );
+          var cambios = snap.docChanges().map(function (ch) {
+            return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
+          });
+          var cambio = SINC.alFoto(cambios);
+          // borrada en otra sesión: su cambio ya no se puede deshacer (el eco de un borrado propio no retira su aviso)
+          cambios.forEach(function (ch) {
+            if (ch.tipo === 'removed') retirarDeshacer(ch.id, true);
+          });
           // qué es propio se sabe cuando se conoce al usuario: la cuenta y el aviso esperan a saberlo (y se registran antes
           // que la recuperación de lo que quedó en el navegador, para que su aviso, si lo hay, quede encima)
           if (!snap.metadata.fromCache)

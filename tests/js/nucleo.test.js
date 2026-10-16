@@ -54,10 +54,21 @@ test('diffPalabras marca lo quitado y lo añadido', () => {
   assert.deepEqual(
     D.diffPalabras(largo, largo + ' y'),
     [
-      ['-', largo],
-      ['+', largo + ' y'],
+      ['=', largo],
+      ['+', ' y'],
     ],
-    'demasiado grande: no compara'
+    'lo común al principio y al final se aparta: un cambio en un texto largo se ve tal cual'
+  );
+  const otro = Array(600).fill('z').join(' ');
+  assert.deepEqual(
+    D.diffPalabras('a ' + largo + ' b', 'a ' + otro + ' b'),
+    [
+      ['=', 'a '],
+      ['-', largo],
+      ['+', otro],
+      ['=', ' b'],
+    ],
+    'lo distinto en medio, demasiado grande: no se compara, pero lo común sigue aparte'
   );
 });
 

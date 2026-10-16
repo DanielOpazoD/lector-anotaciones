@@ -92,7 +92,8 @@ function ordenKey(a) {
 // anotación, cambia lo que muestra (activa, por revisar, revisada, sin guardar, dónde quedó, si su pasaje cambió, sólo
 // lectura, quién es el lector y su perfil, si hay varios lectores, la huella de su bloque). Un redibujo reutiliza el
 // nodo si las dos siguen iguales.
-var FICHAS = {}, // id → { a, firma, nodo }
+var PROPUESTA_ABIERTA = {}, // ids con el cuadro de la propuesta abierto sin propuesta guardada todavía
+  FICHAS = {}, // id → { a, firma, nodo }
   MEDIDAS = new WeakMap(); // nodo de ficha → ancho de la lista y modo con que se midieron sus notas
 function firmaFicha(a, varios) {
   var u = UBIC[a.id],
@@ -237,7 +238,8 @@ function renderPanel() {
     if (ta) {
       if (ta.value !== foco.valor) {
         ta.value = foco.valor;
-        ajustarAlto(ta);
+        // como si se hubiera escrito: la diferencia de la propuesta, el alto, el margen y el guardado lo siguen
+        ta.dispatchEvent(new Event('input'));
       }
       ta.focus({ preventScroll: true });
       try {
@@ -311,6 +313,7 @@ function cabezaBandeja(L) {
   return c;
 }
 function renderCuentaRevisar() {
+  refrescarMarcas();
   var n = cuantasPorRevisar();
   $('#n-revisar').textContent = n ? String(n) : '';
   // en el botón del teléfono el número va con su significado para quien usa lector de pantalla
@@ -561,7 +564,7 @@ function fichaPropuesta(a, editable) {
     var s = N.propuesta({ id: a.id, tipo: 'subrayado', cita: a.cita, sugerencia: texto });
     caja.classList.toggle('vacia', !s);
     dif.textContent = '';
-    dif.appendChild(s ? renderDiff(a.cita.trim(), s) : el('span', { 'class': 'sin', text: 'Igual a la cita' }));
+    dif.appendChild(s ? difRecortada(a.cita.trim(), s) : el('span', { 'class': 'sin', text: 'Igual a la cita' }));
   };
   mostrarDif(a.sugerencia);
   if (!editable) return caja;
@@ -600,11 +603,40 @@ function fichaPropuesta(a, editable) {
   caja.appendChild(ta);
   return caja;
 }
+// La diferencia de una propuesta con lo que no cambia recortado: de un tramo igual largo quedan unas palabras a cada
+// lado del cambio y «…» en lugar del resto, para que en una cita larga se vea el cambio y no el párrafo.
+function difRecortada(antes, ahora) {
+  var w = el('div'),
+    tramos = diffPalabras(antes, ahora),
+    MAX = 14,
+    LADO = 6;
+  tramos.forEach(function (p, i) {
+    if (p[0] !== '=') {
+      w.appendChild(el(p[0] === '-' ? 'del' : 'ins', { text: p[1] }));
+      return;
+    }
+    var pal = p[1].split(/(\s+)/),
+      palabras = pal.filter(function (x) {
+        return /\S/.test(x);
+      }).length,
+      t = p[1];
+    if (palabras > MAX) {
+      var cabeza = pal.slice(0, LADO * 2).join(''),
+        cola = pal.slice(-LADO * 2).join('');
+      if (i === 0) t = '… ' + cola.replace(/^\s+/, '');
+      else if (i === tramos.length - 1) t = cabeza.replace(/\s+$/, '') + ' …';
+      else t = cabeza.replace(/\s+$/, '') + ' … ' + cola.replace(/^\s+/, '');
+    }
+    w.appendChild(document.createTextNode(t));
+  });
+  return w;
+}
 // Abre el cuadro de la propuesta en la ficha de un subrayado (lo crea con la cita si no lo tiene) y lo enfoca.
 function abrirPropuesta(id) {
   var a = anots[id],
     f = $('.ficha[data-id="' + id + '"]');
   if (!a || !f || a.tipo !== 'subrayado' || SOLO_LECTURA) return;
+  PROPUESTA_ABIERTA[id] = 1; // un redibujo antes de guardar nada lo vuelve a dibujar
   activar(id);
   var ta = $('textarea.sugerencia', f);
   if (!ta) {
@@ -725,7 +757,8 @@ function fichaEdicion(ctx) {
   ta.addEventListener('keydown', salirConTecla);
   f.appendChild(ta);
   pintarEtiquetas(f, a);
-  if (a.tipo === 'subrayado' && typeof a.sugerencia === 'string') f.appendChild(fichaPropuesta(a, true));
+  if (a.tipo === 'subrayado' && (typeof a.sugerencia === 'string' || PROPUESTA_ABIERTA[a.id]))
+    f.appendChild(fichaPropuesta(a, true));
   var hilo = fichaHilo(a);
   if (hilo) f.appendChild(hilo);
   if (a.respuesta || a.cierre) {
@@ -809,7 +842,7 @@ function fichaAcciones(ctx) {
       b.addEventListener('click', function () {
         var ac = actual();
         guardar(Object.assign({}, ac, { color: c }));
-        if (ac.color !== c) ofrecerDeshacerCambio(a.id, { color: ac.color }, 'Color: ' + c + '.');
+        if (ac.color !== c) ofrecerDeshacerCambio(a.id, { color: ac.color }, { color: c }, 'Color: ' + c + '.');
       });
       cols.appendChild(b);
     });
@@ -850,11 +883,16 @@ function fichaAcciones(ctx) {
       var ac = actual(),
         nuevo = ac.estado === 'resuelta' ? 'abierta' : 'resuelta';
       guardar(Object.assign({}, ac, { estado: nuevo }));
-      ofrecerDeshacerCambio(a.id, { estado: ac.estado }, nuevo === 'resuelta' ? 'Marcada resuelta.' : 'Reabierta.');
+      ofrecerDeshacerCambio(
+        a.id,
+        { estado: ac.estado || 'abierta' },
+        { estado: nuevo },
+        nuevo === 'resuelta' ? 'Marcada resuelta.' : 'Reabierta.'
+      );
     });
     acc.appendChild(res);
   }
-  if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string') {
+  if (a.tipo === 'subrayado' && typeof a.sugerencia !== 'string' && !PROPUESTA_ABIERTA[a.id]) {
     var pr = el('button', {
       'class': 'btn peq',
       type: 'button',
@@ -987,7 +1025,8 @@ function revisar(id, accion) {
   var enBandeja = V.tab === 'revisar';
   if (enBandeja) VISTA.revisada(id);
   // lo de antes, para deshacer: sin revisión previa, `revisado` vacío (la base no borra campos; vacío no cuenta)
-  var antes = { estado: a.estado, revisado: a.revisado || '' };
+  var antes = { estado: a.estado || 'abierta', revisado: a.revisado || '' },
+    marca = N.marcaRevision(a, ahora());
   if (accion === 'atendida') {
     // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
     // (en «Sección» o «Todas») se queda en la ficha
@@ -1005,8 +1044,8 @@ function revisar(id, accion) {
       pend.filter(function (x) {
         return ordenKey(x) > ordenKey(a);
       })[0] || pend[0];
-    guardar(Object.assign({}, a, { estado: 'resuelta', revisado: N.marcaRevision(a, ahora()) }));
-    ofrecerDeshacerCambio(id, antes, 'Atendida.');
+    guardar(Object.assign({}, a, { estado: 'resuelta', revisado: marca }));
+    ofrecerDeshacerCambio(id, antes, { estado: 'resuelta', revisado: marca }, 'Atendida.');
     if (enBandeja && sig) {
       irARevisar(sig);
       return;
@@ -1019,8 +1058,8 @@ function revisar(id, accion) {
     }
     return;
   }
-  guardar(Object.assign({}, a, { estado: 'abierta', revisado: N.marcaRevision(a, ahora()) }));
-  ofrecerDeshacerCambio(id, antes, 'Reabierta.');
+  guardar(Object.assign({}, a, { estado: 'abierta', revisado: marca }));
+  ofrecerDeshacerCambio(id, antes, { estado: 'abierta', revisado: marca }, 'Reabierta.');
   var f = $('.ficha[data-id="' + id + '"]'),
     ta = f && ($('textarea.replica', f) || $('textarea.nota', f));
   if (ta) {

@@ -46,9 +46,10 @@
     var j = i < 0 ? (d > 0 ? 0 : lista.length - 1) : i + d;
     return j >= 0 && j < lista.length ? j : -1;
   }
-  // Respondida como atendida o descartada y devuelta por el autor desde «Por revisar» (como `reabierta` en exportar.py).
+  // Respondida (sin pregunta: atendida, descartada o sin cierre) y devuelta por el autor desde «Por revisar» (como
+  // `reabierta` en exportar.py).
   function reabierta(a) {
-    return !!a.revisado && (a.cierre === 'atendida' || a.cierre === 'descartada') && a.estado !== 'resuelta';
+    return !!a.revisado && !!(a.respuesta || a.cierre) && a.cierre !== 'pregunta' && a.estado !== 'resuelta';
   }
   // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
   function lineaHilo(h) {

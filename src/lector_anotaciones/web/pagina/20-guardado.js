@@ -103,13 +103,10 @@ function rechazoEscritura(e, id, previa, verbo) {
     if (ub) UBIC[id] = ub;
     pintar(r.restaurada);
   }
+  // el borrado o el cambio no ocurrió: no hay nada que deshacer (salvo que el aviso ya sea de otra anotación)
+  retirarDeshacer(id);
   if (verbo === 'borrar') {
-    // el borrado no ocurrió: no hay nada que deshacer (salvo que el enlace ya sea de otro borrado posterior)
-    if (ultimoBorrado && ultimoBorrado.id === id) {
-      ultimoBorrado = null;
-      var z = $('#deshacer-zona');
-      if (z) z.innerHTML = '';
-    }
+    // nada más: la anotación volvió a la memoria
   } else if (r.restaurada) escribirCampos([id]);
   else if (r.conservada) guardarLocal([id]);
   renderPanel();
@@ -135,6 +132,7 @@ function activarSoloLectura() {
   if (SOLO_LECTURA) return;
   SOLO_LECTURA = true;
   document.body.classList.add('solo-lectura');
+  retirarDeshacer();
   ocultarTb();
   // El modo se señala en sitios que el eco de la base no pisa: el chip de la cabecera, el nombre de la barra de
   // selección (que sólo ofrece copiar), la ayuda sin los atajos de anotar, y los números de página sin acción.

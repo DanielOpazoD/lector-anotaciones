@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import __version__
 from .aplicar import aplicar, diferencias
+from .aplicar import escribir as escribir_fuente
 from .aplicar import respuestas as respuestas_de
 from .capas import ConfigCapas, leer_lista
 from .construir import cargar_anterior, construir, escribir, resumen, validar
@@ -100,7 +101,7 @@ def _parser() -> argparse.ArgumentParser:
         help="versiones de los documentos: JSON {id: versión} o el texto que devolvió la lectura de la colección",
     )
     r.add_argument("--coleccion", default="anotaciones", help="ruta de la colección (p. ej. libros/<id>/anotaciones)")
-    r.add_argument("--commit", help="commit de las respuestas que no traen uno")
+    r.add_argument("--commit", help="commit de las respuestas atendidas que no traen uno")
     r.add_argument(
         "--salida",
         type=Path,
@@ -114,7 +115,9 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--escribir", action="store_true", help="escribe los cambios; sin esto, sólo muestra las diferencias"
     )
-    ap.add_argument("--respuestas", type=Path, help="escribe aquí las respuestas de lo aplicado, para `responder`")
+    ap.add_argument(
+        "--respuestas", type=Path, help="con --escribir, deja aquí las respuestas de lo aplicado, para `responder`"
+    )
     return p
 
 
@@ -213,13 +216,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.orden == "responder":
         notas: list[str] = []
         try:
+            respuestas = leer_respuestas(args.respuestas)
+            if args.commit:  # el commit es el que aplicó el cambio: sólo en lo atendido
+                respuestas = [
+                    dict(r, commit=r.get("commit") or args.commit) if r.get("cierre") == "atendida" else r
+                    for r in respuestas
+                ]
             lotes = en_lotes(
                 escrituras(
-                    cargar_coleccion(args.anotaciones),
-                    [
-                        dict(r, commit=r.get("commit") or args.commit) if args.commit else r
-                        for r in leer_respuestas(args.respuestas)
-                    ],
+                    cargar_coleccion(args.anotaciones, de_la_base=True),
+                    respuestas,
                     leer_versiones(args.versiones),
                     coleccion=args.coleccion,
                     avisos=notas,
@@ -233,6 +239,14 @@ def main(argv: list[str] | None = None) -> int:
         if len(lotes) > 1 and not args.salida:
             print(f"error: {len(lotes)} lotes no caben en la salida estándar; usa --salida", file=sys.stderr)
             return 2
+        if args.salida:
+            # los lotes numerados de una corrida anterior con la misma salida se retiran: con sus versiones todavía
+            # válidas, mandarlos por error escribiría respuestas viejas
+            salida = Path(args.salida)
+            for viejo in sorted(salida.parent.glob(f"{salida.stem}-*{salida.suffix}")):
+                if viejo.stem[len(salida.stem) + 1 :].isdigit():
+                    viejo.unlink()
+                    print(f"retirado {viejo}: de una corrida anterior", file=sys.stderr)
         if len(lotes) <= 1:
             lote = lotes[0] if lotes else []
             texto = json.dumps(lote, ensure_ascii=False, indent=2) + "\n"
@@ -244,6 +258,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ok {destino}: lote {i} de {len(lotes)}, {len(lote)} escrituras")
         return 0
     if args.orden == "aplicar":
+        if args.respuestas and not args.escribir:
+            print("error: --respuestas sólo con --escribir: sin escribir, nada quedó aplicado", file=sys.stderr)
+            return 2
         try:
             resultados, archivos = aplicar(cargar_coleccion(args.anotaciones), args.fuentes)
         except (FileNotFoundError, ValueError) as e:
@@ -255,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{r.estado}: {r.id} · {donde} · «{r.cita}» → «{r.propuesta}»{extra}", file=sys.stderr)
         if args.escribir:
             for ruta, arch in sorted(archivos.items()):
-                ruta.write_text(arch.texto, encoding="utf-8")
+                escribir_fuente(ruta, arch.texto)
                 print(f"ok {ruta}: {len(arch.resultados)} propuestas aplicadas")
         else:
             sys.stdout.write(diferencias(archivos, args.fuentes))
