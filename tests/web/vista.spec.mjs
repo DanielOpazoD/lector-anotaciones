@@ -57,7 +57,15 @@ test('Activar, dejar y abrir la propuesta no rehacen la ficha; un redibujo la re
   check(r.lector === 'Lectora Invitada', `la ficha rehecha lleva el nombre de la otra lectora (${r.lector})`);
   // la propuesta abierta también sobrevive a una ficha rehecha: un cambio del propio subrayado
   await p.evaluate((s) => window.__cambioExterno(s, { nota: 'Con nota' }), s);
-  await esperar(p, (s) => !document.querySelector(`.ficha[data-id="${s}"]`).__marca, s);
+  const rehecha = await esperar(
+    p,
+    (s) => {
+      const f = document.querySelector(`.ficha[data-id="${s}"]`);
+      return !f.__marca && f.querySelector('textarea.nota').value === 'Con nota';
+    },
+    s
+  );
+  check(rehecha, 'un cambio del propio subrayado rehace su ficha, con lo nuevo');
   check(
     await p.evaluate((s) => !!document.querySelector(`.ficha[data-id="${s}"] textarea.sugerencia`), s),
     'rehecha por un cambio suyo, la ficha vuelve con el cuadro de la propuesta abierto'

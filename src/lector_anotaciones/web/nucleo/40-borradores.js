@@ -56,9 +56,9 @@
   function copiarCampo(destino, origen, k) {
     destino[k] = origen[k];
   }
-  // Lo que le falta a un documento de fuera (la base la escribe cualquier colaborador) para ser una anotación que la
-  // página pueda mostrar sin romperse, según esquemas/anotacion.schema.json; null si no le falta nada. No juzga el
-  // contenido: sólo la forma de lo que la página lee.
+  // En qué se aparta un documento de fuera (la base la escribe cualquier colaborador) de la forma de una anotación
+  // (esquemas/anotacion.schema.json); null si en nada. Es para el diagnóstico: el documento entra igual (la base manda) y
+  // la página lo muestra como puede. Nunca lanza.
   var TEXTOS = ['nota', 'sugerencia', 'respuesta', 'replica', 'cita', 'antes', 'despues', 'commit', 'respondido'];
   var TEXTOS_MAS = ['revisado', 'creado', 'editado', 'src', 'grupo', 'bh', 'color', 'estado', 'cierre'];
   /**
@@ -67,7 +67,8 @@
    */
   function problemaDeAnotacion(a) {
     if (!a || typeof a !== 'object' || Array.isArray(a)) return 'no es un objeto';
-    if (['subrayado', 'pagina', 'capitulo', 'general'].indexOf(a.tipo) < 0) return 'tipo desconocido: ' + a.tipo;
+    if (['subrayado', 'pagina', 'capitulo', 'general'].indexOf(a.tipo) < 0)
+      return 'tipo desconocido: ' + (typeof a.tipo === 'string' ? a.tipo : typeof a.tipo);
     var mal = TEXTOS.concat(TEXTOS_MAS).filter(function (k) {
       return a[k] !== undefined && a[k] !== null && typeof a[k] !== 'string';
     });
@@ -82,7 +83,7 @@
     var entradaValida = function (h) {
       return h && typeof h === 'object' && typeof h.texto === 'string';
     };
-    if (a.hilo !== undefined && !(Array.isArray(a.hilo) && a.hilo.every(entradaValida)))
+    if (a.hilo !== undefined && a.hilo !== null && !(Array.isArray(a.hilo) && a.hilo.every(entradaValida)))
       return 'conversación anterior mal formada';
     if (a.tipo === 'subrayado') {
       if (typeof a.pid !== 'string' || typeof a.cita !== 'string') return 'subrayado sin pasaje o sin cita';

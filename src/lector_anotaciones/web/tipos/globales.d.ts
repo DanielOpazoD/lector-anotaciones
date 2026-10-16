@@ -175,48 +175,50 @@ interface EstadoLibro {
 
 /** El núcleo (nucleo/*.js): todo lo que la página llama, con su tipo; un nombre que no está aquí es un error. */
 interface Nucleo {
-  crearSincronia(): Sincronia;
-  crearVista(inicial?: Partial<EstadoVista>): Vista;
-  migrarClaves(local: Record<string, Anotacion>, viejas: Record<string, Record<string, Anotacion>>): number;
-  esTransitorio(codigo?: string): boolean;
-  esDePermiso(codigo: string, tamano: number, verbo: string): boolean;
-  porRevisar(a: Anotacion, yo: string | null): boolean;
-  marcaRevision(a: Anotacion, ahora: string): string;
-  reabierta(a: Anotacion): boolean;
-  propuesta(a: Anotacion): string;
-  lineaHilo(h: NonNullable<Anotacion['hilo']>[number]): string;
-  vecina<T extends { id: string }>(
+  crearSincronia: () => Sincronia;
+  crearVista: (inicial?: Partial<EstadoVista>) => Vista;
+  migrarClaves: (local: Record<string, Anotacion>, viejas: Record<string, Record<string, Anotacion>>) => number;
+  esTransitorio: (codigo?: string) => boolean;
+  esDePermiso: (codigo: string, tamano: number, verbo: string) => boolean;
+  porRevisar: (a: Anotacion, yo: string | null) => boolean;
+  marcaRevision: (a: Anotacion, ahora: string) => string;
+  reabierta: (a: Anotacion) => boolean;
+  propuesta: (a: Anotacion) => string;
+  lineaHilo: (h: NonNullable<Anotacion['hilo']>[number]) => string;
+  vecina: <T extends { id: string }>(
     lista: T[],
     actual: string | null,
     d: number,
     orden?: { de: (x: T) => number; clave: number | null }
-  ): number;
-  apilar(
+  ) => number;
+  apilar: (
     items: { id: string; y: number | null; h: number }[],
     activo: string | null,
     separacion?: number
-  ): { tops: Record<string, number>; alto: number };
-  marcarCampos(marcas: Record<string, boolean>, antes: Anotacion, despues: Anotacion): Record<string, boolean>;
-  fundirBorrador(deBase: Anotacion, borrador: Anotacion, campos?: Record<string, boolean>): Anotacion;
-  igual(a: unknown, b: unknown): boolean;
+  ) => { tops: Record<string, number>; alto: number };
+  marcarCampos: (marcas: Record<string, boolean>, antes: Anotacion, despues: Anotacion) => Record<string, boolean>;
+  fundirBorrador: (deBase: Anotacion, borrador: Anotacion, campos?: Record<string, boolean>) => Anotacion;
+  igual: (a: unknown, b: unknown) => boolean;
   CAMPOS_LECTOR: string[];
   /** Lo que le falta a un documento de fuera para ser una anotación que la página pueda mostrar; null si nada. */
-  problemaDeAnotacion(a: unknown): string | null;
-  seccionId(titulo: string, usados: Record<string, boolean>): string;
+  problemaDeAnotacion: (a: unknown) => string | null;
+  seccionId: (titulo: string, usados: Record<string, boolean>) => string;
   /** HTML escapado con **negrita** y *cursiva*. */
-  inline(s: string): string;
-  estadoLibro(figs?: string): EstadoLibro;
-  parsearMarkdown(archivos: { nombre: string; texto: string }[], figs?: string): Seccion[];
-  normalizar(s: unknown): string;
+  inline: (s: string) => string;
+  estadoLibro: (figs?: string) => EstadoLibro;
+  parsearMarkdown: (archivos: { nombre: string; texto: string }[], figs?: string) => Seccion[];
+  normalizar: (s: unknown) => string;
   /** El texto de un fragmento HTML del lector: sin etiquetas y con las entidades resueltas. */
-  textoDeHtml(h: unknown): string;
-  escaparHtml(s: unknown): string;
-  ordenado(o: any): any;
-  slug(s: string, maximo?: number): string;
-  etiquetasDe(a: Anotacion): string[];
-  diffPalabras(antes: string, ahora: string): ['=' | '-' | '+', string][];
-  buscarCita(txt: string, a: Anotacion): { i: number; puntos: number } | null;
-  ubicarEn(
+  textoDeHtml: (h: unknown) => string;
+  escaparHtml: (s: unknown) => string;
+  /** Un campo como texto para mostrarlo, traiga lo que traiga; nunca lanza. */
+  comoTexto: (x: unknown) => string;
+  ordenado: (o: any) => any;
+  slug: (s: string, maximo?: number) => string;
+  etiquetasDe: (a: Anotacion) => string[];
+  diffPalabras: (antes: string, ahora: string) => ['=' | '-' | '+', string][];
+  buscarCita: (txt: string, a: Anotacion) => { i: number; puntos: number } | null;
+  ubicarEn: (
     a: Anotacion,
     ctx: {
       existe(pid: string): boolean;
@@ -224,10 +226,24 @@ interface Nucleo {
       candidatos(a: Anotacion): string[];
       porHuella?(h: string): string[];
     }
-  ): Ubicacion | null;
-  huella(texto: string): string;
+  ) => Ubicacion | null;
+  huella: (texto: string) => string;
+  /** SHA-1 en hexadecimal (la huella usa sus primeros 12). */
+  sha1: (texto: string) => string;
+  /** Las partes de texto de un bloque como las muestra la página (una por ítem o celda). */
+  partesRender: (b: Bloque) => string[];
+  /** El texto de un bloque como lo muestra la página: el sistema de coordenadas de subrayados y capas. */
+  textoRender: (b: Bloque) => string;
+  /** HTML de fuera reducido a texto, <strong> y <em>. */
+  sanearHtml: (h: unknown) => string;
+  /** Un texto plano con forma de Markdown: las líneas sueltas que parecen títulos pasan a `##`. */
+  txtAMarkdown: (texto: string) => string;
+  /** Qué nivel de título de un documento abre sección (1 o 2) y cuál es subtítulo (h3, h4). */
+  mapaNiveles: (
+    usados: Record<number, number>
+  ) => Record<string, { sec: 1 | 2; t?: undefined } | { t: 'h3' | 'h4'; sec?: undefined }>;
   /** Secciones ya parseadas → libro.json; de `meta`, lo que falta toma un valor por omisión. */
-  armarLibro(
+  armarLibro: (
     secciones: Seccion[],
     meta?: {
       titulo?: string;
@@ -237,27 +253,27 @@ interface Nucleo {
       generador?: string;
       generado?: string;
     }
-  ): Libro;
+  ) => Libro;
   /** Los problemas de un libro.json cualquiera (vacío si es válido). */
-  validarLibro(libro: unknown): string[];
+  validarLibro: (libro: unknown) => string[];
   /** Un libro de fuera (importado, o de la base) con su HTML reducido a texto, <strong> y <em>. */
-  sanearLibro(libro: Libro): Libro;
-  libroAMarkdown(libro: Libro): string;
+  sanearLibro: (libro: Libro) => Libro;
+  libroAMarkdown: (libro: Libro) => string;
   /** Un ZIP en memoria (EPUB y Word lo son): sus nombres y cómo leer cada entrada; lanza si no es un ZIP. */
-  abrirZip(
+  abrirZip: (
     bytes: Uint8Array,
     inflar?: OpcionesImportar['inflar']
-  ): {
+  ) => {
     nombres: string[];
     tiene(nombre: string): boolean;
     bytes(nombre: string): Promise<Uint8Array>;
     texto(nombre: string): Promise<string>;
   };
-  decodificarUtf8(bytes: Uint8Array): string;
-  importarLibro(
+  decodificarUtf8: (bytes: Uint8Array) => string;
+  importarLibro: (
     archivos: { nombre: string; bytes: Uint8Array }[],
     opciones?: OpcionesImportar
-  ): Promise<{ libro: Libro; avisos: string[]; origen: string }>;
+  ) => Promise<{ libro: Libro; avisos: string[]; origen: string }>;
 }
 
 /** Un lector, como lo da la capacidad `user` de claude.ai. */

@@ -172,7 +172,7 @@ def datos_respuesta(a: Anotacion, r: Json, ahora: str) -> Json:
 
 def _validar(r: Json, por_id: dict[str, Anotacion], versiones: dict[str, int]) -> str | None:
     rid = r.get("id")
-    if rid not in por_id:
+    if not isinstance(rid, str) or rid not in por_id:
         return f"{rid!r}: no está en la colección"
     if r.get("cierre") not in CIERRES:
         return f"{rid}: cierre {r.get('cierre')!r}; debe ser {', '.join(CIERRES)}"

@@ -3,7 +3,7 @@
 /** Lo que cada fragmento de la página ofrece a los demás (LAPagina, `P` dentro de cada módulo). */
 interface Pagina {
   // 00-base.js
-  libro: () => any;
+  libro: () => Libro;
   fallo: (donde?: string, e?: any) => void;
   SEC_BY_ID: Record<string, Seccion>;
   BLOQUE_SEC: Record<string, string>;

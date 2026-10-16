@@ -8,7 +8,8 @@
   P.exportarMD = exportarMD;
   P.diagnostico = diagnostico;
   P.copiar = copiar;
-  var reabierta = P.N.reabierta,
+  var comoTexto = P.N.comoTexto,
+    reabierta = P.N.reabierta,
     lineaHilo = P.N.lineaHilo,
     propuesta = P.N.propuesta;
   // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
@@ -58,7 +59,7 @@
     if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
     if (a.nota) out.push('Nota: ' + a.nota);
     if (propuesta(a)) out.push('Propuesta: «' + propuesta(a) + '»');
-    (a.hilo || []).forEach(function (h) {
+    (Array.isArray(a.hilo) ? a.hilo : []).forEach(function (h) {
       out.push(lineaHilo(h));
     });
     if (a.respuesta || a.cierre)
@@ -209,7 +210,7 @@
             a.cita +
             '»' +
             senalSinGuardar(a) +
-            (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : '') +
+            (a.nota ? '\n  - Nota: ' + comoTexto(a.nota).replace(/\n/g, ' ') : '') +
             (propuesta(a) ? '\n  - Propuesta: «' + propuesta(a).replace(/\n/g, ' ') + '»' : '')
         );
       else
@@ -219,17 +220,17 @@
             (a.pagina ? ' p. ' + a.pagina : '') +
             (a.estado === 'resuelta' ? ', resuelta' : '') +
             '] ' +
-            (a.nota || '(sin texto)').replace(/\n/g, ' ') +
+            (comoTexto(a.nota) || '(sin texto)').replace(/\n/g, ' ') +
             senalSinGuardar(a)
         );
-      (a.hilo || []).forEach(function (h) {
+      (Array.isArray(a.hilo) ? a.hilo : []).forEach(function (h) {
         out.push('  - ' + lineaHilo(h));
       });
       if (a.respuesta || a.cierre)
         out.push(
-          '  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' ')
+          '  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + comoTexto(a.respuesta).replace(/\n/g, ' ')
         );
-      if (a.replica) out.push('  - Réplica: ' + a.replica.replace(/\n/g, ' '));
+      if (a.replica) out.push('  - Réplica: ' + comoTexto(a.replica).replace(/\n/g, ' '));
       if (reabierta(a)) out.push('  - Reabierta por el autor tras la respuesta.');
     });
     return out.join('\n');

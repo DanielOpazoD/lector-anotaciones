@@ -2,22 +2,20 @@
 // La ficha es función de la anotación (`a`) y de su vista (`v`, la reúne `vistaDeFicha` en 50-panel.js): al dibujar no
 // se lee nada más que eso y ayudantes puros (`P.el`, `P.etiqueta`, `P.N`, `P.diffPalabras`, `P.chipAutor`,
 // `P.etiquetasFicha`); `npm run modulos` lo comprueba. Lo que corre después (los manejadores de eventos y las acciones,
-// `abrirPropuesta` y `cursorAlFinal`) sí lee y cambia el estado.
-// `ctx`: la anotación con que se dibuja (`a`), la vista (`v`), el nodo (`f`) y la anotación viva (`actual()`). Los
-// manejadores leen la anotación viva, no la copia con que se dibujó: un guardado silencioso (nota, réplica) sustituye el
-// objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o el estado después deben llevar lo recién escrito.
+// `abrirPropuesta`, `cursorAlFinal` y `vigente`) sí lee y cambia el estado.
+// `ctx`: la anotación con que se dibuja (`a`), la vista (`v`) y el nodo (`f`). Los manejadores leen la anotación vigente
+// (`vigente(a)`), no la copia con que se dibujó: un guardado silencioso (nota, réplica) sustituye el objeto en `anots`
+// sin redibujar el panel, y copiar, cambiar el color o el estado después deben llevar lo recién escrito.
 (function (P, E) {
   // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
   P.ficha = ficha;
   P.abrirPropuesta = abrirPropuesta;
+  // La anotación como está ahora (un guardado silencioso la sustituye sin redibujar), o la dibujada si ya no está.
+  function vigente(a) {
+    return P.anots[a.id] || a;
+  }
   function ficha(a, v) {
-    var ctx = {
-      a: a,
-      v: v,
-      actual: function () {
-        return P.anots[a.id] || a;
-      },
-    };
+    var ctx = { a: a, v: v };
     var pendiente = v.pendiente;
     var f = P.el('div', {
       'class':
@@ -43,8 +41,10 @@
       f.appendChild(n);
     });
     if (a.cierre === 'pregunta') f.classList.add('cierre-pregunta');
-    if (a.tipo === 'subrayado')
-      f.appendChild(P.el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
+    if (a.tipo === 'subrayado') {
+      var cita = P.N.comoTexto(a.cita);
+      f.appendChild(P.el('div', { 'class': 'cita', text: cita.length > 220 ? cita.slice(0, 220) + '…' : cita }));
+    }
     if (v.soloLectura) {
       fichaSoloLectura(ctx);
       return f;
@@ -65,8 +65,7 @@
   // Cabecera: categoría, sección y página, lector, cierre, «nueva respuesta» o «revisada», e «ir al texto».
   function fichaCabecera(ctx) {
     var a = ctx.a,
-      v = ctx.v,
-      actual = ctx.actual;
+      v = ctx.v;
     var cab = P.el('div', { 'class': 'cab' }, [
       P.el('span', {}, [
         a.tipo === 'subrayado' && a.color ? P.el('span', { 'class': 'cat', text: a.color }) : null,
@@ -91,7 +90,7 @@
     ) {
       var ir = P.el('button', { 'class': 'enlace', type: 'button', text: 'ir al texto', 'data-accion': 'ir' });
       ir.addEventListener('click', function () {
-        P.irAAnot(actual());
+        P.irAAnot(vigente(a));
       });
       cab.appendChild(ir);
     }
@@ -154,7 +153,9 @@
       var s = P.N.propuesta({ id: a.id, tipo: 'subrayado', cita: a.cita, sugerencia: texto });
       caja.classList.toggle('vacia', !s);
       dif.textContent = '';
-      dif.appendChild(s ? difRecortada(a.cita.trim(), s) : P.el('span', { 'class': 'sin', text: 'Igual a la cita' }));
+      dif.appendChild(
+        s ? difRecortada(P.N.comoTexto(a.cita).trim(), s) : P.el('span', { 'class': 'sin', text: 'Igual a la cita' })
+      );
     };
     mostrarDif(a.sugerencia);
     if (!editable) return caja;
@@ -242,19 +243,23 @@
   }
   // La conversación anterior (`hilo`), plegada: lo vigente sigue en la respuesta y la réplica que vienen después.
   function fichaHilo(a) {
-    if (!a.hilo || !a.hilo.length) return null;
+    // sólo las entradas con forma de entrada (un documento de la base puede traer cualquier cosa)
+    var hilo = (Array.isArray(a.hilo) ? a.hilo : []).filter(function (h) {
+      return h && typeof h === 'object';
+    });
+    if (!hilo.length) return null;
     var d = P.el('details', { 'class': 'hilo' }, [
-      P.el('summary', { text: 'Conversación anterior (' + a.hilo.length + ')' }),
+      P.el('summary', { text: 'Conversación anterior (' + hilo.length + ')' }),
     ]);
-    a.hilo.forEach(function (h) {
-      var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(' · ');
+    hilo.forEach(function (h) {
+      var detalle = [h.cierre, h.commit, P.N.comoTexto(h.cuando).slice(0, 10)].filter(Boolean).join(' · ');
       d.appendChild(
         P.el('div', { 'class': 'hilo-item ' + (h.de === 'autor' ? 'del-autor' : 'del-editor') }, [
           P.el('div', {
             'class': 'quien',
             text: (h.de === 'autor' ? 'Tú' : 'Quien edita') + (detalle ? ' · ' + detalle : ''),
           }),
-          document.createTextNode(h.texto || ''),
+          document.createTextNode(P.N.comoTexto(h.texto)),
         ])
       );
     });
@@ -263,8 +268,7 @@
   // Sólo lectura: la nota y la respuesta como texto, y «Copiar».
   function fichaSoloLectura(ctx) {
     var a = ctx.a,
-      f = ctx.f,
-      actual = ctx.actual;
+      f = ctx.f;
     f.appendChild(P.el('div', { 'class': 'nota-texto', text: a.nota || '' }));
     if (P.N.propuesta(a)) f.appendChild(fichaPropuesta(a, false));
     var hiloSL = fichaHilo(a);
@@ -285,7 +289,7 @@
       'data-accion': 'copiar',
     });
     copSL.addEventListener('click', function () {
-      P.copiar(P.textoAnotacion(actual()), copSL);
+      P.copiar(P.textoAnotacion(vigente(a)), copSL);
     });
     accSL.appendChild(copSL);
     f.appendChild(accSL);
@@ -361,7 +365,9 @@
         P.el('div', {
           'class': 'quien',
           text:
-            'Respuesta' + (a.commit ? ' · ' + a.commit : '') + (a.respondido ? ' · ' + a.respondido.slice(0, 10) : ''),
+            'Respuesta' +
+            (a.commit ? ' · ' + a.commit : '') +
+            (a.respondido ? ' · ' + P.N.comoTexto(a.respondido).slice(0, 10) : ''),
         })
       );
       r.appendChild(
@@ -416,8 +422,7 @@
   function fichaAcciones(ctx) {
     var a = ctx.a,
       v = ctx.v,
-      f = ctx.f,
-      actual = ctx.actual;
+      f = ctx.f;
     var acc = P.el('div', { 'class': 'acciones' });
     if (a.tipo === 'subrayado') {
       var cols = P.el('div', { 'class': 'colores' });
@@ -433,7 +438,7 @@
         });
         // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
         b.addEventListener('click', function () {
-          var ac = actual();
+          var ac = vigente(a);
           P.guardar(Object.assign({}, ac, { color: c }));
           if (ac.color !== c) P.ofrecerDeshacerCambio(a.id, { color: ac.color }, { color: c }, 'Color: ' + c + '.');
         });
@@ -473,7 +478,7 @@
         'data-accion': 'estado',
       });
       res.addEventListener('click', function () {
-        var ac = actual(),
+        var ac = vigente(a),
           nuevo = ac.estado === 'resuelta' ? 'abierta' : 'resuelta';
         P.guardar(Object.assign({}, ac, { estado: nuevo }));
         P.ofrecerDeshacerCambio(
@@ -519,7 +524,7 @@
       'data-accion': 'copiar',
     });
     cop.addEventListener('click', function () {
-      P.copiar(P.textoAnotacion(actual()), cop);
+      P.copiar(P.textoAnotacion(vigente(a)), cop);
     });
     acc.appendChild(cop);
     var del = P.el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar', 'data-accion': 'borrar' });

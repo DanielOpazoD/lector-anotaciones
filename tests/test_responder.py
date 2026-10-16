@@ -213,6 +213,13 @@ def test_escrituras_sin_id_y_repetidas_se_informan_juntas():
         escrituras(TODAS, [dict(r), dict(r), dict(r, id="nueva"), dict(r, id="nueva")], {"nueva": 1}, ahora=AHORA)
 
 
+def test_escrituras_con_una_id_que_no_es_texto_es_un_valueerror():
+    r = {"respuesta": "Hecho.", "cierre": "atendida"}
+    for rid in (["x"], {"x": 1}, 3):
+        with pytest.raises(ValueError, match="no está en la colección"):
+            escrituras(TODAS, [dict(r, id=rid)], {"nueva": 1}, ahora=AHORA)
+
+
 def test_en_lotes_respeta_cincuenta_escrituras_y_el_tamano():
     pequenas = [{"doc_id": str(i), "data": {}} for i in range(120)]
     assert [len(lote) for lote in en_lotes(pequenas)] == [50, 50, 20]

@@ -75,13 +75,14 @@
   // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
   /** @param {NonNullable<Anotacion['hilo']>[number]} h */
   function lineaHilo(h) {
-    var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(', ');
+    h = h && typeof h === 'object' ? h : { de: 'editor', texto: '' };
+    var detalle = [h.cierre, h.commit, N.comoTexto(h.cuando).slice(0, 10)].filter(Boolean).join(', ');
     return (
       'Antes, ' +
       (h.de === 'editor' ? 'quien edita' : 'el autor') +
       (detalle ? ' (' + detalle + ')' : '') +
       ': ' +
-      (h.texto || '').trim().replace(/\n/g, ' ')
+      N.comoTexto(h.texto).trim().replace(/\n/g, ' ')
     );
   }
   // Lo que un subrayado propone en lugar de su cita (`sugerencia`, sin espacios en los extremos), o '' si no propone
@@ -89,7 +90,7 @@
   /** @param {Anotacion | null | undefined} a */
   function propuesta(a) {
     var s = a && a.tipo === 'subrayado' && typeof a.sugerencia === 'string' ? a.sugerencia.trim() : '';
-    return s && a && s !== (a.cita || '').trim() ? s : '';
+    return s && a && s !== N.comoTexto(a.cita).trim() ? s : '';
   }
   return {
     propuesta: propuesta,

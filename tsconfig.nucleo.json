@@ -1,8 +1,9 @@
 {
-  "//": "El núcleo, más estricto que la página: ningún tipo implícito (npm run tipos corre los dos).",
+  "//": "El núcleo, más estricto que la página: ningún tipo implícito, y cada función devuelta se compara con su firma en Nucleo con parámetros estrictos (npm run tipos corre los dos).",
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noImplicitAny": true
+    "noImplicitAny": true,
+    "strictFunctionTypes": true
   },
   "include": ["src/lector_anotaciones/web/nucleo/*.js", "src/lector_anotaciones/web/tipos/globales.d.ts"]
 }

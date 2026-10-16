@@ -51,6 +51,19 @@
         return Object.prototype.hasOwnProperty.call(ENTIDADES, e.toLowerCase()) ? ENTIDADES[e.toLowerCase()] : todo;
       });
   }
+  // Un campo como texto para mostrarlo, sea lo que sea lo que trae (un documento de la base lo escribió cualquiera):
+  // nunca lanza. null o ausente: ''.
+  /** @param {unknown} x */
+  function comoTexto(x) {
+    if (typeof x === 'string') return x;
+    if (x === null || x === undefined) return '';
+    if (typeof x === 'number' || typeof x === 'boolean') return String(x);
+    try {
+      return JSON.stringify(x) || '';
+    } catch (e) {
+      return '';
+    }
+  }
   /** @param {unknown} s */
   function escaparHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -92,6 +105,7 @@
     normalizar: normalizar,
     slug: slug,
     textoDeHtml: textoDeHtml,
+    comoTexto: comoTexto,
     escaparHtml: escaparHtml,
     ordenado: ordenado,
     igual: igual,

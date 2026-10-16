@@ -75,8 +75,15 @@ const asignacion = (st, ns) =>
     ? st.expression
     : null;
 
-function analizar() {
-  const prog = programa('declare var LAPagina: { N: Nucleo; [k: string]: any };\ndeclare var LAEstado: any;\n');
+// Dos pasadas: la primera, con E sin tipo, encuentra el estado y el tipo que declara cada uno; la segunda infiere lo que
+// ofrece P sabiendo ya esos tipos (así una función que devuelve E.LIBRO devuelve un Libro, no any).
+function analizar(declarados = {}) {
+  const tiposE = Object.entries(declarados)
+    .map(([x, t]) => `${x}: ${t}; `)
+    .join('');
+  const prog = programa(
+    `declare var LAPagina: { N: Nucleo; [k: string]: any };\ndeclare var LAEstado: { ${tiposE}[k: string]: any };\n`
+  );
   const tc = prog.getTypeChecker();
   const texto = (t) =>
     tc.typeToString(t, undefined, ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseFullyQualifiedType);
@@ -105,7 +112,6 @@ function analizar() {
   for (const f of lista('pagina')) {
     const sf = prog.getSourceFile(f);
     const nombre = path.basename(f);
-    if (nombre === DIBUJO.archivo) comprobarDibujo(sf);
     usa[nombre] = { P: new Set(), E: new Set() };
     for (const st of cuerpo(sf)) {
       // el estado se declara donde se le da su primer valor en el nivel del módulo; si ese valor lleva un tipo
@@ -150,6 +156,7 @@ function analizar() {
       ts.forEachChild(n, visitar);
     })(sf);
   }
+  comprobarDibujo(prog, tc);
   for (const f of Object.keys(usa)) {
     for (const x of usa[f].P) if (!ofrece[x]) throw new Error(`${f} usa P.${x}, que nadie ofrece`);
     for (const x of usa[f].E) if (!estado[x]) throw new Error(`${f} usa E.${x}, que nadie asigna`);
@@ -159,69 +166,148 @@ function analizar() {
 
 // La ficha es función de la anotación y de su vista (la reúne `vistaDeFicha`, 50-panel.js, y su JSON es la firma con
 // que se reutiliza el nodo): en 52-ficha.js, lo que corre al dibujar no lee nada más. Corre al dibujar el cuerpo de cada
-// función que no es una acción, y lo que ese cuerpo llama en el momento: las funciones que pasa a forEach, map…, y las
-// que guarda en una variable y llama. No corre al dibujar lo que queda para después: manejadores de eventos,
-// temporizadores, funciones que devuelve o que pone en un objeto. Si la ficha necesita algo más, va a la vista.
+// función del módulo que no es una acción, y lo que ese cuerpo llama en el momento: las funciones que pasa a forEach,
+// map, replace…, las que guarda en una variable o declara dentro y llama, las de otros fragmentos que llama, y los
+// ayudantes puros de P (cuyos cuerpos se revisan igual, para que «puro» no sea sólo un nombre). No corre al dibujar lo
+// que queda para después: manejadores de eventos, temporizadores, funciones que devuelve o que pone en un objeto. Una
+// llamada a algo que no se puede revisar (una función recibida, un alias) también es un error: si la ficha necesita algo
+// más, va a la vista.
 const DIBUJO = {
   archivo: '52-ficha.js',
-  acciones: new Set(['abrirPropuesta', 'cursorAlFinal']), // corren después, desde un manejador o un atajo
+  acciones: new Set(['abrirPropuesta', 'cursorAlFinal', 'vigente']), // corren después, desde un manejador o un atajo
   puros: new Set(['el', 'etiqueta', 'N', 'diffPalabras', 'chipAutor', 'etiquetasFicha']), // de P, sin estado
+  nucleo: new Set(['N', 'diffPalabras']), // del núcleo, que no ve la página: puros por construcción
   documento: new Set(['createTextNode', 'createElement', 'createDocumentFragment']),
   globales: new Set(['window', 'localStorage', 'sessionStorage', 'location', 'navigator', 'LAPagina', 'LAEstado']),
 };
-const ITERAN = new Set(['forEach', 'map', 'filter', 'some', 'every', 'reduce', 'find', 'findIndex', 'flatMap', 'sort']);
+const ITERAN = new Set([
+  'forEach',
+  'map',
+  'filter',
+  'some',
+  'every',
+  'reduce',
+  'reduceRight',
+  'find',
+  'findIndex',
+  'flatMap',
+  'sort',
+  'replace',
+  'from',
+]);
 
-function comprobarDibujo(sf) {
+function comprobarDibujo(prog, tc) {
   const errores = [];
-  const linea = (n) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
-  for (const st of cuerpo(sf))
+  const fuentes = lista('pagina').map((f) => prog.getSourceFile(f));
+  const ficha = fuentes.find((f) => path.basename(f.fileName) === DIBUJO.archivo);
+  const lugar = (f, n) => `${path.basename(f.fileName)}:${f.getLineAndCharacterOfPosition(n.getStart(f)).line + 1}`;
+  const delModulo = new Map(fuentes.map((f) => [f, new Set(cuerpo(f).filter(ts.isFunctionDeclaration))]));
+  for (const st of cuerpo(ficha))
     if (ts.isVariableStatement(st))
-      errores.push(`línea ${linea(st)}: ${DIBUJO.archivo} no guarda estado propio (nada de variables del módulo)`);
-  for (const fn of cuerpo(sf).filter(ts.isFunctionDeclaration)) {
-    const quien = fn.name.text;
-    if (DIBUJO.acciones.has(quien)) continue;
-    const guardadas = new Map(), // nombre → función guardada en una variable, que corre si se llama al dibujar
-      vistas = new Set();
-    const mal = (n, que) => errores.push(`línea ${linea(n)}: ${quien} ${que} al dibujar`);
+      errores.push(`${lugar(ficha, st)}: ${DIBUJO.archivo} no guarda estado propio (nada de variables del módulo)`);
+  // qué se revisa: las funciones de la ficha que no son acciones, y los ayudantes puros de los demás fragmentos
+  const raices = [];
+  for (const fn of delModulo.get(ficha))
+    if (!DIBUJO.acciones.has(fn.name.text)) raices.push({ f: ficha, fn, quien: fn.name.text });
+  const hallados = new Set();
+  for (const f of fuentes)
+    for (const st of cuerpo(f)) {
+      if (f !== ficha && ts.isFunctionDeclaration(st) && st.name && DIBUJO.puros.has(st.name.text)) {
+        raices.push({ f, fn: st, quien: 'P.' + st.name.text });
+        hallados.add(st.name.text);
+      }
+      if (ts.isVariableStatement(st))
+        for (const d of st.declarationList.declarations)
+          if (
+            ts.isIdentifier(d.name) &&
+            DIBUJO.puros.has(d.name.text) &&
+            d.initializer &&
+            ts.isFunctionLike(d.initializer)
+          ) {
+            raices.push({ f, fn: d.initializer, quien: 'P.' + d.name.text });
+            hallados.add(d.name.text);
+          }
+    }
+  for (const x of DIBUJO.puros)
+    if (!DIBUJO.nucleo.has(x) && !hallados.has(x)) errores.push(`P.${x} figura entre los puros, pero no se encontró`);
+  const revisadas = new Set();
+  for (const { f, fn, quien } of raices) revisar(f, fn, quien);
+  if (errores.length)
+    throw new Error(`la ficha debe dibujarse sólo con (anotación, vista):\n  ${errores.join('\n  ')}`);
+
+  function revisar(f, fn, quien) {
+    if (revisadas.has(fn)) return;
+    revisadas.add(fn);
+    const guardadas = new Map(); // nombre → función declarada o guardada dentro, que corre si se llama al dibujar
+    const mal = (n, que) => errores.push(`${lugar(f, n)}: ${quien} ${que} al dibujar`);
+    // lo que una referencia a una función nombra: qué hacer si se llama (o se pasa a forEach…) al dibujar
+    const alLlamar = (n, id) => {
+      const x = id.text;
+      if (DIBUJO.acciones.has(x)) return mal(n, `llama a la acción ${x}`);
+      if (guardadas.has(x)) return recorrer(guardadas.get(x).body);
+      const sim = tc.getSymbolAtLocation(id),
+        d = sim && sim.declarations && sim.declarations[0];
+      if (!d) return mal(n, `llama a ${x}, que no se sabe qué es`);
+      if (d.getSourceFile().isDeclarationFile) return; // del lenguaje o del navegador: String, parseInt…
+      const fd = d.getSourceFile();
+      if (ts.isFunctionDeclaration(d) && delModulo.get(fd) && delModulo.get(fd).has(d)) {
+        if (fd !== ficha) revisar(fd, d, quien + ' → ' + x); // de otro fragmento: corre ahora, se revisa igual
+        return; // las de la ficha se revisan por su cuenta
+      }
+      // un alias de un ayudante puro: `var etiquetasDe = P.N.etiquetasDe`
+      if (ts.isVariableDeclaration(d) && d.initializer && ts.isPropertyAccessExpression(d.initializer)) {
+        let raiz = d.initializer;
+        while (ts.isPropertyAccessExpression(raiz.expression)) raiz = raiz.expression;
+        if (ts.isIdentifier(raiz.expression) && raiz.expression.text === 'P' && DIBUJO.puros.has(raiz.name.text))
+          return;
+      }
+      mal(n, `llama a ${x}, que no se puede revisar`);
+    };
     const recorrer = (n) => {
+      if (!n) return;
+      if (ts.isFunctionDeclaration(n) && n.name) {
+        guardadas.set(n.name.text, n); // declarada dentro: corre si se llama
+        return;
+      }
       if (ts.isFunctionLike(n)) {
         const pa = n.parent;
-        if (
-          ts.isCallExpression(pa) &&
-          pa.arguments.includes(n) &&
-          ts.isPropertyAccessExpression(pa.expression) &&
-          ITERAN.has(pa.expression.name.text)
-        )
-          recorrer(n.body);
+        if (ts.isCallExpression(pa) && pa.arguments.includes(n) && ITERAN.has(nombreLlamado(pa))) recorrer(n.body);
         else if (ts.isVariableDeclaration(pa) && pa.initializer === n && ts.isIdentifier(pa.name))
           guardadas.set(pa.name.text, n);
         return; // lo demás queda para después
       }
-      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
-        const x = n.expression.text,
-          g = guardadas.get(x);
-        if (DIBUJO.acciones.has(x)) mal(n, `llama a la acción ${x}`);
-        if (g && !vistas.has(g)) {
-          vistas.add(g);
-          recorrer(g.body);
-        }
+      if (ts.isCallExpression(n)) {
+        if (ts.isIdentifier(n.expression)) alLlamar(n, n.expression);
+        // una función nombrada que se pasa a forEach, map…: corre ahora
+        if (ITERAN.has(nombreLlamado(n))) for (const arg of n.arguments) if (ts.isIdentifier(arg)) alLlamar(n, arg);
       }
-      if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression)) {
+      if ((ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && ts.isIdentifier(n.expression)) {
         const ns = n.expression.text,
-          x = n.name.text;
+          x = ts.isPropertyAccessExpression(n) ? n.name.text : '[…]';
         if (ns === 'E') mal(n, `lee E.${x} (el estado va en la vista)`);
         if (ns === 'P' && !DIBUJO.puros.has(x)) mal(n, `usa P.${x} (sólo ayudantes puros; el estado va en la vista)`);
         if (ns === 'document' && !DIBUJO.documento.has(x)) mal(n, `lee document.${x}`);
       }
-      if (ts.isIdentifier(n) && DIBUJO.globales.has(n.text)) mal(n, `usa ${n.text}`);
+      if (ts.isIdentifier(n)) {
+        if (DIBUJO.globales.has(n.text)) mal(n, `usa ${n.text}`);
+        // P o E sueltos (un alias, `var est = E`): no se puede seguir lo que se lee con ellos
+        const pa = n.parent;
+        if (
+          (n.text === 'P' || n.text === 'E') &&
+          !((ts.isPropertyAccessExpression(pa) || ts.isElementAccessExpression(pa)) && pa.expression === n)
+        )
+          mal(n, `usa ${n.text} sin más (un alias no se puede revisar)`);
+      }
+      if (n.kind === ts.SyntaxKind.ThisKeyword) mal(n, 'usa this');
       ts.forEachChild(n, recorrer);
     };
     recorrer(fn.body);
   }
-  if (errores.length)
-    throw new Error(
-      `la ficha debe dibujarse sólo con (anotación, vista):\n  ${DIBUJO.archivo}, ${errores.join('\n  ')}`
-    );
+}
+// El nombre de lo que se llama: `xs.forEach(…)` → forEach, `Array.from(…)` → from, `f(…)` → f.
+function nombreLlamado(llamada) {
+  const c = llamada.expression;
+  return ts.isPropertyAccessExpression(c) ? c.name.text : ts.isIdentifier(c) ? c.text : '';
 }
 
 function tipoEstado(tipos) {
@@ -312,7 +398,16 @@ function escribir({ ofrece, estado, usa }) {
   return { dts: dts.join('\n'), doc: doc.join('\n') };
 }
 
-const salida = escribir(analizar());
+const primera = analizar();
+const salida = escribir(
+  analizar(
+    Object.fromEntries(
+      Object.entries(primera.estado)
+        .filter(([, v]) => v.tipo)
+        .map(([x, v]) => [x, v.tipo])
+    )
+  )
+);
 salida.dts = await prettier.format(salida.dts, { ...(await prettier.resolveConfig(DTS)), parser: 'typescript' });
 if (process.argv.includes('--comprobar')) {
   const viejos = [DTS, DOC].map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : ''));

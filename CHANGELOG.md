@@ -2,6 +2,66 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.6.0] - 2026-10-16
+
+Una versión de calidad del código: por fuera casi nada cambia; por dentro, la página está en módulos, la ficha se
+dibuja con la anotación y su vista, las pruebas son cortas e independientes y los tipos son estrictos. El plan y lo que
+midió cada etapa están en `docs/HOJA_DE_RUTA_0.6.md`.
+
+### Añadido
+
+- **«Copiar diagnóstico»** (en Exportar): la versión de la página, el libro, el modo, lo pendiente de guardar, el
+  navegador y los fallos que la página pasó por alto (un almacenamiento bloqueado, una voz que no está, un documento
+  de la base con forma rara) o que nadie capturó. Nunca el texto de las anotaciones. La página dice su versión en
+  `<meta name="generator">`.
+
+### Cambiado
+
+- **Lo que llega de la base se muestra aunque traiga algo raro** (un campo que no es texto, una conversación anterior
+  nula o mal formada, un subrayado sin cita): antes, un solo documento así dejaba el panel vacío para todos. Entra
+  tal cual —la base manda y nada de lo que tiene se pisa— y lo que no tiene la forma del esquema queda en el
+  diagnóstico.
+- **Por dentro.** La cobertura se mide en Python, el núcleo y la página, con pisos en la CI. Cada fragmento de la página
+  es un módulo, y lo que comparten está tipado (`herramientas/modulos.mjs`, `docs/MODULOS.md`). La ficha es función de
+  la anotación y de su vista, y una herramienta comprueba que al dibujarla no se lea nada más. Las pruebas del navegador
+  son cortas e independientes (de 64 a 147), con preparaciones compartidas. Python pasa `mypy --strict`; la página
+  tiene `libro.json` tipado y el núcleo, ningún tipo implícito, con cada función revisada contra su declaración.
+  `cli.py` tiene una función por orden. Los selectores de lector y etiqueta se rehacen una vez por redibujo, no una
+  por ficha.
+
+### Corregido
+
+- Un libro de la biblioteca con una sección o un bloque que no es un objeto, o con secciones o bloques que no son
+  listas, daba un error que se repetía en cada carga; ahora se informa como no válido y se olvida la elección.
+- Un EPUB con un ítem sin id y una referencia sin idref sumaba un capítulo fantasma y le quitaba al siguiente su título.
+- Una selección que empezaba en el título de la sección subrayaba con la barra pero no respondía a los atajos (1–4, N,
+  P, C).
+- Importar HTML, EPUB o Word sin analizador (desde fuera de la página) daba un `TypeError` en vez de un mensaje.
+- `responder`, llamado como biblioteca con respuestas sin id, repetidas o con una id que no es texto, lanzaba
+  `TypeError` en vez del error con los problemas.
+
+### Revisión independiente antes de publicar
+
+Dos revisores con papeles distintos: uno buscó defectos en el código que corre y el otro, verdes que mienten en las
+pruebas y las herramientas. Todo hallazgo se reprodujo antes de arreglarlo, y cada arreglo trae una prueba que falla
+sin él.
+
+- En el código: el filtro que dejaba fuera lo que llegaba de la base con forma rara hacía que una copia local más vieja
+  de esa anotación subiera entera y borrara la respuesta de quien edita (se rehízo: ahora entra todo y la página lo
+  tolera); el mismo filtro ocultaba anotaciones legítimas (de un libro con `generado` numérico, o con `hilo: null`) y
+  podía lanzar; un error del arranque seguía callado; el arreglo de `sanearLibro` no cubría listas que no son listas;
+  el mensaje de un error de JSON podía llevar al diagnóstico un trozo de una nota; `responder` lanzaba con una id que
+  no es texto.
+- En las pruebas y herramientas: una prueba de la ficha no miraba el resultado de su espera (una ficha rancia habría
+  pasado la CI) y la del filtro por etiqueta no podía fallar (una sola anotación); la regla que vigila el dibujo de la
+  ficha no veía llamadas a `vigente`, funciones declaradas dentro, funciones guardadas pasadas a `forEach`, callbacks
+  de `replace` o `Array.from`, alias de `P` o `E`, `this` ni lo que hacían los ayudantes «puros» (ahora revisa sus
+  cuerpos y toda llamada que no puede seguir es un error); la cobertura de la página sumaba resultados viejos,
+  redondeaba antes de comparar con el piso y contaba cierres de bloque y cabeceras de función como cubiertos;
+  `P.libro()` quedaba sin tipo; la envoltura del núcleo no veía funciones que faltan, sobran o están mal escritas ni
+  parámetros que dejan de ser opcionales; una espera siempre se cumplía y otra comprobaba lo revisado sobre datos
+  sembrados en vez de revisarlos.
+
 ## [0.5.0] - 2026-10-16
 
 ### Añadido

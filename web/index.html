@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="lector-anotaciones 0.5.0">
+<meta name="generator" content="lector-anotaciones 0.6.0">
 <title>Lector de anotaciones</title>
 <link rel="icon" href="data:,">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -628,6 +628,19 @@
         return Object.prototype.hasOwnProperty.call(ENTIDADES, e.toLowerCase()) ? ENTIDADES[e.toLowerCase()] : todo;
       });
   }
+  // Un campo como texto para mostrarlo, sea lo que sea lo que trae (un documento de la base lo escribió cualquiera):
+  // nunca lanza. null o ausente: ''.
+  /** @param {unknown} x */
+  function comoTexto(x) {
+    if (typeof x === 'string') return x;
+    if (x === null || x === undefined) return '';
+    if (typeof x === 'number' || typeof x === 'boolean') return String(x);
+    try {
+      return JSON.stringify(x) || '';
+    } catch (e) {
+      return '';
+    }
+  }
   /** @param {unknown} s */
   function escaparHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -669,6 +682,7 @@
     normalizar: normalizar,
     slug: slug,
     textoDeHtml: textoDeHtml,
+    comoTexto: comoTexto,
     escaparHtml: escaparHtml,
     ordenado: ordenado,
     igual: igual,
@@ -912,9 +926,9 @@
   function copiarCampo(destino, origen, k) {
     destino[k] = origen[k];
   }
-  // Lo que le falta a un documento de fuera (la base la escribe cualquier colaborador) para ser una anotación que la
-  // página pueda mostrar sin romperse, según esquemas/anotacion.schema.json; null si no le falta nada. No juzga el
-  // contenido: sólo la forma de lo que la página lee.
+  // En qué se aparta un documento de fuera (la base la escribe cualquier colaborador) de la forma de una anotación
+  // (esquemas/anotacion.schema.json); null si en nada. Es para el diagnóstico: el documento entra igual (la base manda) y
+  // la página lo muestra como puede. Nunca lanza.
   var TEXTOS = ['nota', 'sugerencia', 'respuesta', 'replica', 'cita', 'antes', 'despues', 'commit', 'respondido'];
   var TEXTOS_MAS = ['revisado', 'creado', 'editado', 'src', 'grupo', 'bh', 'color', 'estado', 'cierre'];
   /**
@@ -923,7 +937,8 @@
    */
   function problemaDeAnotacion(a) {
     if (!a || typeof a !== 'object' || Array.isArray(a)) return 'no es un objeto';
-    if (['subrayado', 'pagina', 'capitulo', 'general'].indexOf(a.tipo) < 0) return 'tipo desconocido: ' + a.tipo;
+    if (['subrayado', 'pagina', 'capitulo', 'general'].indexOf(a.tipo) < 0)
+      return 'tipo desconocido: ' + (typeof a.tipo === 'string' ? a.tipo : typeof a.tipo);
     var mal = TEXTOS.concat(TEXTOS_MAS).filter(function (k) {
       return a[k] !== undefined && a[k] !== null && typeof a[k] !== 'string';
     });
@@ -938,7 +953,7 @@
     var entradaValida = function (h) {
       return h && typeof h === 'object' && typeof h.texto === 'string';
     };
-    if (a.hilo !== undefined && !(Array.isArray(a.hilo) && a.hilo.every(entradaValida)))
+    if (a.hilo !== undefined && a.hilo !== null && !(Array.isArray(a.hilo) && a.hilo.every(entradaValida)))
       return 'conversación anterior mal formada';
     if (a.tipo === 'subrayado') {
       if (typeof a.pid !== 'string' || typeof a.cita !== 'string') return 'subrayado sin pasaje o sin cita';
@@ -1031,13 +1046,14 @@
   // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
   /** @param {NonNullable<Anotacion['hilo']>[number]} h */
   function lineaHilo(h) {
-    var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(', ');
+    h = h && typeof h === 'object' ? h : { de: 'editor', texto: '' };
+    var detalle = [h.cierre, h.commit, N.comoTexto(h.cuando).slice(0, 10)].filter(Boolean).join(', ');
     return (
       'Antes, ' +
       (h.de === 'editor' ? 'quien edita' : 'el autor') +
       (detalle ? ' (' + detalle + ')' : '') +
       ': ' +
-      (h.texto || '').trim().replace(/\n/g, ' ')
+      N.comoTexto(h.texto).trim().replace(/\n/g, ' ')
     );
   }
   // Lo que un subrayado propone en lugar de su cita (`sugerencia`, sin espacios en los extremos), o '' si no propone
@@ -1045,7 +1061,7 @@
   /** @param {Anotacion | null | undefined} a */
   function propuesta(a) {
     var s = a && a.tipo === 'subrayado' && typeof a.sugerencia === 'string' ? a.sugerencia.trim() : '';
-    return s && a && s !== (a.cita || '').trim() ? s : '';
+    return s && a && s !== N.comoTexto(a.cita).trim() ? s : '';
   }
   return {
     propuesta: propuesta,
@@ -1776,10 +1792,10 @@
    */
   function sanearLibro(libro) {
     // lo que no es una sección o un bloque se deja como está: `validarLibro` lo informa
-    (libro.secciones || []).forEach(function (s) {
+    (Array.isArray(libro.secciones) ? libro.secciones : []).forEach(function (s) {
       if (!s || typeof s !== 'object') return;
       s.titulo = String(s.titulo || '');
-      (s.bloques || []).forEach(function (b) {
+      (Array.isArray(s.bloques) ? s.bloques : []).forEach(function (b) {
         if (!b || typeof b !== 'object') return;
         // la forma que cada tipo de bloque espera, aunque el archivo traiga otra
         var h = b.html,
@@ -3594,7 +3610,12 @@
    * @param {any} e
    */
   function fallo(donde, e) {
-    var error = e && typeof e === 'object' ? (e.code ? e.code + ': ' : '') + (e.message || String(e)) : String(e);
+    var error;
+    // un error de JSON cita un trozo de lo que leía, que puede ser el texto de una anotación: sólo su nombre
+    if (e && e.name === 'SyntaxError') error = 'SyntaxError (sin su mensaje, que puede citar lo leído)';
+    else if (e && typeof e === 'object')
+      error = (e.code ? N.comoTexto(e.code) + ': ' : '') + N.comoTexto(e.message || e);
+    else error = N.comoTexto(e);
     FALLOS.unshift({ cuando: ahora(), donde: donde, error: error });
     if (FALLOS.length > 50) FALLOS.length = 50;
   }
@@ -5060,7 +5081,8 @@
     bp.title = n ? n + (n === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : '';
   }
   function etiqueta(a) {
-    if (a.tipo === 'subrayado') return (a.sidTitulo || '').replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
+    if (a.tipo === 'subrayado')
+      return P.N.comoTexto(a.sidTitulo).replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
     if (a.tipo === 'pagina') return 'Nota de la página ' + a.pagina;
     if (a.tipo === 'capitulo') return 'Nota de la sección: ' + (a.sidTitulo || '');
     return 'Nota general';
@@ -5138,22 +5160,20 @@
 // La ficha es función de la anotación (`a`) y de su vista (`v`, la reúne `vistaDeFicha` en 50-panel.js): al dibujar no
 // se lee nada más que eso y ayudantes puros (`P.el`, `P.etiqueta`, `P.N`, `P.diffPalabras`, `P.chipAutor`,
 // `P.etiquetasFicha`); `npm run modulos` lo comprueba. Lo que corre después (los manejadores de eventos y las acciones,
-// `abrirPropuesta` y `cursorAlFinal`) sí lee y cambia el estado.
-// `ctx`: la anotación con que se dibuja (`a`), la vista (`v`), el nodo (`f`) y la anotación viva (`actual()`). Los
-// manejadores leen la anotación viva, no la copia con que se dibujó: un guardado silencioso (nota, réplica) sustituye el
-// objeto en `anots` sin redibujar el panel, y copiar, cambiar el color o el estado después deben llevar lo recién escrito.
+// `abrirPropuesta`, `cursorAlFinal` y `vigente`) sí lee y cambia el estado.
+// `ctx`: la anotación con que se dibuja (`a`), la vista (`v`) y el nodo (`f`). Los manejadores leen la anotación vigente
+// (`vigente(a)`), no la copia con que se dibujó: un guardado silencioso (nota, réplica) sustituye el objeto en `anots`
+// sin redibujar el panel, y copiar, cambiar el color o el estado después deben llevar lo recién escrito.
 (function (P, E) {
   // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
   P.ficha = ficha;
   P.abrirPropuesta = abrirPropuesta;
+  // La anotación como está ahora (un guardado silencioso la sustituye sin redibujar), o la dibujada si ya no está.
+  function vigente(a) {
+    return P.anots[a.id] || a;
+  }
   function ficha(a, v) {
-    var ctx = {
-      a: a,
-      v: v,
-      actual: function () {
-        return P.anots[a.id] || a;
-      },
-    };
+    var ctx = { a: a, v: v };
     var pendiente = v.pendiente;
     var f = P.el('div', {
       'class':
@@ -5179,8 +5199,10 @@
       f.appendChild(n);
     });
     if (a.cierre === 'pregunta') f.classList.add('cierre-pregunta');
-    if (a.tipo === 'subrayado')
-      f.appendChild(P.el('div', { 'class': 'cita', text: a.cita.length > 220 ? a.cita.slice(0, 220) + '…' : a.cita }));
+    if (a.tipo === 'subrayado') {
+      var cita = P.N.comoTexto(a.cita);
+      f.appendChild(P.el('div', { 'class': 'cita', text: cita.length > 220 ? cita.slice(0, 220) + '…' : cita }));
+    }
     if (v.soloLectura) {
       fichaSoloLectura(ctx);
       return f;
@@ -5201,8 +5223,7 @@
   // Cabecera: categoría, sección y página, lector, cierre, «nueva respuesta» o «revisada», e «ir al texto».
   function fichaCabecera(ctx) {
     var a = ctx.a,
-      v = ctx.v,
-      actual = ctx.actual;
+      v = ctx.v;
     var cab = P.el('div', { 'class': 'cab' }, [
       P.el('span', {}, [
         a.tipo === 'subrayado' && a.color ? P.el('span', { 'class': 'cat', text: a.color }) : null,
@@ -5227,7 +5248,7 @@
     ) {
       var ir = P.el('button', { 'class': 'enlace', type: 'button', text: 'ir al texto', 'data-accion': 'ir' });
       ir.addEventListener('click', function () {
-        P.irAAnot(actual());
+        P.irAAnot(vigente(a));
       });
       cab.appendChild(ir);
     }
@@ -5290,7 +5311,9 @@
       var s = P.N.propuesta({ id: a.id, tipo: 'subrayado', cita: a.cita, sugerencia: texto });
       caja.classList.toggle('vacia', !s);
       dif.textContent = '';
-      dif.appendChild(s ? difRecortada(a.cita.trim(), s) : P.el('span', { 'class': 'sin', text: 'Igual a la cita' }));
+      dif.appendChild(
+        s ? difRecortada(P.N.comoTexto(a.cita).trim(), s) : P.el('span', { 'class': 'sin', text: 'Igual a la cita' })
+      );
     };
     mostrarDif(a.sugerencia);
     if (!editable) return caja;
@@ -5378,19 +5401,23 @@
   }
   // La conversación anterior (`hilo`), plegada: lo vigente sigue en la respuesta y la réplica que vienen después.
   function fichaHilo(a) {
-    if (!a.hilo || !a.hilo.length) return null;
+    // sólo las entradas con forma de entrada (un documento de la base puede traer cualquier cosa)
+    var hilo = (Array.isArray(a.hilo) ? a.hilo : []).filter(function (h) {
+      return h && typeof h === 'object';
+    });
+    if (!hilo.length) return null;
     var d = P.el('details', { 'class': 'hilo' }, [
-      P.el('summary', { text: 'Conversación anterior (' + a.hilo.length + ')' }),
+      P.el('summary', { text: 'Conversación anterior (' + hilo.length + ')' }),
     ]);
-    a.hilo.forEach(function (h) {
-      var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(' · ');
+    hilo.forEach(function (h) {
+      var detalle = [h.cierre, h.commit, P.N.comoTexto(h.cuando).slice(0, 10)].filter(Boolean).join(' · ');
       d.appendChild(
         P.el('div', { 'class': 'hilo-item ' + (h.de === 'autor' ? 'del-autor' : 'del-editor') }, [
           P.el('div', {
             'class': 'quien',
             text: (h.de === 'autor' ? 'Tú' : 'Quien edita') + (detalle ? ' · ' + detalle : ''),
           }),
-          document.createTextNode(h.texto || ''),
+          document.createTextNode(P.N.comoTexto(h.texto)),
         ])
       );
     });
@@ -5399,8 +5426,7 @@
   // Sólo lectura: la nota y la respuesta como texto, y «Copiar».
   function fichaSoloLectura(ctx) {
     var a = ctx.a,
-      f = ctx.f,
-      actual = ctx.actual;
+      f = ctx.f;
     f.appendChild(P.el('div', { 'class': 'nota-texto', text: a.nota || '' }));
     if (P.N.propuesta(a)) f.appendChild(fichaPropuesta(a, false));
     var hiloSL = fichaHilo(a);
@@ -5421,7 +5447,7 @@
       'data-accion': 'copiar',
     });
     copSL.addEventListener('click', function () {
-      P.copiar(P.textoAnotacion(actual()), copSL);
+      P.copiar(P.textoAnotacion(vigente(a)), copSL);
     });
     accSL.appendChild(copSL);
     f.appendChild(accSL);
@@ -5497,7 +5523,9 @@
         P.el('div', {
           'class': 'quien',
           text:
-            'Respuesta' + (a.commit ? ' · ' + a.commit : '') + (a.respondido ? ' · ' + a.respondido.slice(0, 10) : ''),
+            'Respuesta' +
+            (a.commit ? ' · ' + a.commit : '') +
+            (a.respondido ? ' · ' + P.N.comoTexto(a.respondido).slice(0, 10) : ''),
         })
       );
       r.appendChild(
@@ -5552,8 +5580,7 @@
   function fichaAcciones(ctx) {
     var a = ctx.a,
       v = ctx.v,
-      f = ctx.f,
-      actual = ctx.actual;
+      f = ctx.f;
     var acc = P.el('div', { 'class': 'acciones' });
     if (a.tipo === 'subrayado') {
       var cols = P.el('div', { 'class': 'colores' });
@@ -5569,7 +5596,7 @@
         });
         // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
         b.addEventListener('click', function () {
-          var ac = actual();
+          var ac = vigente(a);
           P.guardar(Object.assign({}, ac, { color: c }));
           if (ac.color !== c) P.ofrecerDeshacerCambio(a.id, { color: ac.color }, { color: c }, 'Color: ' + c + '.');
         });
@@ -5609,7 +5636,7 @@
         'data-accion': 'estado',
       });
       res.addEventListener('click', function () {
-        var ac = actual(),
+        var ac = vigente(a),
           nuevo = ac.estado === 'resuelta' ? 'abierta' : 'resuelta';
         P.guardar(Object.assign({}, ac, { estado: nuevo }));
         P.ofrecerDeshacerCambio(
@@ -5655,7 +5682,7 @@
       'data-accion': 'copiar',
     });
     cop.addEventListener('click', function () {
-      P.copiar(P.textoAnotacion(actual()), cop);
+      P.copiar(P.textoAnotacion(vigente(a)), cop);
     });
     acc.appendChild(cop);
     var del = P.el('button', { 'class': 'btn peq', type: 'button', text: 'Borrar', 'data-accion': 'borrar' });
@@ -6195,7 +6222,8 @@
   P.exportarMD = exportarMD;
   P.diagnostico = diagnostico;
   P.copiar = copiar;
-  var reabierta = P.N.reabierta,
+  var comoTexto = P.N.comoTexto,
+    reabierta = P.N.reabierta,
     lineaHilo = P.N.lineaHilo,
     propuesta = P.N.propuesta;
   // Una anotación como texto breve con todo lo que hace falta para ubicarla en las fuentes:
@@ -6245,7 +6273,7 @@
     if (a.tipo === 'subrayado') out.push('«' + a.cita + '»');
     if (a.nota) out.push('Nota: ' + a.nota);
     if (propuesta(a)) out.push('Propuesta: «' + propuesta(a) + '»');
-    (a.hilo || []).forEach(function (h) {
+    (Array.isArray(a.hilo) ? a.hilo : []).forEach(function (h) {
       out.push(lineaHilo(h));
     });
     if (a.respuesta || a.cierre)
@@ -6396,7 +6424,7 @@
             a.cita +
             '»' +
             senalSinGuardar(a) +
-            (a.nota ? '\n  - Nota: ' + a.nota.replace(/\n/g, ' ') : '') +
+            (a.nota ? '\n  - Nota: ' + comoTexto(a.nota).replace(/\n/g, ' ') : '') +
             (propuesta(a) ? '\n  - Propuesta: «' + propuesta(a).replace(/\n/g, ' ') + '»' : '')
         );
       else
@@ -6406,17 +6434,17 @@
             (a.pagina ? ' p. ' + a.pagina : '') +
             (a.estado === 'resuelta' ? ', resuelta' : '') +
             '] ' +
-            (a.nota || '(sin texto)').replace(/\n/g, ' ') +
+            (comoTexto(a.nota) || '(sin texto)').replace(/\n/g, ' ') +
             senalSinGuardar(a)
         );
-      (a.hilo || []).forEach(function (h) {
+      (Array.isArray(a.hilo) ? a.hilo : []).forEach(function (h) {
         out.push('  - ' + lineaHilo(h));
       });
       if (a.respuesta || a.cierre)
         out.push(
-          '  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + (a.respuesta || '').replace(/\n/g, ' ')
+          '  - Respuesta' + (a.cierre ? ' (' + a.cierre + ')' : '') + ': ' + comoTexto(a.respuesta).replace(/\n/g, ' ')
         );
-      if (a.replica) out.push('  - Réplica: ' + a.replica.replace(/\n/g, ' '));
+      if (a.replica) out.push('  - Réplica: ' + comoTexto(a.replica).replace(/\n/g, ' '));
       if (reabierta(a)) out.push('  - Reabierta por el autor tras la respuesta.');
     });
     return out.join('\n');
@@ -8886,17 +8914,15 @@
         col.onSnapshot(
           function (snap) {
             // lo que llega de la base entra en la memoria; un borrador sin guardar de esa anotación queda encima
-            // lo que no tiene forma de anotación no entra (lo escribió cualquiera): queda en el diagnóstico
-            var cambios = snap
-              .docChanges()
-              .map(function (ch) {
-                return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
-              })
-              .filter(function (ch) {
-                var mal = ch.datos && P.N.problemaDeAnotacion(ch.datos);
-                if (mal) P.fallo('base: ' + ch.id + ' no es una anotación válida', mal);
-                return !mal;
-              });
+            // Lo que llega entra tal cual (la base manda, y lo que tiene se conserva aunque traiga algo raro: dejarlo
+            // fuera haría que una copia local lo pisara entero). Lo que no tiene la forma del esquema queda en el
+            // diagnóstico; la página lo muestra como puede, sin romperse.
+            var cambios = snap.docChanges().map(function (ch) {
+              var datos = ch.type === 'removed' ? null : ch.doc.data(),
+                mal = datos && P.N.problemaDeAnotacion(datos);
+              if (mal) P.fallo('base: ' + ch.doc.id + ' no tiene la forma de una anotación', mal);
+              return { tipo: ch.type, id: ch.doc.id, datos: datos };
+            });
             var cambio = P.SINC.alFoto(cambios);
             // borrada en otra sesión: su cambio ya no se puede deshacer (el eco de un borrado propio no retira su aviso)
             cambios.forEach(function (ch) {
@@ -8941,8 +8967,9 @@
           }
         );
       })
-      .catch(function () {
-        /* el error del libro ya se mostró */
+      .catch(function (e) {
+        // el error del libro ya se mostró; cualquier otro de la conexión queda en el diagnóstico
+        P.fallo('arranque', e);
       });
   }
   arrancar();

@@ -4,10 +4,14 @@
 // cobertura/web/<prueba>.json: por fragmento, las líneas que se ejecutaron y las funciones que corrieron. Este guion
 // las junta y escribe el informe:
 //
-//   COBERTURA=1 npx playwright test && node tests/web/herramientas/cobertura.mjs [--minimo 80]
+//   node tests/web/herramientas/cobertura.mjs --limpiar && COBERTURA=1 npx playwright test && \
+//     node tests/web/herramientas/cobertura.mjs [--minimo 80]
 //
-// Una línea cuenta si es código (no vacía, no sólo comentario ni sólo cierre de llaves) y su primer carácter se
-// ejecutó al menos una vez. La cobertura es un detector de lo que ninguna prueba toca, no un objetivo.
+// (`--limpiar` borra lo de corridas anteriores, que se sumaría con otra numeración de líneas.) Una línea cuenta si es
+// código y su primer carácter se ejecutó al menos una vez. No cuentan las vacías, las de comentario, las que empiezan
+// cerrando un bloque (`}`, `} else {`: su primer carácter es del bloque anterior) ni las cabeceras `function …` (su
+// primer carácter corre al declararse, aunque la función nunca se llame: eso lo dice la lista de funciones). La
+// cobertura es un detector de lo que ninguna prueba toca, no un objetivo.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,7 +37,9 @@ export function lineasDeCodigo(texto) {
   const out = [];
   texto.split('\n').forEach((l, i) => {
     const t = l.trim();
-    if (!t || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || /^[\])};,]+$/.test(t)) return;
+    if (!t || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || /^[\])}]/.test(t) || /^[;,]+$/.test(t))
+      return;
+    if (/^(async\s+)?function\b/.test(t)) return;
     out.push(i + 1);
   });
   return out;
@@ -134,7 +140,8 @@ function informe(minimo) {
   const texto = lineas.join('\n') + '\n';
   fs.writeFileSync(path.join(RAIZ, 'cobertura', 'web.md'), texto);
   console.log(texto);
-  const t = Number(pct(cubiertas, total));
+  // con todos los decimales: 91,95 % no llega a un piso de 92
+  const t = total ? (100 * cubiertas) / total : 100;
   if (minimo && t < minimo) {
     console.error(`cobertura de la página ${t} % por debajo del mínimo ${minimo} %`);
     process.exit(1);
@@ -142,6 +149,9 @@ function informe(minimo) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const i = process.argv.indexOf('--minimo');
-  informe(i > 0 ? Number(process.argv[i + 1]) : 0);
+  if (process.argv.includes('--limpiar')) fs.rmSync(SALIDA, { recursive: true, force: true });
+  else {
+    const i = process.argv.indexOf('--minimo');
+    informe(i > 0 ? Number(process.argv[i + 1]) : 0);
+  }
 }

@@ -19,9 +19,8 @@ import {
 
 // ------------------------------------------------------------ cuatro respuestas por revisar
 // Cuatro subrayados (dos en un mismo párrafo, uno en la lista, uno en el párrafo del capítulo 2 que cambió) con
-// respuestas de quien edita: atendida, pregunta, descartada y atendida con el pasaje reescrito. Sin base. Con
-// `revisadas`, las cuatro ya revisadas en una visita anterior.
-async function cuatroRespondidas(abrir, base, { revisadas = false } = {}) {
+// respuestas de quien edita: atendida, pregunta, descartada y atendida con el pasaje reescrito. Sin base.
+async function cuatroRespondidas(abrir, base) {
   const p = await abrir({
     permisos: ['clipboard-read', 'clipboard-write'],
     preparar: (p) => libroAlterado(p, conCambio),
@@ -52,7 +51,7 @@ async function cuatroRespondidas(abrir, base, { revisadas = false } = {}) {
     }, clave);
   const [vA, vB, vC, vD] = (await leer()).map((a) => a.id);
   await p.evaluate(
-    ({ k, ids, revisadas }) => {
+    ({ k, ids }) => {
       const j = JSON.parse(localStorage.getItem(k));
       const [a, b, c, d] = ids;
       Object.assign(j[a], {
@@ -81,10 +80,9 @@ async function cuatroRespondidas(abrir, base, { revisadas = false } = {}) {
         respondido: new Date(Date.now() + 120000).toISOString(),
         bh: 'viejo0000000',
       });
-      if (revisadas) ids.forEach((id) => (j[id].revisado = j[id].respondido));
       localStorage.setItem(k, JSON.stringify(j));
     },
-    { k: clave, ids: [vA, vB, vC, vD], revisadas }
+    { k: clave, ids: [vA, vB, vC, vD] }
   );
   await p.goto(base + '#cap-01');
   await p.reload();
@@ -469,7 +467,15 @@ test('Lo revisado se recuerda; una respuesta nueva vuelve a la bandeja; en el te
   abrir,
   base,
 }) => {
-  const { p, vA, clave } = await cuatroRespondidas(abrir, base, { revisadas: true });
+  const { p, vA, clave } = await cuatroRespondidas(abrir, base);
+  // las cuatro revisadas con el teclado (A en cada una, de una a la siguiente), y la página recargada
+  await tocar(p, '#tab-revisar');
+  await p.keyboard.press('.');
+  for (let i = 0; i < 4; i++) await p.keyboard.press('a');
+  await p.waitForTimeout(150);
+  check((await cuentaRevisar(p)) === '', 'las cuatro quedan revisadas');
+  await p.reload();
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
   check((await cuentaRevisar(p)) === '', 'lo revisado se recuerda al recargar');
   await p.evaluate(
     ({ k, id }) => {

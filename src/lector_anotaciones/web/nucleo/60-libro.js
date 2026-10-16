@@ -275,10 +275,10 @@
    */
   function sanearLibro(libro) {
     // lo que no es una sección o un bloque se deja como está: `validarLibro` lo informa
-    (libro.secciones || []).forEach(function (s) {
+    (Array.isArray(libro.secciones) ? libro.secciones : []).forEach(function (s) {
       if (!s || typeof s !== 'object') return;
       s.titulo = String(s.titulo || '');
-      (s.bloques || []).forEach(function (b) {
+      (Array.isArray(s.bloques) ? s.bloques : []).forEach(function (b) {
         if (!b || typeof b !== 'object') return;
         // la forma que cada tipo de bloque espera, aunque el archivo traiga otra
         var h = b.html,

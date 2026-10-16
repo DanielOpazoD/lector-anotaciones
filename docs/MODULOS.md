@@ -11,7 +11,7 @@ La ficha de una anotación es función de la anotación y de su vista: `vistaDeF
 demás que decide lo que muestra, su JSON es la firma con que se reutiliza el nodo y `vistaEnSitio` es el único
 camino para cambiar una ficha sin redibujarla. En 52-ficha.js, lo que corre al dibujar sólo usa la anotación, la
 vista y ayudantes puros (`P.el`, `P.etiqueta`, `P.N`, `P.diffPalabras`, `P.chipAutor`, `P.etiquetasFicha`); las acciones
-(`abrirPropuesta`, `cursorAlFinal`) y los manejadores de eventos corren después.
+(`abrirPropuesta`, `cursorAlFinal`, `vigente`) y los manejadores de eventos corren después.
 Este guion lo comprueba.
 
 En total: 133 cosas ofrecidas y 22 de estado compartido.

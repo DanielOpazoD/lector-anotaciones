@@ -173,17 +173,15 @@
         col.onSnapshot(
           function (snap) {
             // lo que llega de la base entra en la memoria; un borrador sin guardar de esa anotación queda encima
-            // lo que no tiene forma de anotación no entra (lo escribió cualquiera): queda en el diagnóstico
-            var cambios = snap
-              .docChanges()
-              .map(function (ch) {
-                return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
-              })
-              .filter(function (ch) {
-                var mal = ch.datos && P.N.problemaDeAnotacion(ch.datos);
-                if (mal) P.fallo('base: ' + ch.id + ' no es una anotación válida', mal);
-                return !mal;
-              });
+            // Lo que llega entra tal cual (la base manda, y lo que tiene se conserva aunque traiga algo raro: dejarlo
+            // fuera haría que una copia local lo pisara entero). Lo que no tiene la forma del esquema queda en el
+            // diagnóstico; la página lo muestra como puede, sin romperse.
+            var cambios = snap.docChanges().map(function (ch) {
+              var datos = ch.type === 'removed' ? null : ch.doc.data(),
+                mal = datos && P.N.problemaDeAnotacion(datos);
+              if (mal) P.fallo('base: ' + ch.doc.id + ' no tiene la forma de una anotación', mal);
+              return { tipo: ch.type, id: ch.doc.id, datos: datos };
+            });
             var cambio = P.SINC.alFoto(cambios);
             // borrada en otra sesión: su cambio ya no se puede deshacer (el eco de un borrado propio no retira su aviso)
             cambios.forEach(function (ch) {
@@ -228,8 +226,9 @@
           }
         );
       })
-      .catch(function () {
-        /* el error del libro ya se mostró */
+      .catch(function (e) {
+        // el error del libro ya se mostró; cualquier otro de la conexión queda en el diagnóstico
+        P.fallo('arranque', e);
       });
   }
   arrancar();

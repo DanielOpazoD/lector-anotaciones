@@ -226,11 +226,11 @@ export const conBase = () => {
     metadata: { fromCache: false },
     docChanges: () => cambios.map((c) => ({ type: c.type, doc: { id: c.id, data: () => coleccion(nombre)[c.id] } })),
   });
-  // window.__ecos cuenta las fotos que la base ya entregó: una prueba espera así al eco de una escritura
-  window.__ecos = 0;
+  // window.__ecos cuenta, por colección, las fotos que la base ya entregó: una prueba espera así al eco de una escritura
+  window.__ecos = {};
   const emitir = (nombre, cambios) => {
     (oyentes[nombre] || []).forEach((cb) => cb(snap(nombre, cambios)));
-    window.__ecos++;
+    window.__ecos[nombre] = (window.__ecos[nombre] || 0) + 1;
   };
   const sembrar = window.__semilla || {};
   Object.keys(sembrar).forEach((id) => {

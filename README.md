@@ -94,7 +94,7 @@ src/lector_anotaciones/   paquete Python
   pagina.py               empaqueta las fuentes de la página en un solo index.html
   cli.py                  órdenes `construir`, `pagina`, `exportar`, `pendientes`, `aplicar` y `responder`
   web/                    fuentes de la página
-    plantilla.html        el documento, con las marcas {{ESTILOS}}, {{NUCLEO}} y {{PAGINA}}
+    plantilla.html        el documento, con las marcas {{ESTILOS}}, {{NUCLEO}}, {{PAGINA}} y {{VERSION}}
     estilos.css
     nucleo/*.js           lógica pura, sin DOM: texto, diferencias, ubicar subrayados, borradores,
                           qué queda por revisar, apilar fichas al margen, Markdown, armar y sanear

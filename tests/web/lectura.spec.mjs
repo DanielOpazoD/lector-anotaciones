@@ -206,9 +206,18 @@ test('Las #etiquetas de la nota dan chips, selector y filtro; buscar en las nota
       !(await p.$eval('#f-etiqueta', (s) => s.hidden)),
     'las #etiquetas de la nota se vuelven chips y un selector'
   );
+  // otra nota, sin la etiqueta: el filtro tiene algo que dejar fuera
+  await pulsar(p, '#b-nota-gen');
+  await p.keyboard.type('Una nota sin etiquetas');
+  await p.keyboard.press('Escape');
+  const antes = (await p.$$('.ficha')).length;
   await abrirDe(p, '#f-etiqueta');
   await p.selectOption('#f-etiqueta', 'carmen');
-  check((await p.$$('.ficha')).length === 1, 'el filtro por etiqueta deja las fichas con esa etiqueta');
+  const quedan = await p.$$eval('.ficha', (fs) => fs.map((f) => (f.querySelector('textarea') || {}).value));
+  check(
+    antes === 2 && quedan.length === 1 && /#carmen/.test(quedan[0]),
+    `el filtro por etiqueta deja las fichas con esa etiqueta (${antes} → ${JSON.stringify(quedan)})`
+  );
   await pulsar(p, '.filtro[data-f="conservar"]');
   await p.fill('#buscar', 'cinética');
   await p.press('#buscar', 'Enter');

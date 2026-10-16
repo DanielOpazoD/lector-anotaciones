@@ -321,3 +321,16 @@ test('validarLibro y sanearLibro con secciones o bloques que no son objetos: se 
     assert.ok(p.includes('sección sin id o sin bloques'));
   }
 });
+
+// La revisión de la 0.6: un libro de la biblioteca con secciones o bloques que no son listas tampoco hace lanzar a
+// sanearLibro (que corre antes que validarLibro).
+test('sanearLibro con secciones o bloques que no son listas: no lanza, y validarLibro lo informa', () => {
+  for (const libro of [
+    { secciones: [{ id: 'a', titulo: 'A', bloques: {} }] },
+    { secciones: [{ id: 'a', bloques: 'x' }] },
+    { secciones: { a: 1 } },
+  ]) {
+    assert.doesNotThrow(() => N.sanearLibro(libro), JSON.stringify(libro));
+    assert.ok(N.validarLibro(libro).length > 0, JSON.stringify(libro));
+  }
+});

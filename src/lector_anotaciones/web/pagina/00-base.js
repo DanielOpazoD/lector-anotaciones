@@ -104,7 +104,12 @@
    * @param {any} e
    */
   function fallo(donde, e) {
-    var error = e && typeof e === 'object' ? (e.code ? e.code + ': ' : '') + (e.message || String(e)) : String(e);
+    var error;
+    // un error de JSON cita un trozo de lo que leía, que puede ser el texto de una anotación: sólo su nombre
+    if (e && e.name === 'SyntaxError') error = 'SyntaxError (sin su mensaje, que puede citar lo leído)';
+    else if (e && typeof e === 'object')
+      error = (e.code ? N.comoTexto(e.code) + ': ' : '') + N.comoTexto(e.message || e);
+    else error = N.comoTexto(e);
     FALLOS.unshift({ cuando: ahora(), donde: donde, error: error });
     if (FALLOS.length > 50) FALLOS.length = 50;
   }

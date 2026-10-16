@@ -274,3 +274,16 @@ test('problemaDeAnotacion: lo que la página no podría mostrar, según el esque
   );
   assert.equal(N.problemaDeAnotacion({ tipo: 'pagina', pagina: 'cuatro' }), 'nota de página sin página');
 });
+
+// Lo que el núcleo ofrece es exactamente lo que declara `interface Nucleo` (tipos/globales.d.ts): una función nueva sin
+// declarar, una que se quitó o un nombre mal escrito hacen fallar esto (la envoltura de cada archivo revisa además la
+// firma de cada una contra su declaración).
+test('el núcleo ofrece exactamente lo que declara Nucleo', async () => {
+  const ts = (await import('typescript')).default;
+  const { readFileSync } = await import('node:fs');
+  const ruta = new URL('../../src/lector_anotaciones/web/tipos/globales.d.ts', import.meta.url);
+  const sf = ts.createSourceFile('globales.d.ts', readFileSync(ruta, 'utf8'), ts.ScriptTarget.ES2020, true);
+  const nucleo = sf.statements.find((s) => ts.isInterfaceDeclaration(s) && s.name.text === 'Nucleo');
+  const declarados = nucleo.members.map((m) => m.name.getText(sf)).sort();
+  assert.deepEqual(Object.keys(N).sort(), declarados);
+});

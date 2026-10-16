@@ -367,7 +367,8 @@
     bp.title = n ? n + (n === 1 ? ' respuesta por revisar' : ' respuestas por revisar') : '';
   }
   function etiqueta(a) {
-    if (a.tipo === 'subrayado') return (a.sidTitulo || '').replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
+    if (a.tipo === 'subrayado')
+      return P.N.comoTexto(a.sidTitulo).replace(/\..*$/, '') + (a.pagina ? ' · p. ' + a.pagina : '');
     if (a.tipo === 'pagina') return 'Nota de la página ' + a.pagina;
     if (a.tipo === 'capitulo') return 'Nota de la sección: ' + (a.sidTitulo || '');
     return 'Nota general';

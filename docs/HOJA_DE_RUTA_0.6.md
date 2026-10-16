@@ -24,7 +24,7 @@ etapa.
 | F4 | Pruebas de navegador cortas, con preparaciones compartidas | hecho |
 | F5 | Tipos: `libro.json` tipado, sin `any`, `noImplicitAny` en el núcleo; mypy para Python | hecho |
 | F6 | Menores: una función por orden en `cli.py`; los errores silenciados, a un diagnóstico copiable | hecho |
-| F7 | Revisión independiente, documentación y publicación de la 0.6.0 | pendiente |
+| F7 | Revisión independiente, documentación y publicación de la 0.6.0 | hecho |
 
 ## F1 · Lo que midió la cobertura
 
@@ -111,5 +111,35 @@ mensajes; los recuentos se volvieron a comprobar sobre sus registros.
   Exportar) los copia con la versión de la página (el empaquetador la escribe en `<meta name="generator">`), el libro,
   el modo, lo pendiente de guardar y el navegador; nunca el texto de las anotaciones.
 - Al tipar `alFoto` apareció que lo que llega de la base entraba sin revisar, y un solo documento mal formado (un
-  subrayado sin cita, escrito por cualquier colaborador) dejaba el panel vacío para todos. Ahora `problemaDeAnotacion`
-  (núcleo) lo deja fuera y queda en el diagnóstico.
+  subrayado sin cita, escrito por cualquier colaborador) dejaba el panel vacío para todos. El primer arreglo lo dejaba
+  fuera; la revisión de F7 mostró que eso podía borrar datos (ver abajo), así que ahora entra tal cual y la página lo
+  muestra sin romperse (`comoTexto` donde se daba por hecho que un campo es texto); `problemaDeAnotacion` sólo lo
+  nombra en el diagnóstico.
+
+## F7 · Revisión independiente
+
+Dos revisores con papeles distintos sobre todo lo de la 0.6 (`83da645..`): un mantenedor desconfiado buscando defectos
+en el código que corre, y un auditor buscando verdes que mienten en las pruebas y las herramientas. Encontraron 6 y 12
+cosas; cada una se reprodujo antes de tocar nada y cada arreglo trae una prueba que falla sin él (comprobado rompiendo
+el código y revirtiendo).
+
+- **Lo más grave lo había introducido F6.** Dejar fuera un documento de la base con forma rara hacía que la página lo
+  tratara como inexistente: una copia local más vieja de esa anotación subía entera con `set` y borraba la respuesta,
+  el cierre, el commit y la conversación de quien edita (reproducido contra la 0.5, que conservaba todo). El filtro
+  además ocultaba anotaciones legítimas. Se rehízo: lo que llega entra tal cual, como en la 0.5, y la tolerancia está
+  donde se dibuja; una prueba de navegador con siete documentos raros y otra con la copia local vieja lo fijan.
+- **Pruebas que no podían fallar:** la de la ficha rehecha no miraba el resultado de su espera (con una ficha rancia,
+  46 de 46 en verde) y la del filtro por etiqueta tenía una sola anotación. Ahora caen con su mutación.
+- **La regla del dibujo** dejaba pasar ocho maneras de leer estado al dibujar, dos de ellas muy realistas (llamar a la
+  anotación vigente, y un ayudante «puro» que lee estado). La ficha ya no lleva `ctx.actual` (`vigente(a)` es una
+  acción), la regla revisa los cuerpos de los ayudantes puros y de lo que se llama de otros fragmentos, y una llamada
+  que no puede seguir es un error: cae en las 17 violaciones de prueba y no en los 2 controles.
+- **Herramientas:** la cobertura de la página sumaba resultados de corridas viejas (con ellos, 97,6 % en vez de 93,0 %),
+  redondeaba antes del piso y contaba cierres y cabeceras como cubiertos; `P.libro()` quedaba `any` (ahora la
+  inferencia de `P` conoce los tipos de `E`: una errata en `P.libro().titlo` falla); la envoltura del núcleo no veía
+  funciones que faltan, sobran o están mal escritas (una prueba compara lo que exporta con `Nucleo`, y las 6 que no
+  estaban declaradas lo están) ni parámetros que dejan de ser opcionales (`Nucleo` con propiedades y
+  `strictFunctionTypes`).
+- **Lo que queda, a sabiendas:** un documento armado a propósito para romper la página (un campo con un `toString` que
+  no es una función) todavía puede hacerlo, como en la 0.5; quien puede escribir así en la base también puede borrarla.
+  En Python, los alias de `tipos.py` son `dict[str, Any]`: mypy no ve claves mal escritas en los datos JSON.

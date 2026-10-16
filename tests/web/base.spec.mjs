@@ -366,7 +366,8 @@ test('Un subrayado nuevo lleva autor y huella; el respaldo diario se trocea por 
   });
   await p.fill('.ficha[data-id="conpregunta"] textarea.replica', 'Al inicio, confirmado.');
   await p.$eval('.ficha[data-id="conpregunta"] textarea.replica', (t) => t.blur());
-  await p.waitForFunction(() => Object.values(window.__colecciones.respaldos || {}).some((d) => d.libro) || true);
+  // la réplica llegó a la base: si el respaldo se fuera a repetir, ya habría empezado
+  await esperar(p, () => (window.__docs.conpregunta || {}).replica === 'Al inicio, confirmado.', null, 2000);
   await p.waitForTimeout(150);
   check(
     (await p.evaluate(() => Object.keys(window.__colecciones.respaldos || {}).length)) === 0,
@@ -548,10 +549,10 @@ test('Con la base llena: la nota rechazada conserva el borrador con el foco y «
 test('Deshacer un borrado: el enlace sobrevive al eco de la base y devuelve la anotación', async ({ abrir }) => {
   const p = await conUsuario(abrir);
   await enFicha(p, '.ficha[data-id="ajena"]', 'button:has-text("Borrar")');
-  const ecos = await p.evaluate(() => window.__ecos);
+  const ecos = await p.evaluate(() => window.__ecos.anotaciones || 0);
   await p.click('.ficha[data-id="ajena"] .confirmar button:has-text("Sí")');
   // la base borra en el acto, pero su eco llega después: se espera a que llegue
-  const eco = await esperar(p, (n) => !window.__docs.ajena && window.__ecos > n, ecos, 2000);
+  const eco = await esperar(p, (n) => !window.__docs.ajena && (window.__ecos.anotaciones || 0) > n, ecos, 2000);
   check(eco && !!(await p.$('#deshacer')), 'el enlace de deshacer sobrevive al eco de la base que confirma el borrado');
   await p.click('#deshacer');
   check(await esperar(p, () => !!window.__docs.ajena, null, 2000), 'deshacer devuelve la anotación a la base');
