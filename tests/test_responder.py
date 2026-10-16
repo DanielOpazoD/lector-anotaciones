@@ -206,6 +206,13 @@ def test_escrituras_rechaza_responder_dos_veces_lo_mismo():
         escrituras(TODAS, [r, r], {"nueva": 1}, ahora=AHORA)
 
 
+def test_escrituras_sin_id_y_repetidas_se_informan_juntas():
+    # dos sin id y dos con la misma: un ValueError con todo, no un TypeError al ordenar None con texto
+    r = {"respuesta": "Hecho.", "cierre": "atendida"}
+    with pytest.raises(ValueError, match=r"no está en la colección.*nueva: respondida dos veces"):
+        escrituras(TODAS, [dict(r), dict(r), dict(r, id="nueva"), dict(r, id="nueva")], {"nueva": 1}, ahora=AHORA)
+
+
 def test_en_lotes_respeta_cincuenta_escrituras_y_el_tamano():
     pequenas = [{"doc_id": str(i), "data": {}} for i in range(120)]
     assert [len(lote) for lote in en_lotes(pequenas)] == [50, 50, 20]

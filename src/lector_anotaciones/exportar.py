@@ -13,6 +13,9 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+from .tipos import Anotacion, Json, Libro
 
 COLORES = {
     "revisar": "revisar o reescribir",
@@ -23,13 +26,13 @@ COLORES = {
 TIPOS = {"subrayado": "subrayado", "pagina": "nota de página", "capitulo": "nota de sección", "general": "nota general"}
 
 
-def cargar(ruta: Path) -> list[dict]:
+def cargar(ruta: Path) -> list[Anotacion]:
     """Lee el JSON en cualquiera de las tres formas y devuelve la lista de anotaciones."""
     datos = json.loads(Path(ruta).read_text(encoding="utf-8-sig"))
     return normalizar(datos)
 
 
-def normalizar(datos) -> list[dict]:
+def normalizar(datos: Any) -> list[Anotacion]:
     if isinstance(datos, list):
         anots = datos
     elif isinstance(datos, dict) and isinstance(datos.get("anotaciones"), list):
@@ -47,12 +50,12 @@ def normalizar(datos) -> list[dict]:
 _NUM_BLOQUE = re.compile(r"-b(\d+)$")
 
 
-def _indice_bloque(a: dict) -> int:
+def _indice_bloque(a: Anotacion) -> int:
     m = _NUM_BLOQUE.search(a.get("pid") or "")
     return int(m.group(1)) if m else 0
 
 
-def _orden(a: dict) -> tuple:
+def _orden(a: Anotacion) -> tuple[Any, ...]:
     """Dentro de una sección, el orden del libro: por bloque y desplazamiento, como `ordenKey` en la página.
 
     La página de la anotación no cuenta (se fijó al crearla y puede faltar o haber quedado vieja); sólo
@@ -62,16 +65,16 @@ def _orden(a: dict) -> tuple:
     return (_indice_bloque(a), pagina, a.get("inicio") or 0, a.get("creado") or "")
 
 
-def _grupo(a: dict) -> str:
+def _grupo(a: Anotacion) -> str:
     return "General" if a.get("tipo") == "general" else (a.get("sidTitulo") or "General")
 
 
-def _orden_archivo(a: dict) -> tuple:
+def _orden_archivo(a: Anotacion) -> tuple[Any, ...]:
     archivo, _, linea = (a.get("src") or "").partition(":")
     return (archivo, int(linea) if linea.isdigit() else 0, a.get("inicio") or 0)
 
 
-def linea_hilo(h: dict) -> str:
+def linea_hilo(h: Json) -> str:
     """Una entrada anterior de la conversación: quién, con su cierre, commit y fecha, y el texto."""
     quien = "quien edita" if h.get("de") == "editor" else "el autor"
     detalle = ", ".join(x for x in (h.get("cierre"), h.get("commit"), (h.get("cuando") or "")[:10]) if x)
@@ -79,7 +82,7 @@ def linea_hilo(h: dict) -> str:
     return f"Antes, {quien}{f' ({detalle})' if detalle else ''}: {texto}"
 
 
-def _cola(a: dict) -> list[str]:
+def _cola(a: Anotacion) -> list[str]:
     """Las líneas de la conversación anterior, la respuesta, el cierre y la réplica que siguen a una anotación."""
     lineas = [f"  - {linea_hilo(h)}" for h in a.get("hilo") or [] if isinstance(h, dict)]
     if a.get("respuesta") or a.get("cierre"):
@@ -93,7 +96,7 @@ def _cola(a: dict) -> list[str]:
     return lineas
 
 
-def propuesta(a: dict) -> str:
+def propuesta(a: Anotacion) -> str:
     """Lo que un subrayado propone en lugar de su cita, sin espacios en los extremos; vacío si no propone nada (sin
     propuesta, vacía o igual a la cita), como `propuesta` en la página."""
     s = a.get("sugerencia") if a.get("tipo") == "subrayado" else None
@@ -101,7 +104,7 @@ def propuesta(a: dict) -> str:
     return s if s and s != (a.get("cita") or "").strip() else ""
 
 
-def reabierta(a: dict) -> bool:
+def reabierta(a: Anotacion) -> bool:
     """Respondida (sin pregunta: atendida, descartada o sin cierre) y devuelta por el autor desde «Por revisar»."""
     return (
         bool(a.get("revisado"))
@@ -111,7 +114,7 @@ def reabierta(a: dict) -> bool:
     )
 
 
-def _linea(a: dict) -> list[str]:
+def _linea(a: Anotacion) -> list[str]:
     caja = "[x]" if a.get("estado") == "resuelta" else "[ ]"
     pag = f"p. {a['pagina']}" if a.get("pagina") else "sin página"
     src = f"`{a['src']}`" if a.get("src") else ""
@@ -131,22 +134,22 @@ def _linea(a: dict) -> list[str]:
     return [f"- {caja} " + " · ".join(p for p in partes if p) + f": {nota or '(sin texto)'}", *_cola(a)]
 
 
-def orden_de_secciones(libro: dict) -> dict[str, int]:
+def orden_de_secciones(libro: Libro) -> dict[str, int]:
     """Posición de cada sección en el libro (`id` → índice), para ordenar los grupos como el libro."""
     return {s["id"]: i for i, s in enumerate(libro.get("secciones", []))}
 
 
-def _ordenar_grupos(grupos: dict[str, list[dict]], orden_secciones: dict[str, int] | None) -> list[str]:
+def _ordenar_grupos(grupos: dict[str, list[Anotacion]], orden_secciones: dict[str, int] | None) -> list[str]:
     """Las secciones en el orden del libro si se conoce; si no, por su primera página y después por
     la fecha de su primera anotación. «General» va siempre al final."""
     infinito = float("inf")
 
-    def clave(nombre: str) -> tuple:
+    def clave(nombre: str) -> tuple[Any, ...]:
         lista = grupos[nombre]
         if nombre == "General":
             return (2, infinito, "")
         if orden_secciones is not None:
-            pos = min((orden_secciones.get(a.get("sid"), infinito) for a in lista), default=infinito)
+            pos = min((orden_secciones.get(a.get("sid") or "", infinito) for a in lista), default=infinito)
             if pos != infinito:
                 return (0, pos, "")
         paginas = [a["pagina"] for a in lista if a.get("pagina")]
@@ -156,7 +159,7 @@ def _ordenar_grupos(grupos: dict[str, list[dict]], orden_secciones: dict[str, in
 
 
 def a_markdown(
-    anots: list[dict],
+    anots: list[Anotacion],
     titulo: str = "",
     solo_abiertas: bool = False,
     agrupar: str = "seccion",
@@ -176,7 +179,7 @@ def a_markdown(
     fecha = (ahora or datetime.now(UTC)).strftime("%Y-%m-%d %H:%M UTC")
     out = [f"# Anotaciones · {titulo}" if titulo else "# Anotaciones", ""]
     out.append(f"{len(anots)} anotaciones ({abiertas} abiertas). Exportado el {fecha}.")
-    grupos: dict[str, list[dict]] = {}
+    grupos: dict[str, list[Anotacion]] = {}
     if agrupar == "seccion":
         for a in sorted(anots, key=_orden):
             grupos.setdefault(_grupo(a), []).append(a)

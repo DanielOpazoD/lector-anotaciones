@@ -17,6 +17,7 @@ from __future__ import annotations
 import bisect
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .util import norm
 
@@ -199,9 +200,7 @@ def capas_por_partes(partes: list[str], config: ConfigCapas | None = None) -> di
     return {k: v for k, v in capas.items() if v}
 
 
-def leer_lista(ruta) -> list[str]:
+def leer_lista(ruta: str | Path) -> list[str]:
     """Una expresión por línea; se ignoran vacías y las que empiezan con #."""
-    from pathlib import Path
-
     lineas = Path(ruta).read_text(encoding="utf-8-sig").split("\n")
     return [x.strip() for x in lineas if x.strip() and not x.strip().startswith("#")]

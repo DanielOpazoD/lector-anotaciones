@@ -14,13 +14,14 @@ from . import __version__
 from .capas import ConfigCapas, capas_por_partes
 from .markdown import expandir_fuentes, parse_fuentes
 from .paginas import asignar_paginas, calcular_desfase, sin_paginas, texto_paginas_pdf
+from .tipos import Bloque, Libro, Seccion
 from .util import slug, texto_plano
 
 FORMATO = 2
 _ID_BLOQUE = re.compile(r"^(.+)-b(\d+)$")
 
 
-def partes_render(b: dict) -> list[str]:
+def partes_render(b: Bloque) -> list[str]:
     """Los trozos de texto con que la página compone el bloque: uno por ítem o celda, o uno solo."""
     h = b["html"]
     if isinstance(h, str):
@@ -28,7 +29,7 @@ def partes_render(b: dict) -> list[str]:
     if isinstance(h, dict):
         return [html_mod.unescape(texto_plano(h.get("caption", "")))]
     if isinstance(h, list):
-        partes = []
+        partes: list[str] = []
         for x in h:
             if isinstance(x, list):
                 partes.extend(html_mod.unescape(texto_plano(c)) for c in x)
@@ -38,7 +39,7 @@ def partes_render(b: dict) -> list[str]:
     return []
 
 
-def texto_render(b: dict) -> str:
+def texto_render(b: Bloque) -> str:
     """El texto del bloque tal como lo muestra la página (su `textContent`, sin marcador de página).
 
     Es el sistema de coordenadas de los subrayados y de las capas, y lo que se resume en `h`. En listas,
@@ -51,7 +52,7 @@ def huella(texto: str) -> str:
     return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:12]
 
 
-def cargar_anterior(ruta: Path | None, avisos: list[str] | None = None) -> dict | None:
+def cargar_anterior(ruta: Path | None, avisos: list[str] | None = None) -> Libro | None:
     """La salida anterior, si existe, para marcar qué bloques cambiaron desde entonces.
 
     Si el archivo existe pero no se puede leer como un libro, se devuelve None y se deja un aviso en
@@ -84,10 +85,10 @@ def construir(
     marca_pagina_1: str | None = None,
     ventana: int = 5,
     claves_anteriores: list[str] | None = None,
-    anterior: dict | None = None,
+    anterior: Libro | None = None,
     capas: ConfigCapas | None = None,
     avisos: list[str] | None = None,
-) -> dict:
+) -> Libro:
     """Lee las fuentes (y el PDF, si se da) y devuelve el libro como diccionario listo para JSON.
 
     `anterior` es la salida previa: los bloques cuyo texto cambió desde entonces llevan `anterior` con
@@ -231,7 +232,7 @@ def emparejar_por_semejanza(viejos: list[tuple[int, str]], nuevos: list[tuple[in
     return pares
 
 
-def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
+def marcar_cambios(secciones: list[Seccion], anterior: Libro) -> int:
     """Escribe `anterior` en los bloques cuyo texto cambió respecto de la salida previa; devuelve cuántos.
 
     Los ids son posicionales, así que no sirven para emparejar: se alinean las dos listas de huellas de
@@ -259,7 +260,7 @@ def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
         for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, hp, hn, autojunk=False).get_opcodes():
             if op == "equal":
                 continue
-            viejos = [(i, textos_prev[i]) for i in range(i1, i2) if textos_prev[i] is not None]
+            viejos = [(i, t) for i in range(i1, i2) if (t := textos_prev[i]) is not None]
             tramo_nuevos = [(j, textos_nuevos[j]) for j in range(j1, j2)]
             if op == "replace" and len(viejos) == 1 and len(tramo_nuevos) == 1:
                 pares = [(viejos[0][0], tramo_nuevos[0][0])]
@@ -279,7 +280,7 @@ def marcar_cambios(secciones: list[dict], anterior: dict) -> int:
     return cambios
 
 
-def validar(libro: dict) -> list[str]:
+def validar(libro: Libro) -> list[str]:
     """Comprueba las invariantes de las que depende la trazabilidad; devuelve los problemas."""
     problemas: list[str] = []
     vistos: set[str] = set()
@@ -312,7 +313,7 @@ def validar(libro: dict) -> list[str]:
     return problemas
 
 
-def resumen(libro: dict) -> str:
+def resumen(libro: Libro) -> str:
     """Una línea con las cifras que conviene mirar tras cada construcción."""
     secciones = libro["secciones"]
     nb = sum(len(s["bloques"]) for s in secciones)
@@ -325,7 +326,7 @@ def resumen(libro: dict) -> str:
     )
 
 
-def escribir(libro: dict, salida: Path) -> int:
+def escribir(libro: Libro, salida: Path) -> int:
     """Escribe el JSON (UTF-8, sin escapes) y devuelve su tamaño en bytes."""
     salida = Path(salida)
     salida.parent.mkdir(parents=True, exist_ok=True)

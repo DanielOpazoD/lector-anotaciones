@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .exportar import _linea, _orden_archivo, normalizar, reabierta
+from .tipos import Anotacion, Json
 
 CIERRES = ("atendida", "descartada", "pregunta")
 MOTIVOS = {"nueva": "sin respuesta", "reabierta": "reabierta por el autor", "replica": "el autor contestó la pregunta"}
@@ -23,7 +24,7 @@ MAX_BYTES = 900_000
 BORRAR = {"__delete__": True}
 
 
-def cargar_coleccion(ruta: Path, de_la_base: bool = False) -> list[dict]:
+def cargar_coleccion(ruta: Path, de_la_base: bool = False) -> list[Anotacion]:
     """Las anotaciones de un JSON (cualquiera de las formas de `exportar.normalizar`) o de un directorio con un
     documento por archivo, como lo deja `ArtifactData` con `out_dir` (`<dir>/anotaciones/<id>.json`); ahí la id es el
     nombre del archivo, que es la del documento. Con `de_la_base`, lo copiado de la página («Copiar todo») no sirve:
@@ -31,7 +32,7 @@ def cargar_coleccion(ruta: Path, de_la_base: bool = False) -> list[dict]:
     Una id repetida es un error."""
     ruta = Path(ruta)
     if ruta.is_dir():
-        docs: dict[str, dict] = {}
+        docs: dict[str, Anotacion] = {}
         for f in sorted(ruta.rglob("*.json")):
             d = json.loads(f.read_text(encoding="utf-8-sig"))
             if not isinstance(d, dict):
@@ -56,8 +57,8 @@ def cargar_coleccion(ruta: Path, de_la_base: bool = False) -> list[dict]:
     return anots
 
 
-def _por_id(anots: list[dict]) -> dict[str, dict]:
-    por_id: dict[str, dict] = {}
+def _por_id(anots: list[Anotacion]) -> dict[str, Anotacion]:
+    por_id: dict[str, Anotacion] = {}
     for a in anots:
         if a["id"] in por_id:
             raise ValueError(f"la id {a['id']} está dos veces en la colección")
@@ -65,7 +66,7 @@ def _por_id(anots: list[dict]) -> dict[str, dict]:
     return por_id
 
 
-def motivo(a: dict) -> str | None:
+def motivo(a: Anotacion) -> str | None:
     """Por qué una anotación espera a quien edita (`nueva`, `reabierta`, `replica`), o None si no lo espera: resuelta,
     respondida y a la espera de que el autor la revise, o una pregunta que el autor no contestó."""
     if a.get("estado") == "resuelta":
@@ -79,14 +80,14 @@ def motivo(a: dict) -> str | None:
     return None
 
 
-def pendientes(anots: list[dict]) -> list[tuple[str, dict]]:
+def pendientes(anots: list[Anotacion]) -> list[tuple[str, Anotacion]]:
     """(motivo, anotación) de lo que espera a quien edita, en el orden en que conviene aplicarlo: por archivo y
     línea; las notas sin origen (de sección, generales) al final."""
     lista = [(m, a) for a in anots if (m := motivo(a))]
     return sorted(lista, key=lambda x: (not x[1].get("src"), _orden_archivo(x[1]), x[1].get("creado") or ""))
 
 
-def a_texto(lista: list[tuple[str, dict]]) -> str:
+def a_texto(lista: list[tuple[str, Anotacion]]) -> str:
     """Las pendientes como Markdown: la anotación (con su conversación) bajo su id y el motivo."""
     cuenta = {m: sum(1 for x, _ in lista if x == m) for m in MOTIVOS}
     partes = ", ".join(f"{n} {MOTIVOS[m]}" for m, n in cuenta.items() if n)
@@ -120,7 +121,7 @@ def leer_versiones(ruta: Path) -> dict[str, int]:
     return datos
 
 
-def leer_respuestas(ruta: Path) -> list[dict]:
+def leer_respuestas(ruta: Path) -> list[Json]:
     """Las respuestas: una lista de `{id, respuesta, cierre, commit?}` o un objeto `{id: {respuesta, cierre, …}}`."""
     datos = json.loads(Path(ruta).read_text(encoding="utf-8-sig"))
     forma = "las respuestas deben ser una lista de {id, respuesta, cierre, commit?} o un objeto {id: {respuesta, …}}"
@@ -139,7 +140,7 @@ def iso(t: datetime) -> str:
     return t.strftime("%Y-%m-%dT%H:%M:%S.") + f"{t.microsecond // 1000:03d}Z"
 
 
-def datos_respuesta(a: dict, r: dict, ahora: str) -> dict:
+def datos_respuesta(a: Anotacion, r: Json, ahora: str) -> Json:
     """Los campos que escribe quien responde. Lo vigente (la respuesta anterior y la réplica del autor) pasa al final
     del `hilo`; `commit` y `replica` que ya no corresponden se borran."""
     datos = {
@@ -169,7 +170,7 @@ def datos_respuesta(a: dict, r: dict, ahora: str) -> dict:
     return datos
 
 
-def _validar(r: dict, por_id: dict[str, dict], versiones: dict[str, int]) -> str | None:
+def _validar(r: Json, por_id: dict[str, Anotacion], versiones: dict[str, int]) -> str | None:
     rid = r.get("id")
     if rid not in por_id:
         return f"{rid!r}: no está en la colección"
@@ -185,19 +186,20 @@ def _validar(r: dict, por_id: dict[str, dict], versiones: dict[str, int]) -> str
 
 
 def escrituras(
-    anots: list[dict],
-    respuestas: list[dict],
+    anots: list[Anotacion],
+    respuestas: list[Json],
     versiones: dict[str, int],
     coleccion: str = "anotaciones",
     ahora: datetime | None = None,
     avisos: list[str] | None = None,
-) -> list[dict]:
+) -> list[Json]:
     """Las escrituras de `ArtifactData` (acción «batch») que dejan esas respuestas en la base. Lanza ValueError con
     todos los problemas si alguna respuesta no es válida; `avisos` recibe lo que no impide escribir (responder algo
     que no estaba pendiente)."""
     por_id = _por_id(anots)
     problemas = [p for r in respuestas if (p := _validar(r, por_id, versiones))]
-    vistas = [r.get("id") for r in respuestas]
+    # sólo las ids de texto: las que faltan o no lo son ya son un problema de `_validar`
+    vistas = [r["id"] for r in respuestas if isinstance(r.get("id"), str)]
     problemas += [f"{i}: respondida dos veces" for i in sorted({i for i in vistas if vistas.count(i) > 1})]
     if problemas:
         raise ValueError("; ".join(problemas))
@@ -219,11 +221,11 @@ def escrituras(
     return salida
 
 
-def en_lotes(escritas: list[dict]) -> list[list[dict]]:
+def en_lotes(escritas: list[Json]) -> list[list[Json]]:
     """Reparte las escrituras en lotes que caben en una llamada «batch» (50 escrituras, menos de 1 MiB). El tamaño se
     mide con los caracteres no ASCII escapados (lo más que pueden ocupar); una escritura que no cabe sola es un
     error."""
-    lotes: list[list[dict]] = [[]]
+    lotes: list[list[Json]] = [[]]
     tam = 0
     for e in escritas:
         n = len(json.dumps(e))
@@ -237,7 +239,7 @@ def en_lotes(escritas: list[dict]) -> list[list[dict]]:
     return lotes if lotes[0] else []
 
 
-def aplicar_update(doc: dict, datos: dict) -> dict:
+def aplicar_update(doc: Anotacion, datos: Json) -> Anotacion:
     """Lo que queda de `doc` tras un `update` con `datos` (fusión de primer nivel; `__delete__` quita el campo).
     Sirve para comprobar el resultado antes de escribir."""
     nuevo = dict(doc)

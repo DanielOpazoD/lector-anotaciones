@@ -21,7 +21,9 @@ import html
 import re
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
+from .tipos import Seccion
 from .util import slug, texto_plano
 
 ROMANOS = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
@@ -69,8 +71,8 @@ class _Estado:
     def __init__(self, figs: str) -> None:
         self.figs = figs
         self.usados: set[str] = set()
-        self.secciones: list[dict] = []
-        self.sec: dict | None = None
+        self.secciones: list[Seccion] = []
+        self.sec: Seccion | None = None
 
     def nueva(self, titulo: str, nivel: int, src: str) -> None:
         self.sec = {
@@ -82,7 +84,7 @@ class _Estado:
         }
         self.secciones.append(self.sec)
 
-    def bloque(self, t: str, contenido, src: str, texto: str = "") -> None:
+    def bloque(self, t: str, contenido: str | list[Any] | dict[str, Any], src: str, texto: str = "") -> None:
         if self.sec is None:
             self.nueva("Preliminares", 1, src)
         assert self.sec is not None
@@ -153,7 +155,7 @@ def _parse_lineas(lines: list[str], nombre: str, st: _Estado) -> None:
             continue
         if m := _ITEM_NUMERADO.match(linea):
             items = []
-            textos = []
+            textos: list[str] = []
             primero = int(m.group(1))
             while i < len(lines) and (m := _ITEM_NUMERADO.match(lines[i])):
                 items.append(inline(lines[i][m.end() :].strip()))
@@ -189,14 +191,14 @@ def _parse_lineas(lines: list[str], nombre: str, st: _Estado) -> None:
         st.bloque("p", inline(texto), src, texto)
 
 
-def parse_texto(texto: str, nombre: str = "fuente.md", figs: str = "figs/") -> list[dict]:
+def parse_texto(texto: str, nombre: str = "fuente.md", figs: str = "figs/") -> list[Seccion]:
     """Convierte un único Markdown (como cadena) en secciones con bloques."""
     st = _Estado(figs)
     _parse_lineas(texto.split("\n"), nombre, st)
     return st.secciones
 
 
-def parse_fuentes(rutas: Iterable[Path], figs: str = "figs/") -> list[dict]:
+def parse_fuentes(rutas: Iterable[Path], figs: str = "figs/") -> list[Seccion]:
     """Convierte varios archivos Markdown, en orden, en una sola lista de secciones.
 
     Una sección abierta en un archivo sigue recibiendo bloques si el siguiente archivo empieza

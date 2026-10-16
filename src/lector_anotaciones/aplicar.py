@@ -19,10 +19,12 @@ import difflib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .exportar import propuesta
 from .markdown import parse_texto
 from .responder import motivo
+from .tipos import Anotacion, Json
 
 # El dialecto sólo tiene `*cursiva*` y `**negrita**`: el guion bajo es un carácter más.
 _MARCA = r"\*{1,3}"
@@ -55,11 +57,11 @@ class Archivo:
     texto: str = ""
     resultados: list[Resultado] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.texto = self.original
 
 
-def _patron(texto: str) -> re.Pattern:
+def _patron(texto: str) -> re.Pattern[str]:
     """El texto como expresión: palabras en orden, separadas por espacios cualesquiera y, si la fuente la tiene, una
     marca de énfasis a un lado u otro del espacio; la que envuelva el texto entero queda en los grupos `a` y `b`. No
     empieza ni termina dentro de una palabra."""
@@ -73,7 +75,7 @@ def _patron(texto: str) -> re.Pattern:
     return re.compile(f"(?P<a>{_MARCA})?{ini}{cuerpo}{fin}(?P<b>{_MARCA})?")
 
 
-def _reemplazo(m: re.Match, texto: str) -> tuple[int, int, str] | None:
+def _reemplazo(m: re.Match[str], texto: str) -> tuple[int, int, str] | None:
     """Qué tramo de la coincidencia se sustituye y con qué aviso. Primero el núcleo (sin las marcas de énfasis de los
     extremos): sin marcas dentro, se cambia sólo él, también dentro de un énfasis, que se conserva. Si el núcleo tiene
     marcas, la coincidencia entera, siempre que no empiece dentro de un énfasis ni deje uno abierto: la propuesta va
@@ -92,7 +94,7 @@ def _plano(s: str) -> str:
     return " ".join(re.sub(_MARCA, "", s).split())
 
 
-def _puntos(texto: str, m: re.Match, a: dict) -> int:
+def _puntos(texto: str, m: re.Match[str], a: Anotacion) -> int:
     """Cuánto coincide el contexto de la anotación con el de la coincidencia: 0, 1 o 2 lados."""
     antes = _plano(texto[max(0, m.start() - 200) : m.start()])
     despues = _plano(texto[m.end() : m.end() + 200])
@@ -104,7 +106,7 @@ def _puntos(texto: str, m: re.Match, a: dict) -> int:
     return p
 
 
-def _elegir(texto: str, inicio: int, fin: int, a: dict, con_contexto: bool) -> tuple[re.Match | None, str]:
+def _elegir(texto: str, inicio: int, fin: int, a: Anotacion, con_contexto: bool) -> tuple[re.Match[str] | None, str]:
     """La coincidencia de la cita entre `inicio` y `fin`: la única, o la única con el mejor contexto. Con
     `con_contexto` (fuera del bloque), sólo cuentan las que coinciden al menos en un lado del contexto."""
     ms = list(_patron(a.get("cita") or "").finditer(texto, inicio, fin))
@@ -121,7 +123,7 @@ def _elegir(texto: str, inicio: int, fin: int, a: dict, con_contexto: bool) -> t
     return None, "ambigua"
 
 
-def _ya_aplicada(texto: str, inicio: int, fin: int, a: dict, prop: str, m: re.Match | None) -> bool:
+def _ya_aplicada(texto: str, inicio: int, fin: int, a: Anotacion, prop: str, m: re.Match[str] | None) -> bool:
     """¿La propuesta ya está donde estaba la cita? Con la cita encontrada, si una aparición de la propuesta la contiene
     (aplicarla otra vez la duplicaría). Sin ella, si la propuesta aparece con el contexto de la anotación; si la
     anotación no tiene contexto, si aparece en su bloque."""
@@ -133,10 +135,10 @@ def _ya_aplicada(texto: str, inicio: int, fin: int, a: dict, prop: str, m: re.Ma
     return any(inicio <= p.start() and p.end() <= fin for p in apariciones)
 
 
-def _forma(texto: str):
+def _forma(texto: str) -> str | list[tuple[str, list[tuple[str, Any]]]]:
     """La forma del texto como lo leería `construir`: secciones y bloques, sin el texto. Una propuesta no la cambia."""
 
-    def esqueleto(x):
+    def esqueleto(x: Any) -> Any:
         if isinstance(x, list):
             return [esqueleto(y) for y in x]
         if isinstance(x, dict):
@@ -176,7 +178,7 @@ def _buscar_archivo(raiz: Path, nombre: str) -> Path | None:
     return candidatos[0] if len(candidatos) == 1 else None
 
 
-def aplicables(anots: list[dict]) -> list[dict]:
+def aplicables(anots: list[Anotacion]) -> list[Anotacion]:
     """Los subrayados con una propuesta que espera a quien edita (sin respuesta, o reabiertos)."""
     return [a for a in anots if propuesta(a) and motivo(a) in ("nueva", "reabierta")]
 
@@ -191,7 +193,7 @@ def escribir(ruta: Path, texto: str) -> None:
         f.write(texto)
 
 
-def aplicar(anots: list[dict], raiz: Path) -> tuple[list[Resultado], dict[Path, Archivo]]:
+def aplicar(anots: list[Anotacion], raiz: Path) -> tuple[list[Resultado], dict[Path, Archivo]]:
     """Aplica en memoria las propuestas sobre las fuentes bajo `raiz`. Devuelve el resultado de cada propuesta y los
     archivos tocados (con el texto original y el nuevo); escribirlos es cosa de quien llama (`escribir`)."""
     raiz = Path(raiz)
@@ -199,7 +201,7 @@ def aplicar(anots: list[dict], raiz: Path) -> tuple[list[Resultado], dict[Path, 
         raise FileNotFoundError(f"no existe el directorio de fuentes {raiz}")
     resultados: list[Resultado] = []
     archivos: dict[Path, Archivo] = {}
-    pendientes: list[tuple[Archivo, int, dict, Resultado]] = []
+    pendientes: list[tuple[Archivo, int, Anotacion, Resultado]] = []
     for a in aplicables(anots):
         nombre, _, linea = (a.get("src") or "").rpartition(":")
         r = Resultado(id=a["id"], estado="", archivo=nombre, cita=a.get("cita") or "", propuesta=propuesta(a))
@@ -221,7 +223,7 @@ def aplicar(anots: list[dict], raiz: Path) -> tuple[list[Resultado], dict[Path, 
     return resultados, {k: v for k, v in archivos.items() if v.texto != v.original}
 
 
-def _aplicar_una(arch: Archivo, linea: int, a: dict, r: Resultado) -> None:
+def _aplicar_una(arch: Archivo, linea: int, a: Anotacion, r: Resultado) -> None:
     texto = arch.texto
     inicio, fin = _bloque(texto, linea)
     m, fallo = _elegir(texto, inicio, fin, a, False) if fin > inicio else (None, "no encontrada")
@@ -259,7 +261,7 @@ def _aplicar_una(arch: Archivo, linea: int, a: dict, r: Resultado) -> None:
 def diferencias(archivos: dict[Path, Archivo], raiz: Path) -> str:
     """Las diferencias unificadas de lo que se cambiaría, archivo por archivo, con los finales de línea tal cual."""
     base = Path(raiz).resolve()
-    out = []
+    out: list[str] = []
     for ruta, arch in sorted(archivos.items()):
         nombre = str(ruta.relative_to(base)) if ruta.is_relative_to(base) else str(ruta)
         out += difflib.unified_diff(
@@ -271,7 +273,7 @@ def diferencias(archivos: dict[Path, Archivo], raiz: Path) -> str:
     return "".join(out)
 
 
-def respuestas(resultados: list[Resultado]) -> list[dict]:
+def respuestas(resultados: list[Resultado]) -> list[Json]:
     """Las respuestas de lo aplicado, listas para `responder`."""
     return [
         {"id": r.id, "respuesta": f"Aplicada la propuesta: «{r.propuesta}».", "cierre": "atendida"}

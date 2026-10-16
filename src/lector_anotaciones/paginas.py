@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 from .markdown import SECCIONES_SIN_PAGINA
+from .tipos import Seccion
 from .util import norm
 
 LARGO_CLAVE = 40
@@ -66,7 +67,7 @@ def calcular_desfase(textos: list[str], marca: str | None) -> int | None:
 
 
 def asignar_paginas(
-    secciones: list[dict],
+    secciones: list[Seccion],
     textos: list[str],
     desfase: int = 0,
     ventana: int = 5,
@@ -97,7 +98,7 @@ def asignar_paginas(
         sec["pagina"] = next((b["pagina"] for b in sec["bloques"] if b.get("pagina")), None)
 
 
-def sin_paginas(secciones: list[dict]) -> None:
+def sin_paginas(secciones: list[Seccion]) -> None:
     """Deja todos los bloques y secciones sin página (cuando no hay PDF)."""
     for sec in secciones:
         for b in sec["bloques"]:
