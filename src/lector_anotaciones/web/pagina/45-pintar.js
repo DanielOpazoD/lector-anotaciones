@@ -8,9 +8,10 @@ function pintarPid(pid) {
   var n = $('[data-pid="' + pid + '"]');
   if (!n) return;
   // Los marcadores del margen (página, «cambió») viven dentro del bloque pero no son texto del libro:
-  // se apartan, se repone el HTML original y se vuelven a poner, con sus escuchas intactas.
+  // se apartan, se repone el HTML original y se vuelven a poner, con sus escuchas intactas. La marca de párrafo con la
+  // cuenta de anotaciones se rehace cada vez.
   var extras = Array.prototype.slice.call(n.children).filter(function (c) {
-    return c.classList.contains('pg') || c.classList.contains('marca-cambio');
+    return esMarcador(c) && !c.classList.contains('marca-anot');
   });
   n.innerHTML = ORIG[pid];
   extras
@@ -43,6 +44,11 @@ function pintarPid(pid) {
         fin: UBIC[a.id].fin,
       };
     });
+  if (lista.length) {
+    var marca = marcaParrafo(lista);
+    extras.push(marca); // `pgn` mira `extras`: el texto de la marca (ninguno) tampoco se pinta
+    n.insertBefore(marca, extras.length > 1 ? extras[extras.length - 2].nextSibling : n.firstChild);
+  }
   var capas = capasActivas(pid);
   if (!lista.length && !capas.length) return;
   var lim = {};
@@ -139,6 +145,33 @@ function pintarPid(pid) {
     }
     if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
   });
+}
+// Lo que vive al principio de un bloque sin ser texto del libro: el número de página, «cambió» y la marca de párrafo.
+function esMarcador(c) {
+  return !!c.classList && /(^|\s)(pg|marca-cambio|marca-anot)(\s|$)/.test(c.className);
+}
+// La marca de párrafo (en pantalla estrecha, donde no hay notas al margen): cuántas anotaciones tiene el párrafo, con
+// el color de la primera y un punto si alguna tiene una respuesta por revisar; tocarla abre la primera. La cuenta va
+// en un atributo que el estilo muestra: no es texto del bloque, así que no cambia los desplazamientos de las citas,
+// lo que se copia ni lo que se lee en voz alta.
+function marcaParrafo(lista) {
+  var orden = lista.slice().sort(function (x, y) {
+      return x.inicio - y.inicio;
+    }),
+    n = orden.length,
+    pend = orden.some(function (x) {
+      return porRevisar(anots[x.id]);
+    });
+  var b = el('button', {
+    'class': 'marca-anot c-' + (orden[0].color || 'revisar') + (pend ? ' por-revisar' : ''),
+    type: 'button',
+    'data-n': String(n),
+    'aria-label':
+      n + (n === 1 ? ' anotación' : ' anotaciones') + ' en este párrafo' + (pend ? ', con respuesta por revisar' : ''),
+    title: n + (n === 1 ? ' anotación' : ' anotaciones') + (pend ? ' (respuesta por revisar)' : ''),
+  });
+  abrirConMarca(b, orden[0].id);
+  return b;
 }
 // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo
 // abrían la última pintada.)

@@ -807,7 +807,9 @@ function fichaAcciones(ctx) {
       });
       // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
       b.addEventListener('click', function () {
-        guardar(Object.assign({}, actual(), { color: c }));
+        var ac = actual();
+        guardar(Object.assign({}, ac, { color: c }));
+        if (ac.color !== c) ofrecerDeshacerCambio(a.id, { color: ac.color }, 'Color: ' + c + '.');
       });
       cols.appendChild(b);
     });
@@ -845,8 +847,10 @@ function fichaAcciones(ctx) {
       'data-accion': 'estado',
     });
     res.addEventListener('click', function () {
-      var ac = actual();
-      guardar(Object.assign({}, ac, { estado: ac.estado === 'resuelta' ? 'abierta' : 'resuelta' }));
+      var ac = actual(),
+        nuevo = ac.estado === 'resuelta' ? 'abierta' : 'resuelta';
+      guardar(Object.assign({}, ac, { estado: nuevo }));
+      ofrecerDeshacerCambio(a.id, { estado: ac.estado }, nuevo === 'resuelta' ? 'Marcada resuelta.' : 'Reabierta.');
     });
     acc.appendChild(res);
   }
@@ -982,6 +986,8 @@ function revisar(id, accion) {
   if (!a || SOLO_LECTURA) return;
   var enBandeja = V.tab === 'revisar';
   if (enBandeja) VISTA.revisada(id);
+  // lo de antes, para deshacer: sin revisión previa, `revisado` vacío (la base no borra campos; vacío no cuenta)
+  var antes = { estado: a.estado, revisado: a.revisado || '' };
   if (accion === 'atendida') {
     // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
     // (en «Sección» o «Todas») se queda en la ficha
@@ -1000,6 +1006,7 @@ function revisar(id, accion) {
         return ordenKey(x) > ordenKey(a);
       })[0] || pend[0];
     guardar(Object.assign({}, a, { estado: 'resuelta', revisado: N.marcaRevision(a, ahora()) }));
+    ofrecerDeshacerCambio(id, antes, 'Atendida.');
     if (enBandeja && sig) {
       irARevisar(sig);
       return;
@@ -1013,6 +1020,7 @@ function revisar(id, accion) {
     return;
   }
   guardar(Object.assign({}, a, { estado: 'abierta', revisado: N.marcaRevision(a, ahora()) }));
+  ofrecerDeshacerCambio(id, antes, 'Reabierta.');
   var f = $('.ficha[data-id="' + id + '"]'),
     ta = f && ($('textarea.replica', f) || $('textarea.nota', f));
   if (ta) {

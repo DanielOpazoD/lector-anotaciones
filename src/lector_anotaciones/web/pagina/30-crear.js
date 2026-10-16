@@ -125,7 +125,7 @@ function crearSubrayado(color, conNota, proponer) {
     if (i === iB && !ex.bFuera) fin = offsetEn(p, range.endContainer, range.endOffset);
     var lp = 0,
       c = p.firstChild;
-    while (c && c.classList && (c.classList.contains('pg') || c.classList.contains('marca-cambio'))) {
+    while (c && esMarcador(c)) {
       lp += c.textContent.length;
       c = c.nextSibling;
     }

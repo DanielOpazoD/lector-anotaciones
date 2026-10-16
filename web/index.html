@@ -213,6 +213,8 @@
   .ficha.sin-guardar { border-style: dashed; }
   .ficha .aviso-guardar { font-family: var(--sans); font-size: 11px; color: var(--acento); margin: 2px 0 4px; }
   .bloque .pg + .marca-cambio { top: 1.7em; }
+  /* la marca de párrafo sólo se ve en pantalla estrecha (en la ancha están las notas al margen); la cuenta es un atributo */
+  .marca-anot { display: none; }
   .diff { font-family: var(--serif); background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin: -4px 0 14px; font-size: 15px; line-height: 1.5; }
   .diff del { background: var(--hl-cortar); text-decoration: line-through; } .diff ins { background: var(--hl-conservar); text-decoration: none; }
   .diff .etq { font-family: var(--sans); font-size: 11px; color: var(--fg-2); margin-bottom: 4px; }
@@ -391,6 +393,12 @@
     .pg { position: static; display: inline-block; width: auto; margin-right: 6px; }
     /* sin margen izquierdo, el marcador «cambió» entra en el flujo como el número de página, con área táctil de 32 px */
     .marca-cambio { position: static; display: inline-block; width: auto; min-width: 32px; min-height: 32px; padding: 6px 8px; margin-right: 6px; vertical-align: middle; font-size: 12px; }
+    .marca-anot { display: inline-flex; float: right; position: relative; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; margin: 0 0 4px 8px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--hl-revisar-ink); background: var(--hl-revisar); color: var(--fg); font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .marca-anot::before { content: attr(data-n); }
+    .marca-anot.c-cortar { background: var(--hl-cortar); border-color: var(--hl-cortar-ink); }
+    .marca-anot.c-duda { background: var(--hl-duda); border-color: var(--hl-duda-ink); }
+    .marca-anot.c-conservar { background: var(--hl-conservar); border-color: var(--hl-conservar-ink); }
+    .marca-anot.por-revisar::after { content: ""; position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--acento); border: 1px solid var(--bg); }
     .nav-pie { padding-left: 0; }
   }
 
@@ -3613,7 +3621,7 @@ function crearSubrayado(color, conNota, proponer) {
     if (i === iB && !ex.bFuera) fin = offsetEn(p, range.endContainer, range.endOffset);
     var lp = 0,
       c = p.firstChild;
-    while (c && c.classList && (c.classList.contains('pg') || c.classList.contains('marca-cambio'))) {
+    while (c && esMarcador(c)) {
       lp += c.textContent.length;
       c = c.nextSibling;
     }
@@ -3729,9 +3737,10 @@ function pintarPid(pid) {
   var n = $('[data-pid="' + pid + '"]');
   if (!n) return;
   // Los marcadores del margen (página, «cambió») viven dentro del bloque pero no son texto del libro:
-  // se apartan, se repone el HTML original y se vuelven a poner, con sus escuchas intactas.
+  // se apartan, se repone el HTML original y se vuelven a poner, con sus escuchas intactas. La marca de párrafo con la
+  // cuenta de anotaciones se rehace cada vez.
   var extras = Array.prototype.slice.call(n.children).filter(function (c) {
-    return c.classList.contains('pg') || c.classList.contains('marca-cambio');
+    return esMarcador(c) && !c.classList.contains('marca-anot');
   });
   n.innerHTML = ORIG[pid];
   extras
@@ -3764,6 +3773,11 @@ function pintarPid(pid) {
         fin: UBIC[a.id].fin,
       };
     });
+  if (lista.length) {
+    var marca = marcaParrafo(lista);
+    extras.push(marca); // `pgn` mira `extras`: el texto de la marca (ninguno) tampoco se pinta
+    n.insertBefore(marca, extras.length > 1 ? extras[extras.length - 2].nextSibling : n.firstChild);
+  }
   var capas = capasActivas(pid);
   if (!lista.length && !capas.length) return;
   var lim = {};
@@ -3860,6 +3874,33 @@ function pintarPid(pid) {
     }
     if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
   });
+}
+// Lo que vive al principio de un bloque sin ser texto del libro: el número de página, «cambió» y la marca de párrafo.
+function esMarcador(c) {
+  return !!c.classList && /(^|\s)(pg|marca-cambio|marca-anot)(\s|$)/.test(c.className);
+}
+// La marca de párrafo (en pantalla estrecha, donde no hay notas al margen): cuántas anotaciones tiene el párrafo, con
+// el color de la primera y un punto si alguna tiene una respuesta por revisar; tocarla abre la primera. La cuenta va
+// en un atributo que el estilo muestra: no es texto del bloque, así que no cambia los desplazamientos de las citas,
+// lo que se copia ni lo que se lee en voz alta.
+function marcaParrafo(lista) {
+  var orden = lista.slice().sort(function (x, y) {
+      return x.inicio - y.inicio;
+    }),
+    n = orden.length,
+    pend = orden.some(function (x) {
+      return porRevisar(anots[x.id]);
+    });
+  var b = el('button', {
+    'class': 'marca-anot c-' + (orden[0].color || 'revisar') + (pend ? ' por-revisar' : ''),
+    type: 'button',
+    'data-n': String(n),
+    'aria-label':
+      n + (n === 1 ? ' anotación' : ' anotaciones') + ' en este párrafo' + (pend ? ', con respuesta por revisar' : ''),
+    title: n + (n === 1 ? ' anotación' : ' anotaciones') + (pend ? ' (respuesta por revisar)' : ''),
+  });
+  abrirConMarca(b, orden[0].id);
+  return b;
 }
 // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo
 // abrían la última pintada.)
@@ -4722,7 +4763,9 @@ function fichaAcciones(ctx) {
       });
       // una copia con el cambio: `guardar` toma la versión previa del objeto todavía intacto
       b.addEventListener('click', function () {
-        guardar(Object.assign({}, actual(), { color: c }));
+        var ac = actual();
+        guardar(Object.assign({}, ac, { color: c }));
+        if (ac.color !== c) ofrecerDeshacerCambio(a.id, { color: ac.color }, 'Color: ' + c + '.');
       });
       cols.appendChild(b);
     });
@@ -4760,8 +4803,10 @@ function fichaAcciones(ctx) {
       'data-accion': 'estado',
     });
     res.addEventListener('click', function () {
-      var ac = actual();
-      guardar(Object.assign({}, ac, { estado: ac.estado === 'resuelta' ? 'abierta' : 'resuelta' }));
+      var ac = actual(),
+        nuevo = ac.estado === 'resuelta' ? 'abierta' : 'resuelta';
+      guardar(Object.assign({}, ac, { estado: nuevo }));
+      ofrecerDeshacerCambio(a.id, { estado: ac.estado }, nuevo === 'resuelta' ? 'Marcada resuelta.' : 'Reabierta.');
     });
     acc.appendChild(res);
   }
@@ -4897,6 +4942,8 @@ function revisar(id, accion) {
   if (!a || SOLO_LECTURA) return;
   var enBandeja = V.tab === 'revisar';
   if (enBandeja) VISTA.revisada(id);
+  // lo de antes, para deshacer: sin revisión previa, `revisado` vacío (la base no borra campos; vacío no cuenta)
+  var antes = { estado: a.estado, revisado: a.revisado || '' };
   if (accion === 'atendida') {
     // en la bandeja se pasa a la siguiente por revisar, en el orden del libro y en cualquier sección; fuera de ella
     // (en «Sección» o «Todas») se queda en la ficha
@@ -4915,6 +4962,7 @@ function revisar(id, accion) {
         return ordenKey(x) > ordenKey(a);
       })[0] || pend[0];
     guardar(Object.assign({}, a, { estado: 'resuelta', revisado: N.marcaRevision(a, ahora()) }));
+    ofrecerDeshacerCambio(id, antes, 'Atendida.');
     if (enBandeja && sig) {
       irARevisar(sig);
       return;
@@ -4928,6 +4976,7 @@ function revisar(id, accion) {
     return;
   }
   guardar(Object.assign({}, a, { estado: 'abierta', revisado: N.marcaRevision(a, ahora()) }));
+  ofrecerDeshacerCambio(id, antes, 'Reabierta.');
   var f = $('.ficha[data-id="' + id + '"]'),
     ta = f && ($('textarea.replica', f) || $('textarea.nota', f));
   if (ta) {
@@ -5413,7 +5462,7 @@ function copiarSeleccion(boton) {
     // Los marcadores del margen (número de página, «cambió») son elementos, no texto del libro: se quitan
     // de una copia de la selección, para no tocar ninguna palabra del manuscrito.
     var frag = r2.cloneContents();
-    Array.prototype.slice.call(frag.querySelectorAll('.pg, .marca-cambio')).forEach(function (x) {
+    Array.prototype.slice.call(frag.querySelectorAll('.pg, .marca-cambio, .marca-anot')).forEach(function (x) {
       x.remove();
     });
     // Las listas y tablas se construyen sin texto entre ítems ni celdas; al copiar se reponen los límites:
@@ -6624,37 +6673,22 @@ function detenerLectura() {
   lectura = null;
 }
 // ------------------------------------------------------------ deshacer y respaldo
-function ofrecerDeshacer(a, campos) {
-  // El enlace vive en su propia zona, no en el texto de estado: el eco de la base que confirma el
-  // borrado reescribe ese texto y se llevaría el enlace antes de los ocho segundos. Deshacer devuelve
-  // también la lista de campos que el lector había cambiado y la base todavía no tiene.
-  ultimoBorrado = a;
-  estado('Anotación borrada', true);
+// La zona de «Deshacer», abajo y durante ocho segundos, para un borrado o para un cambio de color o de estado. Vive en
+// su propia zona, no en el texto de estado: el eco de la base que confirma la escritura reescribe ese texto y se
+// llevaría el enlace antes de tiempo. La última acción manda: un aviso nuevo reemplaza al anterior. Al pulsarlo, la
+// zona se vacía y luego se deshace (`alDeshacer` decide adónde va el foco).
+function mostrarDeshacer(texto, boton, titulo, alDeshacer) {
   var z = $('#deshacer-zona');
   z.innerHTML = '';
-  z.appendChild(el('span', { text: 'Anotación borrada.' }));
-  var u = el('button', {
-    id: 'deshacer',
-    'class': 'enlace',
-    type: 'button',
-    text: 'Deshacer borrado',
-    title: 'Recuperar la anotación borrada',
-  });
+  z.appendChild(el('span', { text: texto }));
+  var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: boton, title: titulo });
   u.addEventListener('click', function () {
-    if (ultimoBorrado) {
-      if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
-      guardar(ultimoBorrado);
-      ultimoBorrado = null;
-      estado('Anotación recuperada');
-    }
+    if (!z.contains(u)) return;
     z.innerHTML = '';
-    enfocar(a.id); // el foco pasa a la anotación recuperada
-    if (!z.contains(document.activeElement) && document.activeElement === document.body)
-      $('#lectura').focus({ preventScroll: true });
+    alDeshacer();
   });
   z.appendChild(u);
   setTimeout(function () {
-    if (ultimoBorrado === a) ultimoBorrado = null;
     if (!z.contains(u)) return;
     var tenia = z.contains(document.activeElement);
     z.innerHTML = '';
@@ -6663,6 +6697,40 @@ function ofrecerDeshacer(a, campos) {
       (enfocable(t) ? t : $('#lectura')).focus({ preventScroll: true });
     }
   }, 8000);
+}
+// El foco, tras deshacer, a la anotación; si no se pudo (el panel no se ve), a la lectura.
+function enfocarTrasDeshacer(id) {
+  enfocar(id);
+  if (document.activeElement === document.body) $('#lectura').focus({ preventScroll: true });
+}
+function ofrecerDeshacer(a, campos) {
+  // Deshacer devuelve también la lista de campos que el lector había cambiado y la base todavía no tiene.
+  ultimoBorrado = a;
+  estado('Anotación borrada', true);
+  mostrarDeshacer('Anotación borrada.', 'Deshacer borrado', 'Recuperar la anotación borrada', function () {
+    if (ultimoBorrado) {
+      if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
+      guardar(ultimoBorrado);
+      ultimoBorrado = null;
+      estado('Anotación recuperada');
+    }
+    enfocarTrasDeshacer(a.id); // el foco pasa a la anotación recuperada
+  });
+  setTimeout(function () {
+    if (ultimoBorrado === a) ultimoBorrado = null;
+  }, 8000);
+}
+// Un cambio de color o de estado (también «Atendida» y «Reabrir» al revisar) se puede deshacer: vuelve a los valores
+// de antes (`antes`: campo → valor previo). Un borrado que se estaba ofreciendo deshacer deja de ofrecerse.
+function ofrecerDeshacerCambio(id, antes, texto) {
+  ultimoBorrado = null;
+  mostrarDeshacer(texto, 'Deshacer', 'Volver a como estaba', function () {
+    var a = anots[id];
+    if (!a || SOLO_LECTURA) return;
+    guardar(Object.assign({}, a, antes));
+    estado('Cambio deshecho');
+    enfocarTrasDeshacer(id);
+  });
 }
 function respaldar() {
   // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura

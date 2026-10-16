@@ -203,6 +203,8 @@
   .ficha.sin-guardar { border-style: dashed; }
   .ficha .aviso-guardar { font-family: var(--sans); font-size: 11px; color: var(--acento); margin: 2px 0 4px; }
   .bloque .pg + .marca-cambio { top: 1.7em; }
+  /* la marca de párrafo sólo se ve en pantalla estrecha (en la ancha están las notas al margen); la cuenta es un atributo */
+  .marca-anot { display: none; }
   .diff { font-family: var(--serif); background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin: -4px 0 14px; font-size: 15px; line-height: 1.5; }
   .diff del { background: var(--hl-cortar); text-decoration: line-through; } .diff ins { background: var(--hl-conservar); text-decoration: none; }
   .diff .etq { font-family: var(--sans); font-size: 11px; color: var(--fg-2); margin-bottom: 4px; }
@@ -381,6 +383,12 @@
     .pg { position: static; display: inline-block; width: auto; margin-right: 6px; }
     /* sin margen izquierdo, el marcador «cambió» entra en el flujo como el número de página, con área táctil de 32 px */
     .marca-cambio { position: static; display: inline-block; width: auto; min-width: 32px; min-height: 32px; padding: 6px 8px; margin-right: 6px; vertical-align: middle; font-size: 12px; }
+    .marca-anot { display: inline-flex; float: right; position: relative; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; margin: 0 0 4px 8px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--hl-revisar-ink); background: var(--hl-revisar); color: var(--fg); font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .marca-anot::before { content: attr(data-n); }
+    .marca-anot.c-cortar { background: var(--hl-cortar); border-color: var(--hl-cortar-ink); }
+    .marca-anot.c-duda { background: var(--hl-duda); border-color: var(--hl-duda-ink); }
+    .marca-anot.c-conservar { background: var(--hl-conservar); border-color: var(--hl-conservar-ink); }
+    .marca-anot.por-revisar::after { content: ""; position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--acento); border: 1px solid var(--bg); }
     .nav-pie { padding-left: 0; }
   }
 

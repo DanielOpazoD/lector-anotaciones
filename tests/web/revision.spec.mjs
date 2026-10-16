@@ -1260,3 +1260,68 @@ test('Fichas reutilizadas: el autor que se pone al subir aparece aunque se toque
   check(chip, 'con dos lectores, la ficha subida al conectar lleva el nombre de quien la hizo');
   await ctx.close();
 });
+
+test('Deshacer un cambio de color, de estado o una revisión', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(() => {
+    const t = '2026-10-02T00:00:00.000Z';
+    window.__semilla = {
+      gB: {
+        id: 'gB',
+        tipo: 'general',
+        nota: 'Nota gB',
+        estado: 'abierta',
+        creado: '2026-10-01T00:00:00.000Z',
+        autor: 'u_me',
+        respuesta: 'Hecho.',
+        cierre: 'atendida',
+        respondido: t,
+      },
+    };
+  });
+  await ctx.addInitScript(conBase);
+  const p = await ctx.newPage();
+  await p.goto(base + '#cap-01');
+  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await seleccionarTexto(p, 'Un hecho es lo que se observó');
+  await p.keyboard.press('1');
+  await p.keyboard.press('Escape');
+  const id = await p.evaluate(() => Object.keys(window.__docs).find((k) => k !== 'gB'));
+  const doc = () => p.evaluate((id) => window.__docs[id], id);
+  const zona = () => p.evaluate(() => document.querySelector('#deshacer-zona').textContent);
+  // el color
+  await enFicha(p, `.ficha[data-id="${id}"]`, 'button[data-c="cortar"]');
+  check((await zona()) === 'Color: cortar.Deshacer', `cambiar el color ofrece deshacerlo (${await zona()})`);
+  await p.click('#deshacer');
+  await esperar(p, (id) => window.__docs[id].color === 'revisar', id, 2000);
+  check((await doc()).color === 'revisar', 'deshacer vuelve al color de antes, también en la base');
+  check((await zona()) === '', 'y el aviso se va');
+  // el estado
+  await enFicha(p, `.ficha[data-id="${id}"]`, 'button[data-accion="estado"]');
+  check((await zona()) === 'Marcada resuelta.Deshacer', `marcarla resuelta ofrece deshacerlo (${await zona()})`);
+  await p.click('#deshacer');
+  await esperar(p, (id) => window.__docs[id].estado === 'abierta', id, 2000);
+  check((await doc()).estado === 'abierta', 'deshacer la vuelve a abrir');
+  // «Atendida» en la bandeja: deshacer la devuelve a «por revisar»
+  await p.click('.tab[data-tab="revisar"]');
+  await p.click('.ficha[data-id="gB"] .cab > span');
+  await p.keyboard.press('a');
+  check((await zona()) === 'Atendida.Deshacer', `«Atendida» ofrece deshacerse (${await zona()})`);
+  await p.click('#deshacer');
+  const vuelta = await esperar(
+    p,
+    () => !!document.querySelector('.ficha[data-id="gB"].por-revisar') && window.__docs.gB.estado === 'abierta',
+    null,
+    2000
+  );
+  check(vuelta, 'deshacer «Atendida» la deja otra vez por revisar, abierta');
+  check((await p.evaluate(() => window.__docs.gB.revisado)) === '', 'sin la revisión que se deshizo');
+  // un cambio después de un borrado: el aviso nuevo reemplaza al del borrado
+  await p.click('.tab[data-tab="todas"]');
+  await enFicha(p, `.ficha[data-id="${id}"]`, 'button[data-accion="borrar"]');
+  await p.click(`.ficha[data-id="${id}"] .confirmar button:has-text("Sí")`);
+  check((await zona()) === 'Anotación borrada.Deshacer borrado', 'el borrado ofrece deshacerse');
+  await enFicha(p, '.ficha[data-id="gB"]', 'button[data-accion="atendida"]');
+  check((await zona()) === 'Atendida.Deshacer', 'un cambio posterior reemplaza el aviso del borrado');
+  await ctx.close();
+});

@@ -97,7 +97,7 @@ function copiarSeleccion(boton) {
     // Los marcadores del margen (número de página, «cambió») son elementos, no texto del libro: se quitan
     // de una copia de la selección, para no tocar ninguna palabra del manuscrito.
     var frag = r2.cloneContents();
-    Array.prototype.slice.call(frag.querySelectorAll('.pg, .marca-cambio')).forEach(function (x) {
+    Array.prototype.slice.call(frag.querySelectorAll('.pg, .marca-cambio, .marca-anot')).forEach(function (x) {
       x.remove();
     });
     // Las listas y tablas se construyen sin texto entre ítems ni celdas; al copiar se reponen los límites:

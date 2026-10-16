@@ -45,5 +45,5 @@ encontraron once problemas; cada uno se comprobó releyendo el código y con una
 | E4 | Fichas por id: el panel reutiliza las fichas que no cambiaron | hecho: redibujar 300 fichas sin cambios, de 64–115 ms a 2–4 ms; ficha() en cinco partes |
 | E5 | Tipos: JSDoc y `tsc --checkJs` en la CI | hecho: 54 avisos resueltos; la API del núcleo, la anotación, la sincronía y la vista tipadas |
 | E7 | Modelo: esquema versionado, ancla estable por bloque, hilo de la conversación | hecho: esquemas JSON con pruebas, ancla por huella, hilo en ficha, copia y exportación |
-| E8 | `pendientes`/`responder`/`aplicar`, sugerencias, marcas en el teléfono, deshacer cambios | pendiente |
+| E8 | `pendientes`/`responder`/`aplicar`, sugerencias, marcas en el teléfono, deshacer cambios | hecho: cada función con su prueba (pytest, paridad Python/JS, navegador) y comprobada rompiendo el código |
 | E9 | Revisión independiente, documentación y publicación de la 0.5.0 | pendiente |

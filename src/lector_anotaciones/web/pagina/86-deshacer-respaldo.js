@@ -1,35 +1,20 @@
 // ------------------------------------------------------------ deshacer y respaldo
-function ofrecerDeshacer(a, campos) {
-  // El enlace vive en su propia zona, no en el texto de estado: el eco de la base que confirma el
-  // borrado reescribe ese texto y se llevaría el enlace antes de los ocho segundos. Deshacer devuelve
-  // también la lista de campos que el lector había cambiado y la base todavía no tiene.
-  ultimoBorrado = a;
-  estado('Anotación borrada', true);
+// La zona de «Deshacer», abajo y durante ocho segundos, para un borrado o para un cambio de color o de estado. Vive en
+// su propia zona, no en el texto de estado: el eco de la base que confirma la escritura reescribe ese texto y se
+// llevaría el enlace antes de tiempo. La última acción manda: un aviso nuevo reemplaza al anterior. Al pulsarlo, la
+// zona se vacía y luego se deshace (`alDeshacer` decide adónde va el foco).
+function mostrarDeshacer(texto, boton, titulo, alDeshacer) {
   var z = $('#deshacer-zona');
   z.innerHTML = '';
-  z.appendChild(el('span', { text: 'Anotación borrada.' }));
-  var u = el('button', {
-    id: 'deshacer',
-    'class': 'enlace',
-    type: 'button',
-    text: 'Deshacer borrado',
-    title: 'Recuperar la anotación borrada',
-  });
+  z.appendChild(el('span', { text: texto }));
+  var u = el('button', { id: 'deshacer', 'class': 'enlace', type: 'button', text: boton, title: titulo });
   u.addEventListener('click', function () {
-    if (ultimoBorrado) {
-      if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
-      guardar(ultimoBorrado);
-      ultimoBorrado = null;
-      estado('Anotación recuperada');
-    }
+    if (!z.contains(u)) return;
     z.innerHTML = '';
-    enfocar(a.id); // el foco pasa a la anotación recuperada
-    if (!z.contains(document.activeElement) && document.activeElement === document.body)
-      $('#lectura').focus({ preventScroll: true });
+    alDeshacer();
   });
   z.appendChild(u);
   setTimeout(function () {
-    if (ultimoBorrado === a) ultimoBorrado = null;
     if (!z.contains(u)) return;
     var tenia = z.contains(document.activeElement);
     z.innerHTML = '';
@@ -38,6 +23,40 @@ function ofrecerDeshacer(a, campos) {
       (enfocable(t) ? t : $('#lectura')).focus({ preventScroll: true });
     }
   }, 8000);
+}
+// El foco, tras deshacer, a la anotación; si no se pudo (el panel no se ve), a la lectura.
+function enfocarTrasDeshacer(id) {
+  enfocar(id);
+  if (document.activeElement === document.body) $('#lectura').focus({ preventScroll: true });
+}
+function ofrecerDeshacer(a, campos) {
+  // Deshacer devuelve también la lista de campos que el lector había cambiado y la base todavía no tiene.
+  ultimoBorrado = a;
+  estado('Anotación borrada', true);
+  mostrarDeshacer('Anotación borrada.', 'Deshacer borrado', 'Recuperar la anotación borrada', function () {
+    if (ultimoBorrado) {
+      if (ultimoBorrado === a && campos) SINC.campos[a.id] = Object.assign({}, campos);
+      guardar(ultimoBorrado);
+      ultimoBorrado = null;
+      estado('Anotación recuperada');
+    }
+    enfocarTrasDeshacer(a.id); // el foco pasa a la anotación recuperada
+  });
+  setTimeout(function () {
+    if (ultimoBorrado === a) ultimoBorrado = null;
+  }, 8000);
+}
+// Un cambio de color o de estado (también «Atendida» y «Reabrir» al revisar) se puede deshacer: vuelve a los valores
+// de antes (`antes`: campo → valor previo). Un borrado que se estaba ofreciendo deshacer deja de ofrecerse.
+function ofrecerDeshacerCambio(id, antes, texto) {
+  ultimoBorrado = null;
+  mostrarDeshacer(texto, 'Deshacer', 'Volver a como estaba', function () {
+    var a = anots[id];
+    if (!a || SOLO_LECTURA) return;
+    guardar(Object.assign({}, a, antes));
+    estado('Cambio deshecho');
+    enfocarTrasDeshacer(id);
+  });
 }
 function respaldar() {
   // Una copia diaria de todas las anotaciones en la colección «respaldos», escrita después de una escritura

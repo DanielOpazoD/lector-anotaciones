@@ -390,3 +390,97 @@ test('Teléfono en concentración: sin la barra de índice y anotaciones', async
   );
   await ctx.close();
 });
+
+test('Marcas de párrafo en el teléfono: cuántas anotaciones, de qué color, y tocarla abre la primera', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
+  await ctx.addInitScript(sinBase);
+  const p = await ctx.newPage();
+  await p.goto(base + '#cap-01');
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  const sel = 'article.seccion:not([hidden]) p.bloque:has(mark.hl)';
+  const textoAntes = await p.evaluate(
+    () => document.querySelector('article.seccion:not([hidden]) p.bloque[data-pid]').textContent
+  );
+  for (const [texto, tecla] of [
+    ['escrita con prisa', '3'],
+    ['Un hecho es lo que se observó', '1'],
+  ]) {
+    await seleccionarTexto(p, texto);
+    await p.keyboard.press(tecla);
+    await p.keyboard.press('Escape');
+  }
+  const marca = () =>
+    p.evaluate((s) => {
+      const par = document.querySelector(s);
+      const m = par && par.querySelector('.marca-anot');
+      return m
+        ? {
+            n: m.getAttribute('data-n'),
+            etiqueta: m.getAttribute('aria-label'),
+            color: m.className,
+            vista: getComputedStyle(m).display,
+            texto: par.textContent,
+          }
+        : null;
+    }, sel);
+  const m1 = await marca();
+  check(
+    m1 &&
+      m1.n === '2' &&
+      m1.etiqueta === '2 anotaciones en este párrafo' &&
+      /c-revisar/.test(m1.color) &&
+      m1.vista !== 'none',
+    `el párrafo lleva su marca con la cuenta y el color de la primera anotación (${JSON.stringify(m1)})`
+  );
+  check(m1 && m1.texto === textoAntes, 'la marca no añade texto al párrafo');
+  // con la marca puesta, un subrayado nuevo guarda la cita exacta y sus desplazamientos
+  await seleccionarTexto(p, 'La diferencia parece obvia');
+  await p.keyboard.press('2');
+  await p.keyboard.press('Escape');
+  const nueva = await p.evaluate(
+    ({ k, s }) => {
+      const a = Object.values(JSON.parse(localStorage.getItem(k) || '{}')).find((x) => x.color === 'cortar');
+      const par = document.querySelector(s).cloneNode(true);
+      par.querySelectorAll('.pg, .marca-cambio, .marca-anot').forEach((x) => x.remove());
+      return a && { cita: a.cita, inicio: a.inicio, esperado: par.textContent.indexOf('La diferencia parece obvia') };
+    },
+    { k: CLAVE_LOCAL, s: sel }
+  );
+  check(
+    nueva && nueva.cita === 'La diferencia parece obvia' && nueva.inicio === nueva.esperado,
+    `subrayar con la marca puesta no corre los desplazamientos (${JSON.stringify(nueva)})`
+  );
+  check((await marca()).n === '3', 'la cuenta sube con el subrayado nuevo');
+  // tocarla abre el panel en la primera anotación del párrafo (la del principio)
+  await p.tap(`${sel} .marca-anot`);
+  const abierta = await p.evaluate(() => {
+    const f = document.querySelector('.ficha.foco');
+    return {
+      panel: document.querySelector('#panel').classList.contains('abierta'),
+      cita: f && f.querySelector('.cita') ? f.querySelector('.cita').textContent : null,
+    };
+  });
+  check(
+    abierta.panel && abierta.cita === 'Un hecho es lo que se observó',
+    `tocar la marca abre el panel en la primera anotación del párrafo (${JSON.stringify(abierta)})`
+  );
+  // una respuesta por revisar en el párrafo pone un punto en la marca, y lo dice
+  await p.evaluate((k) => {
+    const j = JSON.parse(localStorage.getItem(k));
+    const a = Object.values(j).find((x) => x.color === 'duda');
+    Object.assign(a, { respuesta: 'Hecho.', cierre: 'atendida', respondido: '2026-10-05T00:00:00.000Z' });
+    localStorage.setItem(k, JSON.stringify(j));
+  }, CLAVE_LOCAL);
+  await p.reload();
+  await p.waitForSelector(`${sel} .marca-anot`);
+  const conRespuesta = await marca();
+  check(
+    /por-revisar/.test(conRespuesta.color) && /con respuesta por revisar$/.test(conRespuesta.etiqueta),
+    `la marca avisa de la respuesta por revisar (${JSON.stringify(conRespuesta)})`
+  );
+  await p.setViewportSize({ width: 1280, height: 900 });
+  check((await marca()).vista === 'none', 'en pantalla ancha (con notas al margen) la marca no se ve');
+  await ctx.close();
+});
