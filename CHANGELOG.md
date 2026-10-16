@@ -2,6 +2,33 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versiones según [SemVer](https://semver.org/lang/es/).
 
+## [0.5.0] - 2026-10-16
+
+### Añadido
+
+- **Proponer otro texto.** «Proponer» en la barra de la selección (o P, también con una ficha activa) subraya y abre en la ficha un cuadro con la cita para reescribirla. La ficha muestra la diferencia palabra por palabra (en reposo, sólo eso); la propuesta (campo nuevo `sugerencia`) va en «Copiar», en las dos copias de todo y en `exportar`.
+- **`lector-anotaciones pendientes`** lista lo que espera a quien edita (sin respuesta, reabierto por el autor, pregunta con réplica) en el orden en que conviene aplicarlo; `--json` para procesarlo.
+- **`lector-anotaciones responder`** convierte respuestas (`[{id, respuesta, cierre, commit?}]`) en las escrituras de la acción «batch» de `ArtifactData`: sólo los campos de quien responde, lo vigente pasado al `hilo`, la réplica y el commit viejo retirados, cada escritura fijada a la versión leída (`if_version`) y repartidas en lotes de 50. Lee la colección del JSON de la página o del directorio que deja una lectura, y las versiones del texto de esa lectura; `--commit` para las que no lo traen.
+- **`lector-anotaciones aplicar`** escribe en las fuentes Markdown las propuestas de texto pendientes: busca la cita en el bloque de su `src` (con espacios flexibles y énfasis entre palabras), decide por contexto entre dos coincidencias, la reubica en el archivo si se movió, conserva el énfasis que la envuelve y no toca lo ambiguo ni lo que cruza el borde de un énfasis. Sin `--escribir` sólo muestra las diferencias; `--respuestas` deja lo aplicado listo para `responder`.
+- **Conversación anterior (`hilo`).** Lo que se dijeron autor y quien edita antes de la respuesta vigente: la ficha lo muestra plegado y «Copiar» y la exportación lo llevan en líneas «Antes, …».
+- **Marcas de párrafo en el teléfono.** Cada párrafo anotado lleva una marca con cuántas anotaciones tiene, el color de la primera y un punto si hay una respuesta por revisar; tocarla abre la primera.
+- **Deshacer cambios.** Durante ocho segundos se puede deshacer, además de un borrado, un cambio de color o de estado y una revisión («Atendida», «Reabrir»).
+- **Esquemas JSON** de una anotación y de «Copiar todo» (`src/lector_anotaciones/esquemas/`), con pruebas de que la documentación y lo que copia la página los cumplen. «Copiar todo (JSON)» lleva `"formato": 2`.
+
+### Cambiado
+
+- **Ancla por huella.** Un subrayado cuyo bloque cambió de id (se insertaron o quitaron bloques antes) se ubica por la huella que tenía al anotarse, y sigue siendo exacto: ya no dice «Reubicado».
+- **Por dentro.** Las decisiones de guardado (qué escribir, qué hacer ante una confirmación o un rechazo, cómo fundir lo que llega) están en el núcleo y se prueban sin navegador; el estado de la vista vive en un almacén con reglas; el panel reutiliza las fichas que no cambiaron (redibujar 300 fichas sin cambios baja de 64–115 ms a 2–4 ms); el JavaScript pasa por Prettier y `tsc --checkJs` con `strictNullChecks`; los estilos van por capas; las pruebas del navegador son de `@playwright/test`, en paralelo (de ~105 s a ~50 s), y fallan ante cualquier error de página.
+- En pantallas táctiles, «Deshacer» tiene el área táctil de 40 px del resto de los controles.
+
+### Corregido
+
+- El número de página tecleado con Enter ya no deja un salto de línea al principio de la nota nueva.
+
+### Revisión independiente antes de publicar
+
+- Lo estructural (dos revisores): las fichas reutilizadas conservaban la posición del margen en la lista; activar o dejar una ficha daba por buena una ficha vieja (una pregunta contestada seguía «nueva respuesta»; faltaba el nombre de quien anotó mientras la base conectaba); una nota cambiada sin verse quedaba recortada; «Copiado» podía quedarse en el botón; en el teléfono, la concentración volvía a mostrar la barra inferior. En las pruebas: un `test.only` dejaba la CI en verde, 16 de 28 pruebas no miraban los errores de página y una espera con plazo fijo fallaba bajo carga.
+
 ## [0.4.0] - 2026-10-15
 
 ### Añadido

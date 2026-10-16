@@ -33,14 +33,19 @@ Son los mismos pasos que corre la integración continua. Las pruebas del navegad
 (`@playwright/test`), con las ayudas comunes en `tests/web/ayudas.mjs`: cada prueba abre sus propios contextos y
 corren en paralelo. `check(cond, mensaje)` es una aserción blanda: si falla, la prueba termina en rojo con el mensaje
 y sigue con las demás comprobaciones; `LISTAR=1 npx playwright test` escribe todas. Una sola prueba:
-`npx playwright test revision -g "casos límite"`. `tests/pdf_minimo.py` escribe un PDF de texto plano, sin maquetador y siempre con los mismos bytes; `tests/fixtures/libro_min.pdf` sale de él (`python -m tests.pdf_minimo tests/fixtures/libro_min.md --salida tests/fixtures/libro_min.pdf`) y una prueba comprueba que sigue siendo el mismo. Las pruebas que leen un PDF de verdad se saltan si falta `poppler-utils`.
+`npx playwright test revision -g "casos límite"`. Las pruebas importan `test` de `ayudas.mjs`, no de
+`@playwright/test`: así un error sin capturar en cualquier página que abran las hace fallar. La base simulada
+(`conBase`) conecta en seguida; con `window.__retenerDb = true` espera a que la prueba llame a `__soltarDb()` (también
+después de recargar), para probar lo que pasa mientras conecta sin depender de un plazo. En la CI, un `test.only`
+olvidado es un error; lo que falla deja captura y traza en `test-results/`. `tests/pdf_minimo.py` escribe un PDF de texto plano, sin maquetador y siempre con los mismos bytes; `tests/fixtures/libro_min.pdf` sale de él (`python -m tests.pdf_minimo tests/fixtures/libro_min.md --salida tests/fixtures/libro_min.pdf`) y una prueba comprueba que sigue siendo el mismo. Las pruebas que leen un PDF de verdad se saltan si falta `poppler-utils`.
 
 ## Reglas de la casa
 
 - Español en código, pruebas y documentación; nombres de funciones y variables en español, como el resto.
 - Lo que la página llama del núcleo, y la forma de una anotación, de la sincronía y de la vista, está tipado en
   `src/lector_anotaciones/web/tipos/globales.d.ts` (no se empaqueta); `npm run tipos` lo revisa. Una función nueva del
-  núcleo que la página use se agrega ahí.
+  núcleo que la página use se agrega ahí: el núcleo está declarado entero, así que un nombre que no esté es un error, y
+  `strictNullChecks` obliga a mirar lo que puede faltar.
 - Los estilos van por capas (`@layer tokens, base, componentes, pantallas, preferencias`): lo del teléfono y las pantallas
   táctiles gana a los componentes, y las preferencias del sistema (movimiento reducido, alto contraste) a todo. Para
   reorganizar `estilos.css` sin cambiar lo que se ve, `npm run estilos -- antes.html despues.html` compara los estilos
