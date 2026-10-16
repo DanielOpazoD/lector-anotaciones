@@ -99,11 +99,13 @@ src/lector_anotaciones/   paquete Python
     nucleo/*.js           lógica pura, sin DOM: texto, diferencias, ubicar subrayados, borradores,
                           qué queda por revisar, apilar fichas al margen, Markdown, armar y sanear
                           libros, ZIP e importadores (probada con node --test)
-    pagina/*.js           la interfaz, en fragmentos que se concatenan por orden de nombre
+    pagina/*.js           la interfaz: un módulo por fragmento, en orden de nombre; lo que comparten va por
+                          P (lo que ofrecen) y E (el estado), con tipos generados (docs/MODULOS.md)
 web/index.html            la página empaquetada (generada; la CI comprueba que esté al día)
 tests/                    pytest (paquete, paridad Python/JS), tests/js (núcleo), tests/web (Playwright),
                           tests/fixtures (libros de muestra EPUB y Word, generados por generar.py)
-docs/                     formatos de libro.json y de las anotaciones; importar libros; cómo publicar
+herramientas/             modulos.mjs: los tipos de P y E y el mapa de los módulos de la página
+docs/                     formatos de libro.json y de las anotaciones; importar libros; cómo publicar; MODULOS.md
 ejemplo/                  libro de prueba con figura
 ```
 

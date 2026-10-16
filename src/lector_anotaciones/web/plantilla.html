@@ -148,6 +148,10 @@
 <script>
 {{NUCLEO}}(function () {
   'use strict';
+  // Los fragmentos de la página (pagina/*.js) son módulos: cada uno en su función, con lo propio privado. Lo que ofrecen
+  // a los demás va en LAPagina (funciones y valores que no cambian) y el estado que comparten y reasignan, en LAEstado.
+  var LAPagina = {},
+    LAEstado = {};
 {{PAGINA}}})();
 </script>
 </body>

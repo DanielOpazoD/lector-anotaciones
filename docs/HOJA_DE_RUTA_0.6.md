@@ -19,7 +19,7 @@ etapa.
 | | Etapa | Estado |
 |---|---|---|
 | F1 | Medir la cobertura: Python, núcleo (`node --test`) y página (V8 en Playwright, por fragmento); pisos en la CI | hecho |
-| F2 | La página en módulos: cada fragmento en su ámbito; lo compartido por un espacio de nombres tipado y el estado por un objeto explícito; `50-panel.js` partido | pendiente |
+| F2 | La página en módulos: cada fragmento en su ámbito; lo compartido por un espacio de nombres tipado y el estado por un objeto explícito; `50-panel.js` partido | hecho |
 | F3 | La ficha como función de (anotación, vista): la firma sale de la vista, no de una lista a mano | pendiente |
 | F4 | Pruebas de navegador cortas, con preparaciones compartidas | pendiente |
 | F5 | Tipos: `libro.json` tipado, sin `any`, `noImplicitAny` en el núcleo; mypy para Python | pendiente |
@@ -41,3 +41,14 @@ y generales, el aviso de «Deshacer» que se va a los ocho segundos y una selecc
 encontró un defecto: con la selección empezando en el título la barra subrayaba pero los atajos (1–4, N, P, C) no; ahora
 siguen la misma regla. Queda sin alcanzar, a propósito, el intercambio de extremos de `crearSubrayado` (un rango del
 navegador siempre va en orden) y los errores de IndexedDB.
+
+## F2 · Los módulos
+
+`50-panel.js` (1.195 líneas) se partió en `50-panel.js` (la lista), `52-ficha.js` (la ficha) y `54-revisar.js` (revisar y
+recorrer), con la página empaquetada idéntica byte a byte. Después, una conversión automática con el servicio de
+lenguaje de TypeScript (que resuelve cada referencia, sin expresiones regulares) puso cada fragmento en su propio
+ámbito: de 278 declaraciones de nivel superior, 129 quedaron privadas, 127 se ofrecen en `P` y 22 —las que varios
+fragmentos comparten y reasignan: el libro, la base, el modo, quién lee, sólo lectura…— viven en `E`. Ningún fragmento
+usaba al cargar algo de uno posterior, así que el orden no cambió. `herramientas/modulos.mjs` genera los tipos de `P` y
+`E` (151 miembros, 20 sin tipo) y `docs/MODULOS.md`. Comprobado: una errata en `P.x`, usar algo privado de otro
+fragmento y una oferta que falta hacen fallar los tipos o la comprobación; las 63 pruebas de navegador pasan.

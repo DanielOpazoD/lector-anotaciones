@@ -1,104 +1,113 @@
 // ------------------------------------------------------------ lectores con identidad
-function chipAutor(id) {
-  var p = PERFILES[id],
-    c = el('span', { 'class': 'autor', title: 'Lector' }, [
-      el('i', { style: 'background:' + ((p && p.color) || 'var(--fg-2)') }),
-      el('span', { text: (p && p.name) || (id === ME ? 'yo' : 'otro lector') }),
-    ]);
-  return c;
-}
-function variosAutores() {
-  var vistos = {};
-  Object.keys(anots).forEach(function (k) {
-    if (anots[k].autor) vistos[anots[k].autor] = 1;
-  });
-  return Object.keys(vistos).length > 1;
-}
-function resolverPerfiles(ids) {
-  if (!USER || !USER.profiles) return;
-  var nuevos = ids.filter(function (i) {
-    return i && !PERFILES_PEDIDOS[i];
-  });
-  if (!nuevos.length) return;
-  nuevos.forEach(function (i) {
-    PERFILES_PEDIDOS[i] = 1;
-  });
-  USER.profiles(nuevos)
-    .then(function (ps) {
-      var cambio = false;
-      Object.keys(ps || {}).forEach(function (i) {
-        if (!PERFILES[i] || PERFILES[i].name !== ps[i].name) {
-          PERFILES[i] = ps[i];
-          cambio = true;
-        }
-      });
-      if (cambio) renderPanel();
-    })
-    .catch(function () {});
-}
-function pintarEtiquetas(f, a) {
-  var ex = f.querySelector('.etiquetas');
-  if (ex) ex.remove();
-  var tags = etiquetasDe(a);
-  if (!tags.length) {
-    renderSelectores();
-    return;
+(function (P, E) {
+  // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
+  P.chipAutor = chipAutor;
+  P.variosAutores = variosAutores;
+  P.resolverPerfiles = resolverPerfiles;
+  P.pintarEtiquetas = pintarEtiquetas;
+  P.renderSelectores = renderSelectores;
+  function chipAutor(id) {
+    var p = P.PERFILES[id],
+      c = P.el('span', { 'class': 'autor', title: 'Lector' }, [
+        P.el('i', { style: 'background:' + ((p && p.color) || 'var(--fg-2)') }),
+        P.el('span', { text: (p && p.name) || (id === E.ME ? 'yo' : 'otro lector') }),
+      ]);
+    return c;
   }
-  var et = el('div', { 'class': 'etiquetas' });
-  tags.forEach(function (t) {
-    var b = el('button', { type: 'button', text: '#' + t, title: 'Filtrar por #' + t });
-    b.addEventListener('click', function () {
-      VISTA.cambiar({ filtroEtiqueta: t });
-      renderPanel();
+  function variosAutores() {
+    var vistos = {};
+    Object.keys(P.anots).forEach(function (k) {
+      if (P.anots[k].autor) vistos[P.anots[k].autor] = 1;
     });
-    et.appendChild(b);
-  });
-  var ta = f.querySelector('textarea');
-  if (ta && ta.nextSibling) f.insertBefore(et, ta.nextSibling);
-  else f.appendChild(et);
-  renderSelectores();
-}
-var etiquetasDe = N.etiquetasDe;
-function renderSelectores() {
-  var autores = {},
-    tags = {};
-  Object.keys(anots).forEach(function (k) {
-    var a = anots[k];
-    if (a.autor) autores[a.autor] = 1;
-    etiquetasDe(a).forEach(function (t) {
-      tags[t] = 1;
+    return Object.keys(vistos).length > 1;
+  }
+  function resolverPerfiles(ids) {
+    if (!E.USER || !E.USER.profiles) return;
+    var nuevos = ids.filter(function (i) {
+      return i && !P.PERFILES_PEDIDOS[i];
     });
-  });
-  var sa = $('#f-autor'),
-    ids = Object.keys(autores);
-  sa.hidden = ids.length < 2;
-  if (!sa.hidden) {
-    resolverPerfiles(ids);
-    var actual = V.filtroAutor;
-    sa.innerHTML = '';
-    sa.appendChild(el('option', { value: '', text: 'todos los lectores' }));
-    ids.forEach(function (i) {
-      sa.appendChild(
-        el('option', {
-          value: i,
-          text: (PERFILES[i] && PERFILES[i].name) || (i === ME ? 'yo' : 'lector ' + (ids.indexOf(i) + 1)),
-        })
-      );
+    if (!nuevos.length) return;
+    nuevos.forEach(function (i) {
+      P.PERFILES_PEDIDOS[i] = 1;
     });
-    sa.value = ids.indexOf(actual) >= 0 ? actual : '';
-    VISTA.cambiar({ filtroAutor: sa.value });
-  } else VISTA.cambiar({ filtroAutor: '' });
-  var se = $('#f-etiqueta'),
-    ts = Object.keys(tags).sort();
-  se.hidden = !ts.length;
-  if (!se.hidden) {
-    var act = V.filtroEtiqueta;
-    se.innerHTML = '';
-    se.appendChild(el('option', { value: '', text: 'todas las etiquetas' }));
-    ts.forEach(function (t) {
-      se.appendChild(el('option', { value: t, text: '#' + t }));
+    E.USER.profiles(nuevos)
+      .then(function (ps) {
+        var cambio = false;
+        Object.keys(ps || {}).forEach(function (i) {
+          if (!P.PERFILES[i] || P.PERFILES[i].name !== ps[i].name) {
+            P.PERFILES[i] = ps[i];
+            cambio = true;
+          }
+        });
+        if (cambio) P.renderPanel();
+      })
+      .catch(function () {});
+  }
+  function pintarEtiquetas(f, a) {
+    var ex = f.querySelector('.etiquetas');
+    if (ex) ex.remove();
+    var tags = etiquetasDe(a);
+    if (!tags.length) {
+      renderSelectores();
+      return;
+    }
+    var et = P.el('div', { 'class': 'etiquetas' });
+    tags.forEach(function (t) {
+      var b = P.el('button', { type: 'button', text: '#' + t, title: 'Filtrar por #' + t });
+      b.addEventListener('click', function () {
+        P.VISTA.cambiar({ filtroEtiqueta: t });
+        P.renderPanel();
+      });
+      et.appendChild(b);
     });
-    se.value = ts.indexOf(act) >= 0 ? act : '';
-    VISTA.cambiar({ filtroEtiqueta: se.value });
-  } else VISTA.cambiar({ filtroEtiqueta: '' });
-}
+    var ta = f.querySelector('textarea');
+    if (ta && ta.nextSibling) f.insertBefore(et, ta.nextSibling);
+    else f.appendChild(et);
+    renderSelectores();
+  }
+  var etiquetasDe = P.N.etiquetasDe;
+  P.etiquetasDe = etiquetasDe;
+  function renderSelectores() {
+    var autores = {},
+      tags = {};
+    Object.keys(P.anots).forEach(function (k) {
+      var a = P.anots[k];
+      if (a.autor) autores[a.autor] = 1;
+      etiquetasDe(a).forEach(function (t) {
+        tags[t] = 1;
+      });
+    });
+    var sa = P.$('#f-autor'),
+      ids = Object.keys(autores);
+    sa.hidden = ids.length < 2;
+    if (!sa.hidden) {
+      resolverPerfiles(ids);
+      var actual = P.V.filtroAutor;
+      sa.innerHTML = '';
+      sa.appendChild(P.el('option', { value: '', text: 'todos los lectores' }));
+      ids.forEach(function (i) {
+        sa.appendChild(
+          P.el('option', {
+            value: i,
+            text: (P.PERFILES[i] && P.PERFILES[i].name) || (i === E.ME ? 'yo' : 'lector ' + (ids.indexOf(i) + 1)),
+          })
+        );
+      });
+      sa.value = ids.indexOf(actual) >= 0 ? actual : '';
+      P.VISTA.cambiar({ filtroAutor: sa.value });
+    } else P.VISTA.cambiar({ filtroAutor: '' });
+    var se = P.$('#f-etiqueta'),
+      ts = Object.keys(tags).sort();
+    se.hidden = !ts.length;
+    if (!se.hidden) {
+      var act = P.V.filtroEtiqueta;
+      se.innerHTML = '';
+      se.appendChild(P.el('option', { value: '', text: 'todas las etiquetas' }));
+      ts.forEach(function (t) {
+        se.appendChild(P.el('option', { value: t, text: '#' + t }));
+      });
+      se.value = ts.indexOf(act) >= 0 ? act : '';
+      P.VISTA.cambiar({ filtroEtiqueta: se.value });
+    } else P.VISTA.cambiar({ filtroEtiqueta: '' });
+  }
+})(LAPagina, LAEstado);

@@ -56,6 +56,12 @@ olvidado es un error; lo que falla deja captura y traza en `test-results/`. `tes
   táctiles gana a los componentes, y las preferencias del sistema (movimiento reducido, alto contraste) a todo. Para
   reorganizar `estilos.css` sin cambiar lo que se ve, `npm run estilos -- antes.html despues.html` compara los estilos
   calculados de dos versiones de la página en una docena de estados.
+- Cada fragmento de `pagina/` es un módulo, `(function (P, E) { … })(LAPagina, LAEstado)`: lo que declara es suyo. Lo que
+  otro fragmento necesita se ofrece con `P.nombre = nombre;` (al principio, para las funciones) y se usa como
+  `P.nombre(…)`; el estado que varios fragmentos comparten y reasignan vive en `E` (`E.SOLO_LECTURA`…), declarado con su
+  primer valor en el nivel del módulo. `npm run modulos` regenera `tipos/pagina.d.ts` (los tipos de `P` y `E`, que
+  infiere tsc) y `docs/MODULOS.md` (qué ofrece y usa cada fragmento); la CI comprueba que estén al día, y usar algo que
+  nadie ofrece es un error de `npm run tipos`.
 - La página se edita en `src/lector_anotaciones/web/` (nunca a mano en `web/index.html`, que se regenera con `lector-anotaciones pagina --salida web/index.html`). Lo que no necesita el DOM va en `nucleo/` con su prueba en `tests/js/`; lo que replica al paquete Python (el Markdown, las huellas) se prueba contra él en `tests/test_paridad_js.py`. Los libros de muestra de `tests/fixtures/` salen de `tests/fixtures/generar.py`.
 - Ningún cambio en la página que rompa los contratos de `tests/test_web.py` (lee `libro.json`, colección `anotaciones`, clave local por libro, sin scripts externos). Si un cambio exige romperlos, se actualizan el documento de formato y el número de `formato` en `libro.json`.
 - Cada cambio de comportamiento lleva prueba, y cada cambio visible entra en `CHANGELOG.md`.

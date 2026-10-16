@@ -8,8 +8,9 @@ Las fuentes viven junto al paquete, en `web/`:
 - `nucleo/*.js`: lógica pura, sin DOM (ubicar citas, fundir borradores, diferencias, Markdown…). Cada
   archivo funciona igual en el navegador (se registra en `LANucleo`) y en Node (se exporta con
   `module.exports`), así que se prueba con `node --test` sin navegador.
-- `pagina/*.js`: la interfaz, en fragmentos que se concatenan por orden de nombre dentro de una sola
-  función (comparten el estado de la página).
+- `pagina/*.js`: la interfaz, en fragmentos que se concatenan por orden de nombre. Cada fragmento es un
+  módulo, `(function (P, E) { … })(LAPagina, LAEstado)`: lo suyo es privado, lo que ofrece a los demás va en `P` y
+  el estado que comparten y reasignan, en `E` (ver docs/MODULOS.md).
 
 El resultado no tiene dependencias ni pasos de compilación en el navegador: se puede abrir desde un
 servidor estático, publicar como página de claude.ai o copiar junto a cualquier `libro.json`.
