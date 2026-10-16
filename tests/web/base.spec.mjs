@@ -1,8 +1,6 @@
 // Con la base compartida (simulada): escrituras, rechazos, borradores, migraciones y sólo lectura.
 import fs from 'node:fs';
 
-import { test } from '@playwright/test';
-
 import {
   LIBRO,
   servir,
@@ -22,6 +20,7 @@ import {
   activo,
   CLAVE_LOCAL,
   guardadoLocal,
+  test,
 } from './ayudas.mjs';
 
 let srv, base;
@@ -822,7 +821,7 @@ test('Anotar mientras conecta no borra la lista de otro borrador', async ({ brow
   // al conectar, x debe subir sólo su nota, sin pisar la réplica más reciente que otra sesión dejó en la base
   const ctxLst = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxLst.addInitScript(() => {
-    window.__retrasoDb = 1500;
+    window.__retenerDb = true;
     window.__semilla = {
       x: {
         id: 'x',
@@ -878,6 +877,7 @@ test('Anotar mientras conecta no borra la lista de otro borrador', async ({ brow
     listaIntacta.x && listaIntacta.x.nota && listaIntacta.ajena9,
     `anotar mientras la base conecta no borra la lista de campos de los borradores aún no cargados (${JSON.stringify(listaIntacta)})`
   );
+  await plst.evaluate(() => window.__soltarDb());
   const lstSubido = await esperar(
     plst,
     () => window.__docs && window.__docs.x && window.__docs.x.nota === 'Nota del borrador',
@@ -1309,7 +1309,7 @@ test('Un rechazo de permiso no retira de la vista lo que la base no tiene', asyn
 test('Anotar mientras la base todavía conecta', async ({ browser }) => {
   const ctxTarde = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxTarde.addInitScript(() => {
-    window.__retrasoDb = 1500;
+    window.__retenerDb = true;
   });
   await ctxTarde.addInitScript(conBase);
   const pt = await ctxTarde.newPage();
@@ -1324,6 +1324,7 @@ test('Anotar mientras la base todavía conecta', async ({ browser }) => {
     /sólo en este navegador/.test(await pt.$eval('#estado', (e) => e.textContent)),
     'antes de conectar, la anotación se guarda en el navegador y se dice'
   );
+  await pt.evaluate(() => window.__soltarDb());
   await pt.waitForFunction(
     () => Object.values(window.__docs).some((d) => d.tipo === 'subrayado' && d.autor === 'u_me'),
     null,
@@ -1338,7 +1339,7 @@ test('Anotar mientras la base todavía conecta', async ({ browser }) => {
   // si la subida de una pendiente falla, la anotación no se pierde: sigue en memoria y en el navegador
   const ctxTarde2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxTarde2.addInitScript(() => {
-    window.__retrasoDb = 1500;
+    window.__retenerDb = true;
     window.__rechazar = 'unavailable';
   });
   await ctxTarde2.addInitScript(conBase);
@@ -1350,6 +1351,7 @@ test('Anotar mientras la base todavía conecta', async ({ browser }) => {
   await pt2.waitForSelector('#sel-tb', { state: 'visible' });
   await pt2.click('#sel-tb .col-btn[data-c="revisar"]');
   await pt2.waitForSelector(`[data-pid="${pidTarde2}"] mark.hl`);
+  await pt2.evaluate(() => window.__soltarDb());
   await pt2.waitForFunction(() => /no pudo subir/.test(document.querySelector('#estado').textContent), null, {
     timeout: 10000,
   });
@@ -1402,6 +1404,7 @@ test('Anotar mientras la base todavía conecta', async ({ browser }) => {
   check(true, 'borrar una pendiente que no subió la retira también de la copia local, una vez que la base confirma');
   await pt2.reload();
   await pt2.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pt2.evaluate(() => window.__soltarDb());
   await pt2.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent), null, {
     timeout: 10000,
   });
@@ -1411,7 +1414,7 @@ test('Anotar mientras la base todavía conecta', async ({ browser }) => {
   // sube lo que la base no tiene; en lo que la base ya tenía, manda la base
   const ctxRecarga = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxRecarga.addInitScript(() => {
-    window.__retrasoDb = 1500;
+    window.__retenerDb = true;
     window.__semilla = {
       vieja: {
         id: 'vieja',
@@ -1474,6 +1477,7 @@ test('Anotar mientras la base todavía conecta', async ({ browser }) => {
     localAntesDeConectar.length === 4 && ['ajena', 'huerfana', 'vieja'].every((k) => localAntesDeConectar.includes(k)),
     `anotar mientras la base conecta no pisa lo que ya había en la copia local (${localAntesDeConectar.join()})`
   );
+  await pr.evaluate(() => window.__soltarDb());
   await pr.waitForFunction(
     () =>
       window.__docs &&
@@ -1609,7 +1613,7 @@ test('Sólo lectura de verdad', async ({ browser }) => {
   // quien anotó mientras conectaba y resulta ser de sólo lectura no pierde su única copia: queda en el navegador y vuelve al recargar
   const ctxSLTarde = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await ctxSLTarde.addInitScript(() => {
-    window.__retrasoDb = 1500;
+    window.__retenerDb = true;
     window.__soloLectura = true;
   });
   await ctxSLTarde.addInitScript(conBase);
@@ -1622,6 +1626,7 @@ test('Sólo lectura de verdad', async ({ browser }) => {
   await pst.waitForSelector('#sel-tb', { state: 'visible' });
   await pst.click('#sel-tb .col-btn[data-c="revisar"]');
   await pst.waitForSelector(`[data-pid="${pidSLT}"] mark.hl`);
+  await pst.evaluate(() => window.__soltarDb());
   await pst.waitForFunction(() => document.body.classList.contains('solo-lectura'), null, { timeout: 10000 });
   await pst.waitForTimeout(300);
   // lo que no pudo subir queda marcado «sin guardar» (sin reintento, que no cabe en sólo lectura) y la barra lo dice
@@ -1650,6 +1655,7 @@ test('Sólo lectura de verdad', async ({ browser }) => {
   );
   await pst.reload();
   await pst.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  await pst.evaluate(() => window.__soltarDb());
   await pst.waitForFunction(() => document.body.classList.contains('solo-lectura'), null, { timeout: 10000 });
   await pst.waitForTimeout(300);
   const trasRecarga = await marcadaSL(pst);

@@ -1,8 +1,6 @@
 // Revisar: fichas compactas, recorrido, bandeja «Por revisar» y notas al margen.
 import fs from 'node:fs';
 
-import { test } from '@playwright/test';
-
 import {
   LIBRO,
   servir,
@@ -22,6 +20,7 @@ import {
   activo,
   CLAVE_LOCAL,
   guardadoLocal,
+  test,
 } from './ayudas.mjs';
 
 let srv, base;
@@ -1128,5 +1127,136 @@ test('Proponer otro texto: P con la selección, el botón de la ficha, la difere
   });
   check(tras === 'Un hecho es lo que se observóobservado', `la propuesta se conserva al recargar (${tras})`);
   check(errores.length === 0, `sin errores de página al proponer${errores.length ? ': ' + errores.join(' | ') : ''}`);
+  await ctx.close();
+});
+
+// Lo que la revisión independiente de la 0.5 encontró en las fichas reutilizadas: cada caso falla sin su arreglo.
+test('Fichas reutilizadas: sin la posición del margen, con lo que muestran al día, notas medidas y «Copiar»', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await ctx.addInitScript(() => {
+    const g = (id, extra, creado) =>
+      Object.assign({ id, tipo: 'general', nota: 'Nota ' + id, estado: 'abierta', creado, autor: 'u_me' }, extra);
+    const t = '2026-10-02T00:00:00.000Z';
+    window.__semilla = {
+      gA: g('gA', { respuesta: '¿Qué quieres decir?', cierre: 'pregunta', respondido: t }, '2026-10-01T00:00:00.000Z'),
+      gB: g('gB', { respuesta: 'Hecho.', cierre: 'atendida', respondido: t }, '2026-10-01T00:01:00.000Z'),
+      gC: g('gC', {}, '2026-10-01T00:02:00.000Z'),
+    };
+  });
+  await ctx.addInitScript(conBase);
+  const p = await ctx.newPage();
+  const errores = [];
+  p.on('pageerror', (e) => errores.push(String(e)));
+  await p.goto(base + '#cap-01');
+  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  // 1. dibujadas al margen (pestaña «Sección») y reutilizadas en la lista («Todas»): sin el `top` del margen
+  for (const [texto, tecla] of [
+    ['Un hecho es lo que se observó', '1'],
+    ['se lee una ficha escrita con prisa', '3'],
+    ['Dar por hecho lo que se infirió de una cifra', '2'],
+  ]) {
+    await seleccionarTexto(p, texto);
+    await p.keyboard.press(tecla);
+    await p.keyboard.press('Escape');
+  }
+  check(await p.evaluate(() => document.querySelector('#lista').classList.contains('al-margen')), 'al margen');
+  await p.click('.tab[data-tab="todas"]');
+  const lista = await p.evaluate(() =>
+    Array.from(document.querySelectorAll('#lista .ficha')).map((f) => {
+      const r = f.getBoundingClientRect();
+      return { top: f.style.top, y: Math.round(r.top), fin: Math.round(r.bottom) };
+    })
+  );
+  const huecos = lista.slice(1).map((f, i) => f.y - lista[i].fin);
+  check(
+    lista.every((f) => f.top === '') && huecos.every((h) => h >= 0 && h < 30),
+    `en la lista, las fichas que estuvieron al margen van seguidas, sin su posición de entonces (${JSON.stringify({ tops: lista.map((f) => f.top), huecos })})`
+  );
+  // 2. contestar una pregunta en la bandeja la revisa; salir con Esc (que reajusta la ficha en su sitio) no deja la
+  // ficha vieja como si estuviera al día: el siguiente redibujo la muestra revisada
+  await p.click('.tab[data-tab="revisar"]');
+  await p.click('.ficha[data-id="gA"] textarea.replica');
+  await p.keyboard.type('Que falta un ejemplo.');
+  await p.keyboard.press('Escape');
+  await p.evaluate(() => window.__cambioExterno('gC', { nota: 'Nota gC cambiada en otra sesión' }));
+  await esperar(p, () => !!document.querySelector('.ficha[data-id="gA"].revisada'), null, 2000);
+  const gA = await p.evaluate(() => {
+    const f = document.querySelector('.ficha[data-id="gA"]');
+    return {
+      revisada: f.classList.contains('revisada'),
+      insignia: (f.querySelector('.nueva') || {}).textContent,
+      atendida: !!f.querySelector('[data-accion="atendida"]'),
+    };
+  });
+  check(
+    gA.revisada && gA.insignia === '✓ revisada' && !gA.atendida,
+    `la pregunta contestada se redibuja revisada aunque se haya salido de su ficha (${JSON.stringify(gA)})`
+  );
+  // 3. una nota que cambia mientras el panel no se ve (concentración) se mide al volver a verse
+  await p.click('.tab[data-tab="todas"]');
+  await p.click('#lectura');
+  await p.keyboard.press('f');
+  await p.evaluate(() =>
+    window.__cambioExterno('gB', { nota: 'Línea uno.\nLínea dos.\nLínea tres.\nLínea cuatro, escrita en otra sesión.' })
+  );
+  await p.waitForTimeout(150);
+  await p.keyboard.press('f');
+  const alto = await p.evaluate(() => {
+    const t = document.querySelector('.ficha[data-id="gB"] textarea.nota');
+    return { cliente: t.clientHeight, contenido: t.scrollHeight };
+  });
+  check(
+    alto.cliente >= alto.contenido - 1,
+    `la nota cambiada en concentración se ve entera al salir (${JSON.stringify(alto)})`
+  );
+  // 4. «Copiar» dos veces seguidas no deja «Copiado» para siempre
+  await enFicha(p, '.ficha[data-id="gC"]', '[data-accion="copiar"]');
+  await p.click('.ficha[data-id="gC"] [data-accion="copiar"]');
+  await p.waitForTimeout(1700);
+  check(
+    (await p.textContent('.ficha[data-id="gC"] [data-accion="copiar"]')) === 'Copiar',
+    '«Copiar» vuelve a su texto tras dos pulsaciones seguidas'
+  );
+  check(errores.length === 0, `sin errores de página${errores.length ? ': ' + errores.join(' | ') : ''}`);
+  await ctx.close();
+});
+
+test('Fichas reutilizadas: el autor que se pone al subir aparece aunque se toque la ficha antes', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(() => {
+    window.__retenerDb = true;
+    window.__semilla = {
+      o1: {
+        id: 'o1',
+        tipo: 'general',
+        nota: 'De otra',
+        estado: 'abierta',
+        creado: '2026-10-01T00:00:00Z',
+        autor: 'u_otro',
+      },
+      m1: { id: 'm1', tipo: 'general', nota: 'Mía', estado: 'abierta', creado: '2026-10-01T00:00:01Z', autor: 'u_me' },
+    };
+  });
+  await ctx.addInitScript(conBase);
+  const p = await ctx.newPage();
+  await p.goto(base + '#cap-01');
+  await p.waitForSelector('article.seccion:not([hidden]) p.bloque[data-pid]');
+  await seleccionarTexto(p, 'Un hecho es lo que se observó');
+  await p.keyboard.press('1');
+  await p.keyboard.press('Escape');
+  await p.evaluate(() => window.__soltarDb());
+  await p.waitForFunction(() => /^Conectado/.test(document.querySelector('#estado').textContent));
+  await p.waitForTimeout(300);
+  const id = await p.evaluate(() => Object.keys(window.__docs).find((k) => k !== 'o1' && k !== 'm1'));
+  await p.click(`.ficha[data-id="${id}"] .cab > span`);
+  await p.keyboard.press('Escape');
+  await p.evaluate(() => window.__cambioExterno('o1', { nota: 'De otra (editada)' }));
+  const chip = await esperar(p, (id) => !!document.querySelector(`.ficha[data-id="${id}"] .autor`), id, 2000);
+  check(chip, 'con dos lectores, la ficha subida al conectar lleva el nombre de quien la hizo');
   await ctx.close();
 });

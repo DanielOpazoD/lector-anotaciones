@@ -151,7 +151,8 @@ function borrar(id) {
   if (SOLO_LECTURA) return;
   var q = quitarDeMemoria(id);
   if (!q) return;
-  var a = q.anotacion;
+  var a = q.anotacion,
+    marca = q.marca;
   renderPanel();
   renderCuentas();
   // Un borrado confirmado sale también de la copia local, para que una pendiente que no subió no vuelva al recargar;
@@ -173,7 +174,7 @@ function borrar(id) {
           borrada();
           return;
         }
-        if (q.marca) SINC.sinGuardar[id] = q.marca;
+        if (marca) SINC.sinGuardar[id] = marca;
         rechazoEscritura(e, id, a, 'borrar');
       });
   } else if (modo === 'cargando') {

@@ -1,8 +1,6 @@
 // En el teléfono: ancho, cajones con velo, foco y notas.
 import fs from 'node:fs';
 
-import { test } from '@playwright/test';
-
 import {
   LIBRO,
   servir,
@@ -22,6 +20,7 @@ import {
   activo,
   CLAVE_LOCAL,
   guardadoLocal,
+  test,
 } from './ayudas.mjs';
 
 let srv, base;
@@ -373,4 +372,21 @@ test('Cajones del teléfono: velo, cierre, foco, notas', async ({ browser }) => 
     `sin errores de consola en el recorrido del teléfono${erroresC.length ? ': ' + erroresC.join(' | ') : ''}`
   );
   await ctxC.close();
+});
+
+test('Teléfono en concentración: sin la barra de índice y anotaciones', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 400, height: 800 }, hasTouch: true });
+  await ctx.addInitScript(sinBase);
+  const p = await ctx.newPage();
+  await p.goto(base);
+  await p.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const antes = await p.evaluate(() => getComputedStyle(document.querySelector('#movil-barra')).display);
+  await p.focus('#lectura');
+  await p.keyboard.press('f');
+  const despues = await p.evaluate(() => getComputedStyle(document.querySelector('#movil-barra')).display);
+  check(
+    antes === 'flex' && despues === 'none',
+    `la concentración esconde la barra del teléfono (${antes} → ${despues})`
+  );
+  await ctx.close();
 });

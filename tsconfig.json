@@ -11,7 +11,7 @@
     ],
     "strict": false,
     "noImplicitAny": false,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "noUnusedLocals": false,
     "skipLibCheck": true
   },

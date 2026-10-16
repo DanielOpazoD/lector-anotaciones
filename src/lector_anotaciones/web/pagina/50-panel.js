@@ -93,7 +93,7 @@ function ordenKey(a) {
 // lectura, quién es el lector y su perfil, si hay varios lectores, la huella de su bloque). Un redibujo reutiliza el
 // nodo si las dos siguen iguales.
 var FICHAS = {}, // id → { a, firma, nodo }
-  ultimoMargen = false;
+  MEDIDAS = new WeakMap(); // nodo de ficha → ancho de la lista y modo con que se midieron sus notas
 function firmaFicha(a, varios) {
   var u = UBIC[a.id],
     pe = pidEfectivo(a);
@@ -119,14 +119,20 @@ function fichaPara(a, varios) {
   FICHAS[a.id] = { a: a, firma: firma, nodo: nodo };
   return { nodo: nodo, nueva: true };
 }
-// Tras cambiar en su sitio una ficha ya dibujada (activarla, o un guardado silencioso que el cuadro ya muestra), su
-// registro se pone al día para que el próximo redibujo no la rehaga.
-function refirmar(id) {
-  var c = FICHAS[id],
-    a = anots[id];
-  if (!c || !a || !c.nodo.isConnected) return;
-  c.a = a;
-  c.firma = firmaFicha(a, variosAutores());
+// Tras activar o dejar una ficha en su sitio (la clase `foco`), su registro dice que lo está, para que el próximo
+// redibujo no la rehaga por eso. Sólo esa parte de la firma: lo demás que haya cambiado sin redibujarse (una pregunta
+// que se contestó, un autor que se puso al subir) sigue pendiente y el redibujo lo muestra.
+function refirmarFoco(id) {
+  var c = FICHAS[id];
+  if (!c || !c.nodo.isConnected) return;
+  c.firma = String(V.fichaFoco === id) + c.firma.slice(c.firma.indexOf('|'));
+}
+// Tras un guardado silencioso, el cuadro ya muestra lo escrito: el registro pasa a la anotación nueva si la ficha
+// mostraba la anterior (`ant`). La firma no se toca: si el cambio altera lo que la ficha muestra («revisada»), el
+// próximo redibujo la rehace.
+function avanzarFicha(id, ant) {
+  var c = FICHAS[id];
+  if (c && c.a === ant && anots[id]) c.a = anots[id];
 }
 // Deja en `cont` exactamente `nodos`, en ese orden, sin mover los que ya están en su lugar.
 function colocarHijos(cont, nodos) {
@@ -146,7 +152,7 @@ function renderPanel() {
     foco = { id: act.id, valor: act.value, ini: act.selectionStart, fin: act.selectionEnd, scroll: act.scrollTop };
   else if (act && act.tagName === 'BUTTON' && act.closest('.ficha'))
     focoBoton = {
-      id: act.closest('.ficha').getAttribute('data-id'),
+      id: /** @type {Element} */ (act.closest('.ficha')).getAttribute('data-id'),
       accion: act.getAttribute('data-accion') || '',
       c: act.getAttribute('data-c') || '',
       texto: act.textContent,
@@ -199,12 +205,17 @@ function renderPanel() {
     actualizarNav();
     return;
   }
-  // las fichas que no cambiaron se reutilizan (y no se mueven si ya están en su lugar); sólo se dibujan las nuevas
+  // las fichas que no cambiaron se reutilizan (y no se mueven si ya están en su lugar); sólo se dibujan las nuevas.
+  // Se miden las notas de las nuevas y de las reutilizadas que se midieron con otro ancho o modo, o sin verse (el
+  // panel oculto en concentración o en el teléfono); fuera del margen, ninguna conserva la altura que tuvo ahí.
   var varios = variosAutores(),
-    nuevas = [],
+    ancho = box.clientWidth,
+    medida = ancho ? ancho + '|' + margen : null,
+    porMedir = [],
     nodos = L.map(function (a) {
       var r = fichaPara(a, varios);
-      if (r.nueva) nuevas.push(r.nodo);
+      if (r.nueva || !medida || MEDIDAS.get(r.nodo) !== medida) porMedir.push(r.nodo);
+      if (!margen && r.nodo.style.top) r.nodo.style.top = '';
       return r.nodo;
     });
   if (margen) {
@@ -212,10 +223,11 @@ function renderPanel() {
     colocarHijos(box, cabeza.concat([capa]));
     colocarHijos(capa, nodos);
   } else colocarHijos(box, cabeza.concat(nodos));
-  // las notas se ajustan en las fichas nuevas; si cambió el ancho de las fichas (lista ↔ margen), en todas
-  if (margen !== ultimoMargen) ajustarTextareas(box);
-  else if (nuevas.length) ajustarTextareasDe(nuevas);
-  ultimoMargen = margen;
+  if (porMedir.length) ajustarTextareasDe(porMedir);
+  porMedir.forEach(function (n) {
+    if (medida) MEDIDAS.set(n, medida);
+    else MEDIDAS.delete(n);
+  });
   if (margen) colocarMargen();
   else box.scrollTop = desplaz;
   // si el elemento enfocado sigue en la página (su ficha se reutilizó), no hay nada que restaurar
@@ -382,8 +394,8 @@ function activar(id) {
   $$('mark.hl[data-aids~="' + id + '"]').forEach(function (m) {
     m.classList.add('foco');
   });
-  refirmar(antes);
-  refirmar(id);
+  refirmarFoco(antes);
+  refirmarFoco(id);
   if (margenActivo()) reacomodarPorActivar(id);
   actualizarNav();
 }
@@ -920,7 +932,7 @@ function guardarSilencioso(id, parche) {
   if (!ant || SOLO_LECTURA) return;
   SINC.cambiar(Object.assign({}, ant, parche), ahora());
   // la ficha ya muestra lo escrito: no hace falta rehacerla (salvo que cambie lo que muestra, como «revisada»)
-  if (!('revisado' in parche)) refirmar(id);
+  avanzarFicha(id, ant);
   if (col) escribirEnBase(id, null);
   else guardarLocal(modo === 'cargando' ? [id] : undefined);
 }
@@ -937,7 +949,7 @@ function cambioDe(a) {
   if (u && u.estado !== 'perdido') return b && b.anterior && (!a.bh || b.h !== a.bh) ? pe : null;
   // de los bloques cuyo texto anterior contenía la cita: el suyo, si es uno; si no, el que la tenía con su contexto
   var elegir = function (bloques) {
-    var mejor = null,
+    var mejor = /** @type {any} */ (null),
       puntos = -1;
     bloques.forEach(function (x) {
       if (!x.anterior) return;
@@ -1025,7 +1037,7 @@ function navegar(d) {
   }
   var j = N.vecina(L, V.fichaFoco, d, {
     de: ordenKey,
-    clave: anots[V.fichaFoco] ? ordenKey(anots[V.fichaFoco]) : null,
+    clave: V.fichaFoco && anots[V.fichaFoco] ? ordenKey(anots[V.fichaFoco]) : null,
   });
   if (j < 0) {
     anunciar(d > 0 ? 'Es la última anotación' : 'Es la primera anotación');

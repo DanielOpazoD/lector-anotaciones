@@ -17,6 +17,23 @@ Lo que se hace, en qué orden, y cómo se sabe que quedó hecho. Se actualiza al
   no necesita otra cosa. Los módulos ES con un empaquetador de JavaScript obligarían a tener Node para generar la
   página. La estructura se gana por otro lado: estado en un almacén, decisiones en el núcleo y fichas por id.
 
+- **«Deshacer» crece en pantallas táctiles.** Con las capas, la regla de 40 px de los enlaces en pantallas táctiles
+  gana a la de «Deshacer» (32 px). Se deja así: es el área táctil que la página promete en el resto de los controles.
+
+## Revisión independiente de lo estructural (E1–E6)
+
+Dos revisores con papeles distintos (equivalencia y seguridad de los datos; herramientas, estilos y pruebas)
+encontraron once problemas; cada uno se comprobó releyendo el código y con una prueba que fallaba antes del arreglo:
+
+- Fichas reutilizadas: conservaban la posición del margen en la lista; activar o salir de una ficha daba por buena
+  una ficha vieja (una pregunta contestada seguía «nueva respuesta», faltaba el autor puesto al subir); las notas
+  medidas sin verse quedaban recortadas; «Copiado» podía quedarse en el botón.
+- Estilos: en el teléfono, la concentración volvía a mostrar la barra inferior (la capa `pantallas` ganaba).
+- Pruebas: `forbidOnly` en la CI; todas las pruebas fallan ante un error de página sin capturar (antes, 16 de 28 no
+  lo miraban); la base simulada conecta cuando la prueba la suelta, no tras un plazo fijo que bajo carga vencía antes;
+  15 s por espera; captura y traza de lo que falla.
+- Tipos: el núcleo está declarado entero (sin firma comodín) y `strictNullChecks` está activo.
+
 ## Etapas
 
 | | Etapa | Estado |

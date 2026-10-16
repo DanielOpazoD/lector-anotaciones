@@ -190,12 +190,20 @@ function exportarMD() {
   });
   return out.join('\n');
 }
+// El texto del botón se recuerda la primera vez: una segunda pulsación antes de que vuelva no recuerda «Copiado».
+var TEXTO_BOTON = new WeakMap();
 function copiar(txt, boton) {
   var ok = function () {
-    var t = boton.textContent;
+    var antes = TEXTO_BOTON.get(boton);
+    if (!antes) {
+      antes = { texto: boton.textContent, t: 0 };
+      TEXTO_BOTON.set(boton, antes);
+    }
+    clearTimeout(antes.t);
     boton.textContent = 'Copiado';
-    setTimeout(function () {
-      boton.textContent = t;
+    antes.t = setTimeout(function () {
+      boton.textContent = antes.texto;
+      TEXTO_BOTON.delete(boton);
     }, 1500);
   };
   if (navigator.clipboard && navigator.clipboard.writeText)

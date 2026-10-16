@@ -48,7 +48,14 @@
   //   enBase      id → 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
   //   pendientes  ids que esperan su primera subida (anotadas mientras conectaba, recuperadas del navegador)
   function crearSincronia() {
-    var S = { anots: {}, campos: {}, sinGuardar: {}, enVuelo: {}, enBase: {}, pendientes: [] };
+    var S = {
+      anots: {},
+      campos: {},
+      sinGuardar: {},
+      enVuelo: {},
+      enBase: {},
+      pendientes: /** @type {string[]} */ ([]),
+    };
 
     function pendiente(id) {
       if (S.pendientes.indexOf(id) < 0) S.pendientes.push(id);
@@ -107,7 +114,11 @@
     S.alRechazar = function (id, codigo, previa, verbo) {
       if (verbo !== 'borrar') delete S.enVuelo[id];
       var tamano = JSON.stringify(previa || S.anots[id] || {}).length;
-      var r = { permiso: esDePermiso(codigo, tamano, verbo), conservada: false, restaurada: null };
+      var r = {
+        permiso: esDePermiso(codigo, tamano, verbo),
+        conservada: false,
+        restaurada: /** @type {Anotacion | null} */ (null),
+      };
       if (verbo === 'borrar') {
         if (previa) S.anots[id] = r.restaurada = previa;
       } else if (previa) {

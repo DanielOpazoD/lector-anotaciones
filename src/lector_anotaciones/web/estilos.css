@@ -365,6 +365,7 @@
     nav.indice .cajon-cab { position: sticky; top: 0; background: var(--bg); padding: 4px 0 8px 8px; z-index: 1; }
     nav.indice { background: var(--bg); }
     #movil-barra { display: flex; gap: 6px; }
+    #app.foco #movil-barra { display: none; } /* la capa `pantallas` gana a `componentes`: se repite aquí */
     /* La barra se reduce a una fila: lo demás (búsqueda, concentración, capas, ajustes, atajos) se despliega con «⋯». */
     header.barra { gap: 8px; }
     #b-mas { display: inline-block; font-size: 16px; line-height: 1; }

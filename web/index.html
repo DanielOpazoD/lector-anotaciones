@@ -375,6 +375,7 @@
     nav.indice .cajon-cab { position: sticky; top: 0; background: var(--bg); padding: 4px 0 8px 8px; z-index: 1; }
     nav.indice { background: var(--bg); }
     #movil-barra { display: flex; gap: 6px; }
+    #app.foco #movil-barra { display: none; } /* la capa `pantallas` gana a `componentes`: se repite aquí */
     /* La barra se reduce a una fila: lo demás (búsqueda, concentración, capas, ajustes, atajos) se despliega con «⋯». */
     header.barra { gap: 8px; }
     #b-mas { display: inline-block; font-size: 16px; line-height: 1; }
@@ -954,6 +955,7 @@
   }
   // El armazón del libro: las secciones abiertas y la actual. Un bloque antes de toda sección abre «Preliminares».
   function estadoLibro(figs) {
+    /** @type {{ figs: string, usados: Record<string, number>, secciones: any[], sec: any, [k: string]: any }} */
     var st = { figs: figs === undefined ? 'figs/' : figs, usados: {}, secciones: [], sec: null };
     st.nueva = function (titulo, nivel, src) {
       st.sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };
@@ -1619,7 +1621,14 @@
   //   enBase      id → 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
   //   pendientes  ids que esperan su primera subida (anotadas mientras conectaba, recuperadas del navegador)
   function crearSincronia() {
-    var S = { anots: {}, campos: {}, sinGuardar: {}, enVuelo: {}, enBase: {}, pendientes: [] };
+    var S = {
+      anots: {},
+      campos: {},
+      sinGuardar: {},
+      enVuelo: {},
+      enBase: {},
+      pendientes: /** @type {string[]} */ ([]),
+    };
 
     function pendiente(id) {
       if (S.pendientes.indexOf(id) < 0) S.pendientes.push(id);
@@ -1678,7 +1687,11 @@
     S.alRechazar = function (id, codigo, previa, verbo) {
       if (verbo !== 'borrar') delete S.enVuelo[id];
       var tamano = JSON.stringify(previa || S.anots[id] || {}).length;
-      var r = { permiso: esDePermiso(codigo, tamano, verbo), conservada: false, restaurada: null };
+      var r = {
+        permiso: esDePermiso(codigo, tamano, verbo),
+        conservada: false,
+        restaurada: /** @type {Anotacion | null} */ (null),
+      };
       if (verbo === 'borrar') {
         if (previa) S.anots[id] = r.restaurada = previa;
       } else if (previa) {
@@ -3341,7 +3354,8 @@ function borrar(id) {
   if (SOLO_LECTURA) return;
   var q = quitarDeMemoria(id);
   if (!q) return;
-  var a = q.anotacion;
+  var a = q.anotacion,
+    marca = q.marca;
   renderPanel();
   renderCuentas();
   // Un borrado confirmado sale también de la copia local, para que una pendiente que no subió no vuelva al recargar;
@@ -3363,7 +3377,7 @@ function borrar(id) {
           borrada();
           return;
         }
-        if (q.marca) SINC.sinGuardar[id] = q.marca;
+        if (marca) SINC.sinGuardar[id] = marca;
         rechazoEscritura(e, id, a, 'borrar');
       });
   } else if (modo === 'cargando') {
@@ -3775,7 +3789,7 @@ function pintarPid(pid) {
   }
   var pos = 0;
   nodos.forEach(function (tn) {
-    var texto = tn.nodeValue,
+    var texto = tn.nodeValue || '',
       ini = pos,
       fin = pos + texto.length;
     pos = fin;
@@ -3804,7 +3818,7 @@ function pintarPid(pid) {
       var nodo;
       if (cubren.length) {
         cubren.sort(function (x, y) {
-          return x.creado < y.creado ? -1 : 1;
+          return (x.creado || '') < (y.creado || '') ? -1 : 1;
         });
         var top = cubren[cubren.length - 1];
         nodo = el('mark', {
@@ -3844,7 +3858,7 @@ function pintarPid(pid) {
       }
       frag.appendChild(nodo);
     }
-    tn.parentNode.replaceChild(frag, tn);
+    if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
   });
 }
 // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo
@@ -3994,7 +4008,7 @@ function ordenKey(a) {
 // lectura, quién es el lector y su perfil, si hay varios lectores, la huella de su bloque). Un redibujo reutiliza el
 // nodo si las dos siguen iguales.
 var FICHAS = {}, // id → { a, firma, nodo }
-  ultimoMargen = false;
+  MEDIDAS = new WeakMap(); // nodo de ficha → ancho de la lista y modo con que se midieron sus notas
 function firmaFicha(a, varios) {
   var u = UBIC[a.id],
     pe = pidEfectivo(a);
@@ -4020,14 +4034,20 @@ function fichaPara(a, varios) {
   FICHAS[a.id] = { a: a, firma: firma, nodo: nodo };
   return { nodo: nodo, nueva: true };
 }
-// Tras cambiar en su sitio una ficha ya dibujada (activarla, o un guardado silencioso que el cuadro ya muestra), su
-// registro se pone al día para que el próximo redibujo no la rehaga.
-function refirmar(id) {
-  var c = FICHAS[id],
-    a = anots[id];
-  if (!c || !a || !c.nodo.isConnected) return;
-  c.a = a;
-  c.firma = firmaFicha(a, variosAutores());
+// Tras activar o dejar una ficha en su sitio (la clase `foco`), su registro dice que lo está, para que el próximo
+// redibujo no la rehaga por eso. Sólo esa parte de la firma: lo demás que haya cambiado sin redibujarse (una pregunta
+// que se contestó, un autor que se puso al subir) sigue pendiente y el redibujo lo muestra.
+function refirmarFoco(id) {
+  var c = FICHAS[id];
+  if (!c || !c.nodo.isConnected) return;
+  c.firma = String(V.fichaFoco === id) + c.firma.slice(c.firma.indexOf('|'));
+}
+// Tras un guardado silencioso, el cuadro ya muestra lo escrito: el registro pasa a la anotación nueva si la ficha
+// mostraba la anterior (`ant`). La firma no se toca: si el cambio altera lo que la ficha muestra («revisada»), el
+// próximo redibujo la rehace.
+function avanzarFicha(id, ant) {
+  var c = FICHAS[id];
+  if (c && c.a === ant && anots[id]) c.a = anots[id];
 }
 // Deja en `cont` exactamente `nodos`, en ese orden, sin mover los que ya están en su lugar.
 function colocarHijos(cont, nodos) {
@@ -4047,7 +4067,7 @@ function renderPanel() {
     foco = { id: act.id, valor: act.value, ini: act.selectionStart, fin: act.selectionEnd, scroll: act.scrollTop };
   else if (act && act.tagName === 'BUTTON' && act.closest('.ficha'))
     focoBoton = {
-      id: act.closest('.ficha').getAttribute('data-id'),
+      id: /** @type {Element} */ (act.closest('.ficha')).getAttribute('data-id'),
       accion: act.getAttribute('data-accion') || '',
       c: act.getAttribute('data-c') || '',
       texto: act.textContent,
@@ -4100,12 +4120,17 @@ function renderPanel() {
     actualizarNav();
     return;
   }
-  // las fichas que no cambiaron se reutilizan (y no se mueven si ya están en su lugar); sólo se dibujan las nuevas
+  // las fichas que no cambiaron se reutilizan (y no se mueven si ya están en su lugar); sólo se dibujan las nuevas.
+  // Se miden las notas de las nuevas y de las reutilizadas que se midieron con otro ancho o modo, o sin verse (el
+  // panel oculto en concentración o en el teléfono); fuera del margen, ninguna conserva la altura que tuvo ahí.
   var varios = variosAutores(),
-    nuevas = [],
+    ancho = box.clientWidth,
+    medida = ancho ? ancho + '|' + margen : null,
+    porMedir = [],
     nodos = L.map(function (a) {
       var r = fichaPara(a, varios);
-      if (r.nueva) nuevas.push(r.nodo);
+      if (r.nueva || !medida || MEDIDAS.get(r.nodo) !== medida) porMedir.push(r.nodo);
+      if (!margen && r.nodo.style.top) r.nodo.style.top = '';
       return r.nodo;
     });
   if (margen) {
@@ -4113,10 +4138,11 @@ function renderPanel() {
     colocarHijos(box, cabeza.concat([capa]));
     colocarHijos(capa, nodos);
   } else colocarHijos(box, cabeza.concat(nodos));
-  // las notas se ajustan en las fichas nuevas; si cambió el ancho de las fichas (lista ↔ margen), en todas
-  if (margen !== ultimoMargen) ajustarTextareas(box);
-  else if (nuevas.length) ajustarTextareasDe(nuevas);
-  ultimoMargen = margen;
+  if (porMedir.length) ajustarTextareasDe(porMedir);
+  porMedir.forEach(function (n) {
+    if (medida) MEDIDAS.set(n, medida);
+    else MEDIDAS.delete(n);
+  });
   if (margen) colocarMargen();
   else box.scrollTop = desplaz;
   // si el elemento enfocado sigue en la página (su ficha se reutilizó), no hay nada que restaurar
@@ -4283,8 +4309,8 @@ function activar(id) {
   $$('mark.hl[data-aids~="' + id + '"]').forEach(function (m) {
     m.classList.add('foco');
   });
-  refirmar(antes);
-  refirmar(id);
+  refirmarFoco(antes);
+  refirmarFoco(id);
   if (margenActivo()) reacomodarPorActivar(id);
   actualizarNav();
 }
@@ -4821,7 +4847,7 @@ function guardarSilencioso(id, parche) {
   if (!ant || SOLO_LECTURA) return;
   SINC.cambiar(Object.assign({}, ant, parche), ahora());
   // la ficha ya muestra lo escrito: no hace falta rehacerla (salvo que cambie lo que muestra, como «revisada»)
-  if (!('revisado' in parche)) refirmar(id);
+  avanzarFicha(id, ant);
   if (col) escribirEnBase(id, null);
   else guardarLocal(modo === 'cargando' ? [id] : undefined);
 }
@@ -4838,7 +4864,7 @@ function cambioDe(a) {
   if (u && u.estado !== 'perdido') return b && b.anterior && (!a.bh || b.h !== a.bh) ? pe : null;
   // de los bloques cuyo texto anterior contenía la cita: el suyo, si es uno; si no, el que la tenía con su contexto
   var elegir = function (bloques) {
-    var mejor = null,
+    var mejor = /** @type {any} */ (null),
       puntos = -1;
     bloques.forEach(function (x) {
       if (!x.anterior) return;
@@ -4926,7 +4952,7 @@ function navegar(d) {
   }
   var j = N.vecina(L, V.fichaFoco, d, {
     de: ordenKey,
-    clave: anots[V.fichaFoco] ? ordenKey(anots[V.fichaFoco]) : null,
+    clave: V.fichaFoco && anots[V.fichaFoco] ? ordenKey(anots[V.fichaFoco]) : null,
   });
   if (j < 0) {
     anunciar(d > 0 ? 'Es la última anotación' : 'Es la primera anotación');
@@ -5480,12 +5506,20 @@ function exportarMD() {
   });
   return out.join('\n');
 }
+// El texto del botón se recuerda la primera vez: una segunda pulsación antes de que vuelva no recuerda «Copiado».
+var TEXTO_BOTON = new WeakMap();
 function copiar(txt, boton) {
   var ok = function () {
-    var t = boton.textContent;
+    var antes = TEXTO_BOTON.get(boton);
+    if (!antes) {
+      antes = { texto: boton.textContent, t: 0 };
+      TEXTO_BOTON.set(boton, antes);
+    }
+    clearTimeout(antes.t);
     boton.textContent = 'Copiado';
-    setTimeout(function () {
-      boton.textContent = t;
+    antes.t = setTimeout(function () {
+      boton.textContent = antes.texto;
+      TEXTO_BOTON.delete(boton);
     }, 1500);
   };
   if (navigator.clipboard && navigator.clipboard.writeText)
@@ -5889,7 +5923,7 @@ function alCambiarAncho() {
       dentro = act && act.closest ? act.closest('#indice, #panel') : null;
     if (dentro)
       ['indice', 'panel'].forEach(function (c) {
-        $('#' + c).classList.toggle('abierta', c === dentro.id);
+        $('#' + c).classList.toggle('abierta', !!dentro && c === dentro.id);
       });
   }
   sincronizarLaterales();
@@ -5929,7 +5963,7 @@ function salirDeFicha() {
     n.classList.remove('foco');
     if (n.classList.contains('ficha')) ajustarTextareas(n);
   });
-  refirmar(antes);
+  refirmarFoco(antes);
   colocarMargenPronto();
   actualizarNav();
 }
@@ -6760,13 +6794,15 @@ function obtenerLibro() {
     });
   };
   if (!m) return dePagina();
+  var tipo = m[1],
+    idL = m[2];
   var leer =
-    m[1] === 'base'
+    tipo === 'base'
       ? usoDb.then(function (d) {
           if (!d) throw new Error('sin base compartida en esta vista');
-          return compartida.leer(d, m[2]);
+          return compartida.leer(d, idL);
         })
-      : enNavegador.leer(m[2]);
+      : enNavegador.leer(idL);
   return leer
     .then(function (L) {
       if (!L) {
@@ -6774,7 +6810,7 @@ function obtenerLibro() {
         e.noEsta = true;
         throw e;
       }
-      L.id = m[2];
+      L.id = idL;
       L.claves_anteriores = []; // las claves viejas de localStorage son del libro de la página
       N.sanearLibro(L);
       var problemas = N.validarLibro(L);
@@ -6783,7 +6819,7 @@ function obtenerLibro() {
         e2.noEsta = true;
         throw e2;
       }
-      return { libro: L, fuente: { tipo: m[1], id: m[2] } };
+      return { libro: L, fuente: { tipo: tipo, id: idL } };
     })
     .catch(function (e) {
       if (e && e.noEsta) guardarEleccion('');

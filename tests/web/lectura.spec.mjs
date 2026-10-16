@@ -1,8 +1,6 @@
 // Leer: capas, cambios entre versiones, progreso, concentración, atajos, voz y accesibilidad.
 import fs from 'node:fs';
 
-import { test } from '@playwright/test';
-
 import {
   LIBRO,
   servir,
@@ -22,6 +20,7 @@ import {
   activo,
   CLAVE_LOCAL,
   guardadoLocal,
+  test,
 } from './ayudas.mjs';
 
 let srv, base;

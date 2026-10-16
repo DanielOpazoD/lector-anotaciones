@@ -66,13 +66,15 @@ function obtenerLibro() {
     });
   };
   if (!m) return dePagina();
+  var tipo = m[1],
+    idL = m[2];
   var leer =
-    m[1] === 'base'
+    tipo === 'base'
       ? usoDb.then(function (d) {
           if (!d) throw new Error('sin base compartida en esta vista');
-          return compartida.leer(d, m[2]);
+          return compartida.leer(d, idL);
         })
-      : enNavegador.leer(m[2]);
+      : enNavegador.leer(idL);
   return leer
     .then(function (L) {
       if (!L) {
@@ -80,7 +82,7 @@ function obtenerLibro() {
         e.noEsta = true;
         throw e;
       }
-      L.id = m[2];
+      L.id = idL;
       L.claves_anteriores = []; // las claves viejas de localStorage son del libro de la página
       N.sanearLibro(L);
       var problemas = N.validarLibro(L);
@@ -89,7 +91,7 @@ function obtenerLibro() {
         e2.noEsta = true;
         throw e2;
       }
-      return { libro: L, fuente: { tipo: m[1], id: m[2] } };
+      return { libro: L, fuente: { tipo: tipo, id: idL } };
     })
     .catch(function (e) {
       if (e && e.noEsta) guardarEleccion('');

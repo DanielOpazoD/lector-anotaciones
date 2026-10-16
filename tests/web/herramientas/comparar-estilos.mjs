@@ -236,6 +236,15 @@ const ESTADOS = [
     },
   },
   {
+    nombre: 'teléfono · concentración',
+    vista: [400, 800],
+    tactil: true,
+    hacer: async (p) => {
+      await p.focus('#lectura');
+      await p.keyboard.press('f');
+    },
+  },
+  {
     nombre: 'teléfono · índice y ⋯',
     vista: [400, 800],
     tactil: true,

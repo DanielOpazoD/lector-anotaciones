@@ -26,9 +26,38 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { expect } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+// `test` de todas las pruebas: un error sin capturar en cualquier página de cualquier contexto que la prueba abra la
+// hace fallar, aunque la prueba no lo mire (cada una abre sus contextos con `browser.newContext`).
+export const test = base.extend({
+  sinErroresDePagina: [
+    async ({ browser }, use) => {
+      const errores = [];
+      const original = browser.newContext;
+      browser.newContext = async function (...args) {
+        const ctx = await original.apply(this, args);
+        // los guiones de inicio de las pruebas corren también en la página en blanco que precede a la navegación, donde
+        // leer el almacenamiento está prohibido: sus errores (sin ninguna línea de la página servida) no son de la página
+        ctx.on('weberror', (e) => {
+          const pila = String((e.error() && e.error().stack) || e.error());
+          if (/^SecurityError: Failed to read the '(local|session)Storage'/.test(pila) && !/https?:\/\//.test(pila))
+            return;
+          errores.push(pila);
+        });
+        return ctx;
+      };
+      try {
+        await use(errores);
+      } finally {
+        browser.newContext = original;
+      }
+      expect(errores, 'errores de página sin capturar').toEqual([]);
+    },
+    { auto: true },
+  ],
+});
 export const LIBRO = process.env.LIBRO_JSON || path.join(RAIZ, 'ejemplo', 'salida', 'libro.json');
 const FIGS = process.env.FIGS_DIR || path.join(RAIZ, 'ejemplo', 'figs');
 const TIPOS = {
@@ -169,15 +198,16 @@ export const conBase = () => {
         )
       ),
   };
-  const retraso = window.__retrasoDb || 0;
+  // Con `__retenerDb`, la base no conecta hasta que la prueba llama a `__soltarDb()`: lo que la prueba hace «mientras
+  // conecta» no compite con un plazo fijo (que bajo carga podía vencer antes de que la prueba actuara).
+  let soltar = () => {};
+  const conectada = window.__retenerDb ? new Promise((r) => (soltar = r)) : Promise.resolve();
+  window.__soltarDb = () => soltar();
   window.claude = {
     use: (n) =>
-      new Promise((res) =>
-        setTimeout(
-          () => res(n === 'db' ? db : n === 'user' && !window.__sinUsuario ? user : null),
-          n === 'db' ? retraso : 0
-        )
-      ),
+      n === 'db'
+        ? conectada.then(() => db)
+        : new Promise((res) => setTimeout(() => res(n === 'user' && !window.__sinUsuario ? user : null), 0)),
   };
   window.__docs = coleccion('anotaciones');
   window.__colecciones = cols;

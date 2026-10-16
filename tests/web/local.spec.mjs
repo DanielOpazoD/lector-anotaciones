@@ -1,8 +1,6 @@
 // Sin base: anotar, guardar en el navegador y reubicar tras un cambio del libro.
 import fs from 'node:fs';
 
-import { test } from '@playwright/test';
-
 import {
   LIBRO,
   servir,
@@ -22,6 +20,7 @@ import {
   activo,
   CLAVE_LOCAL,
   guardadoLocal,
+  test,
 } from './ayudas.mjs';
 
 let srv, base;

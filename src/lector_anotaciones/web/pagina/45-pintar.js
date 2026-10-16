@@ -68,7 +68,7 @@ function pintarPid(pid) {
   }
   var pos = 0;
   nodos.forEach(function (tn) {
-    var texto = tn.nodeValue,
+    var texto = tn.nodeValue || '',
       ini = pos,
       fin = pos + texto.length;
     pos = fin;
@@ -97,7 +97,7 @@ function pintarPid(pid) {
       var nodo;
       if (cubren.length) {
         cubren.sort(function (x, y) {
-          return x.creado < y.creado ? -1 : 1;
+          return (x.creado || '') < (y.creado || '') ? -1 : 1;
         });
         var top = cubren[cubren.length - 1];
         nodo = el('mark', {
@@ -137,7 +137,7 @@ function pintarPid(pid) {
       }
       frag.appendChild(nodo);
     }
-    tn.parentNode.replaceChild(frag, tn);
+    if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
   });
 }
 // Cada marca abre su propia anotación. (Con la variable del bucle en la clausura, todas las marcas de un párrafo

@@ -66,6 +66,7 @@
   }
   // El armazón del libro: las secciones abiertas y la actual. Un bloque antes de toda sección abre «Preliminares».
   function estadoLibro(figs) {
+    /** @type {{ figs: string, usados: Record<string, number>, secciones: any[], sec: any, [k: string]: any }} */
     var st = { figs: figs === undefined ? 'figs/' : figs, usados: {}, secciones: [], sec: null };
     st.nueva = function (titulo, nivel, src) {
       st.sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };

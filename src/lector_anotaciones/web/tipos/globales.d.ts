@@ -40,7 +40,6 @@ interface Anotacion {
     commit?: string;
     cuando?: string;
   }[];
-  [otro: string]: any;
 }
 
 /** La sincronía de las anotaciones (nucleo/65-sincronia.js). */
@@ -98,7 +97,15 @@ interface Vista {
   revisada(id: string): boolean;
 }
 
-/** El núcleo (nucleo/*.js): lo que la página llama con tipos; el resto, sin tipar todavía. */
+/** Dónde quedó un subrayado en esta versión del libro (nucleo/30-ubicar.js). */
+interface Ubicacion {
+  pid: string;
+  inicio: number;
+  fin: number;
+  estado: 'exacto' | 'reubicado' | 'perdido';
+}
+
+/** El núcleo (nucleo/*.js): todo lo que la página llama, con su tipo; un nombre que no está aquí es un error. */
 interface Nucleo {
   crearSincronia(): Sincronia;
   crearVista(inicial?: Partial<EstadoVista>): Vista;
@@ -125,7 +132,28 @@ interface Nucleo {
   fundirBorrador(deBase: Anotacion, borrador: Anotacion, campos?: Record<string, boolean>): Anotacion;
   igual(a: any, b: any): boolean;
   CAMPOS_LECTOR: string[];
-  [otro: string]: any;
+  normalizar(s: string): string;
+  slug(s: string, maximo?: number): string;
+  etiquetasDe(a: Anotacion): string[];
+  diffPalabras(antes: string, ahora: string): ['=' | '-' | '+', string][];
+  buscarCita(txt: string, a: Anotacion): { i: number; puntos: number } | null;
+  ubicarEn(
+    a: Anotacion,
+    ctx: {
+      existe(pid: string): boolean;
+      texto(pid: string): string;
+      candidatos(a: Anotacion): string[];
+      porHuella?(h: string): string[];
+    }
+  ): Ubicacion | null;
+  huella(texto: string): string;
+  validarLibro(libro: any): string[];
+  sanearLibro(libro: any): any;
+  libroAMarkdown(libro: any): string;
+  importarLibro(
+    archivos: { nombre: string; bytes: Uint8Array }[],
+    opciones?: Record<string, any>
+  ): Promise<{ libro: any; avisos: string[]; origen: string }>;
 }
 
 interface Window {

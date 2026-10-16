@@ -271,7 +271,7 @@ function alCambiarAncho() {
       dentro = act && act.closest ? act.closest('#indice, #panel') : null;
     if (dentro)
       ['indice', 'panel'].forEach(function (c) {
-        $('#' + c).classList.toggle('abierta', c === dentro.id);
+        $('#' + c).classList.toggle('abierta', !!dentro && c === dentro.id);
       });
   }
   sincronizarLaterales();
@@ -311,7 +311,7 @@ function salirDeFicha() {
     n.classList.remove('foco');
     if (n.classList.contains('ficha')) ajustarTextareas(n);
   });
-  refirmar(antes);
+  refirmarFoco(antes);
   colocarMargenPronto();
   actualizarNav();
 }
