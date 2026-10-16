@@ -196,6 +196,9 @@
   P.$('#b-copiar-md').addEventListener('click', function () {
     P.copiar(P.exportarMD(), this);
   });
+  P.$('#b-diagnostico').addEventListener('click', function () {
+    P.copiar(P.diagnostico(), this);
+  });
   P.$('#buscar').addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter') P.buscar(this.value);
   });
@@ -208,7 +211,7 @@
     window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false }
   );
   P.mqMovil = mqMovil;
-  E.volverA = null;
+  E.volverA = /** @type {Element | null} */ (null); // a dónde vuelve el foco al cerrar un cajón
   // Un destino de foco que de verdad se puede enfocar: en el documento, visible (no en una sección oculta ni en un panel
   // escondido por la concentración) y fuera de lo inerte.
   function enfocable(n) {
@@ -264,7 +267,8 @@
         (dentro || P.$('.cerrar', n)).focus({ preventScroll: true });
       }
     } else if (n.contains(activo) || !activo || activo === document.body) {
-      var destino = enfocable(E.volverA) && !E.volverA.closest('.cajon') ? E.volverA : null;
+      var v = E.volverA,
+        destino = v && enfocable(v) && !v.closest('.cajon') ? v : null;
       if (!destino && cual === 'panel' && P.V.fichaFoco) {
         var mf = P.$('mark.hl[data-aids~="' + P.V.fichaFoco + '"]');
         if (enfocable(mf)) destino = mf;
@@ -459,7 +463,9 @@
     if (E.lectura) {
       try {
         window.speechSynthesis.cancel();
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('voz', e);
+      }
       P.detenerLectura();
       return;
     }

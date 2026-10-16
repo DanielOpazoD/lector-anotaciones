@@ -14,7 +14,7 @@ vista y ayudantes puros (`P.el`, `P.etiqueta`, `P.N`, `P.diffPalabras`, `P.chipA
 (`abrirPropuesta`, `cursorAlFinal`) y los manejadores de eventos corren después.
 Este guion lo comprueba.
 
-En total: 129 cosas ofrecidas y 22 de estado compartido.
+En total: 133 cosas ofrecidas y 22 de estado compartido.
 
 ## Estado compartido (`E`)
 
@@ -25,18 +25,18 @@ En total: 129 cosas ofrecidas y 22 de estado compartido.
 | `col` | 00-base.js | 00-base.js, 20-guardado.js, 90-arranque.js |
 | `db` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js, 90-arranque.js |
 | `ESCRIBIENDO` | 00-base.js | 00-base.js, 88-biblioteca.js |
-| `FUENTE` | 88-biblioteca.js | 88-biblioteca.js, 90-arranque.js |
+| `FUENTE` | 88-biblioteca.js | 60-exportar.js, 88-biblioteca.js, 90-arranque.js |
 | `lectura` | 00-base.js | 00-base.js, 10-libro.js, 70-interfaz.js, 84-progreso-voz.js |
 | `LEIDAS` | 00-base.js | 00-base.js, 84-progreso-voz.js, 90-arranque.js |
-| `LIBRO` | 00-base.js | 00-base.js, 20-guardado.js, 30-crear.js, 45-pintar.js, 60-exportar.js, 70-interfaz.js, 80-cambios.js, 82-capas.js, 86-deshacer-respaldo.js, 88-biblioteca.js, 90-arranque.js |
+| `LIBRO` | 00-base.js | 00-base.js, 20-guardado.js, 30-crear.js, 60-exportar.js, 70-interfaz.js, 86-deshacer-respaldo.js, 88-biblioteca.js, 90-arranque.js |
 | `LOCAL_KEY` | 00-base.js | 00-base.js, 10-libro.js, 20-guardado.js, 70-interfaz.js, 80-cambios.js, 82-capas.js, 84-progreso-voz.js, 86-deshacer-respaldo.js, 90-arranque.js |
-| `ME` | 00-base.js | 00-base.js, 30-crear.js, 50-panel.js, 75-lectores.js, 88-biblioteca.js, 90-arranque.js |
-| `modo` | 00-base.js | 00-base.js, 20-guardado.js, 90-arranque.js |
+| `ME` | 00-base.js | 00-base.js, 30-crear.js, 50-panel.js, 60-exportar.js, 75-lectores.js, 88-biblioteca.js, 90-arranque.js |
+| `modo` | 00-base.js | 00-base.js, 20-guardado.js, 60-exportar.js, 90-arranque.js |
 | `punteroAbajo` | 55-margen.js | 52-ficha.js, 55-margen.js |
 | `respaldoBloqueado` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js |
 | `respaldoHoy` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js |
 | `SECS` | 00-base.js | 00-base.js, 10-libro.js, 40-ubicar.js, 50-panel.js, 54-revisar.js, 65-buscar.js, 82-capas.js, 84-progreso-voz.js, 90-arranque.js |
-| `SOLO_LECTURA` | 00-base.js | 00-base.js, 20-guardado.js, 30-crear.js, 50-panel.js, 52-ficha.js, 54-revisar.js, 70-interfaz.js, 86-deshacer-respaldo.js, 88-biblioteca.js, 90-arranque.js |
+| `SOLO_LECTURA` | 00-base.js | 00-base.js, 20-guardado.js, 30-crear.js, 50-panel.js, 52-ficha.js, 54-revisar.js, 60-exportar.js, 70-interfaz.js, 86-deshacer-respaldo.js, 88-biblioteca.js, 90-arranque.js |
 | `UBIC` | 40-ubicar.js | 20-guardado.js, 40-ubicar.js, 45-pintar.js, 50-panel.js, 54-revisar.js, 60-exportar.js |
 | `ultimoBorrado` | 00-base.js | 00-base.js, 86-deshacer-respaldo.js |
 | `USER` | 00-base.js | 00-base.js, 75-lectores.js, 90-arranque.js |
@@ -47,7 +47,7 @@ En total: 129 cosas ofrecidas y 22 de estado compartido.
 
 ### 00-base.js
 
-Ofrece: `$`, `$$`, `ahora`, `anots`, `anunciar`, `BLOQUE_SEC`, `BLOQUES`, `bytesJSON`, `el`, `enCurso`, `estado`, `lsGet`, `lsSet`, `N`, `ORIG`, `PERFILES`, `PERFILES_PEDIDOS`, `POS_BLOQUE`, `RESPALDO_MAX`, `SEC_BY_ID`, `SINC`, `uid`, `V`, `VISTA`.
+Ofrece: `$`, `$$`, `ahora`, `anots`, `anunciar`, `BLOQUE_SEC`, `BLOQUES`, `bytesJSON`, `el`, `enCurso`, `estado`, `fallo`, `FALLOS`, `libro`, `lsGet`, `lsSet`, `N`, `ORIG`, `PERFILES`, `PERFILES_PEDIDOS`, `POS_BLOQUE`, `RESPALDO_MAX`, `SEC_BY_ID`, `SINC`, `uid`, `V`, `VISTA`.
 
 No usa nada de otros fragmentos.
 
@@ -57,7 +57,7 @@ Ofrece: `irA`, `mover`, `renderLibro`.
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `BLOQUE_SEC`, `BLOQUES`, `el`, `lsSet`, `ORIG`, `POS_BLOQUE`, `SEC_BY_ID`, `V`, `VISTA`
+- de 00-base.js: `$`, `$$`, `BLOQUE_SEC`, `BLOQUES`, `el`, `fallo`, `lsSet`, `ORIG`, `POS_BLOQUE`, `SEC_BY_ID`, `V`, `VISTA`
 - de 30-crear.js: `notaPagina`
 - de 50-panel.js: `renderPanel`
 - de 70-interfaz.js: `lateral`
@@ -70,7 +70,7 @@ Ofrece: `activarSoloLectura`, `borrar`, `cargarLocal`, `escribirCampos`, `escrib
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `ahora`, `anots`, `enCurso`, `estado`, `lsGet`, `lsSet`, `N`, `SINC`
+- de 00-base.js: `$`, `$$`, `ahora`, `anots`, `enCurso`, `estado`, `fallo`, `lsGet`, `lsSet`, `N`, `SINC`
 - de 40-ubicar.js: `ubicar`
 - de 45-pintar.js: `marcasPagina`, `pintar`, `pintarPid`
 - de 50-panel.js: `avanzarFicha`, `renderPanel`
@@ -105,7 +105,7 @@ Ofrece: `esMarcador`, `marcasPagina`, `pintar`, `pintarPid`, `pintarTodo`, `refr
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `anots`, `BLOQUES`, `el`, `ORIG`, `V`
+- de 00-base.js: `$`, `$$`, `anots`, `BLOQUES`, `el`, `libro`, `ORIG`, `V`
 - de 40-ubicar.js: `pidEfectivo`, `reubicarTodo`
 - de 50-panel.js: `porRevisar`
 - de 54-revisar.js: `enfocar`
@@ -116,7 +116,7 @@ Ofrece: `activar`, `ajustarAlto`, `ajustarTextareas`, `avanzarFicha`, `cambiarTa
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `anots`, `BLOQUE_SEC`, `BLOQUES`, `el`, `N`, `PERFILES`, `POS_BLOQUE`, `SEC_BY_ID`, `SINC`, `V`, `VISTA`
+- de 00-base.js: `$`, `$$`, `anots`, `BLOQUE_SEC`, `BLOQUES`, `el`, `fallo`, `N`, `PERFILES`, `POS_BLOQUE`, `SEC_BY_ID`, `SINC`, `V`, `VISTA`
 - de 40-ubicar.js: `pidEfectivo`
 - de 45-pintar.js: `refrescarMarcas`
 - de 52-ficha.js: `ficha`
@@ -131,7 +131,7 @@ Ofrece: `abrirPropuesta`, `ficha`.
 
 Usa:
 
-- de 00-base.js: `$`, `ahora`, `anots`, `el`, `N`, `V`, `VISTA`
+- de 00-base.js: `$`, `ahora`, `anots`, `el`, `fallo`, `N`, `V`, `VISTA`
 - de 20-guardado.js: `borrar`, `guardar`, `guardarSilencioso`, `reintentar`
 - de 50-panel.js: `activar`, `ajustarAlto`, `etiqueta`, `olvidarFicha`, `porRevisar`, `propuestaAbierta`, `renderCuentaRevisar`
 - de 54-revisar.js: `irAAnot`, `revisar`, `verCambio`
@@ -148,7 +148,7 @@ Ofrece: `actualizarNav`, `cambioDe`, `enfocar`, `irAAnot`, `navegar`, `renderCue
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `ahora`, `anots`, `anunciar`, `BLOQUE_SEC`, `BLOQUES`, `el`, `N`, `SEC_BY_ID`, `V`, `VISTA`
+- de 00-base.js: `$`, `$$`, `ahora`, `anots`, `anunciar`, `BLOQUE_SEC`, `BLOQUES`, `el`, `fallo`, `N`, `SEC_BY_ID`, `V`, `VISTA`
 - de 10-libro.js: `irA`
 - de 20-guardado.js: `guardar`
 - de 40-ubicar.js: `pidEfectivo`
@@ -173,11 +173,11 @@ Usa:
 
 ### 60-exportar.js
 
-Ofrece: `copiar`, `copiarSeleccion`, `exportarJSON`, `exportarMD`, `textoAnotacion`.
+Ofrece: `copiar`, `copiarSeleccion`, `diagnostico`, `exportarJSON`, `exportarMD`, `textoAnotacion`.
 
 Usa:
 
-- de 00-base.js: `$`, `ahora`, `anots`, `BLOQUE_SEC`, `el`, `estado`, `N`, `SEC_BY_ID`, `SINC`
+- de 00-base.js: `$`, `ahora`, `anots`, `BLOQUE_SEC`, `el`, `estado`, `FALLOS`, `libro`, `N`, `SEC_BY_ID`, `SINC`
 - de 30-crear.js: `extremosDeRango`
 - de 50-panel.js: `ordenKey`
 
@@ -201,14 +201,14 @@ Ofrece: `abrirDialogo`, `alternarFoco`, `cerrarDialogo`, `cerrarHerramientas`, `
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `anots`, `lsSet`, `SEC_BY_ID`, `V`, `VISTA`
+- de 00-base.js: `$`, `$$`, `anots`, `fallo`, `lsSet`, `SEC_BY_ID`, `V`, `VISTA`
 - de 10-libro.js: `irA`, `mover`
 - de 30-crear.js: `ancestroPid`, `crearSubrayado`, `extremosDeRango`, `notaGeneral`, `notaPagina`, `notaSeccion`
 - de 50-panel.js: `ajustarTextareas`, `cambiarTab`, `porRevisar`, `renderPanel`, `vistaEnSitio`
 - de 52-ficha.js: `abrirPropuesta`
 - de 54-revisar.js: `actualizarNav`, `navegar`, `revisar`, `verCambio`
 - de 55-margen.js: `colocarMargenPronto`
-- de 60-exportar.js: `copiar`, `copiarSeleccion`, `exportarJSON`, `exportarMD`
+- de 60-exportar.js: `copiar`, `copiarSeleccion`, `diagnostico`, `exportarJSON`, `exportarMD`
 - de 65-buscar.js: `buscar`
 - de 84-progreso-voz.js: `alternarLeida`, `detenerLectura`
 
@@ -226,7 +226,7 @@ Ofrece: `chipAutor`, `etiquetasDe`, `etiquetasFicha`, `pintarEtiquetas`, `render
 
 Usa:
 
-- de 00-base.js: `$`, `anots`, `el`, `N`, `PERFILES`, `PERFILES_PEDIDOS`, `V`, `VISTA`
+- de 00-base.js: `$`, `anots`, `el`, `fallo`, `N`, `PERFILES`, `PERFILES_PEDIDOS`, `V`, `VISTA`
 - de 50-panel.js: `renderPanel`
 
 ### 80-cambios.js
@@ -235,7 +235,7 @@ Ofrece: `alternarDiff`, `diffPalabras`, `lsJSON`, `marcarCambio`, `registrarVist
 
 Usa:
 
-- de 00-base.js: `$`, `BLOQUES`, `el`, `lsGet`, `lsSet`, `N`, `SEC_BY_ID`
+- de 00-base.js: `$`, `BLOQUES`, `el`, `libro`, `lsGet`, `lsSet`, `N`, `SEC_BY_ID`
 - de 40-ubicar.js: `textoPlano`
 - de 55-margen.js: `colocarMargenPronto`
 
@@ -245,7 +245,7 @@ Ofrece: `renderCapasMenu`.
 
 Usa:
 
-- de 00-base.js: `$`, `el`, `lsSet`
+- de 00-base.js: `$`, `el`, `libro`, `lsSet`
 - de 45-pintar.js: `pintarTodo`
 
 ### 84-progreso-voz.js
@@ -263,7 +263,7 @@ Ofrece: `ofrecerDeshacer`, `ofrecerDeshacerCambio`, `respaldar`, `retirarDeshace
 
 Usa:
 
-- de 00-base.js: `$`, `anots`, `anunciar`, `bytesJSON`, `el`, `enCurso`, `estado`, `lsGet`, `lsSet`, `RESPALDO_MAX`, `SINC`
+- de 00-base.js: `$`, `anots`, `anunciar`, `bytesJSON`, `el`, `enCurso`, `estado`, `libro`, `lsGet`, `lsSet`, `RESPALDO_MAX`, `SINC`
 - de 20-guardado.js: `guardar`
 - de 54-revisar.js: `enfocar`
 - de 70-interfaz.js: `enfocable`
@@ -275,7 +275,7 @@ Ofrece: `claveLocalDe`, `mostrarSinLibro`, `obtenerLibro`, `rutaBase`, `usoDb`, 
 
 Usa:
 
-- de 00-base.js: `$`, `$$`, `ahora`, `anots`, `bytesJSON`, `el`, `enCurso`, `estado`, `lsGet`, `lsSet`, `N`, `SINC`
+- de 00-base.js: `$`, `$$`, `ahora`, `anots`, `bytesJSON`, `el`, `enCurso`, `estado`, `fallo`, `lsGet`, `lsSet`, `N`, `SINC`
 - de 20-guardado.js: `guardarLocal`
 - de 70-interfaz.js: `abrirDialogo`, `cerrarDialogo`
 
@@ -285,7 +285,7 @@ No ofrece nada.
 
 Usa:
 
-- de 00-base.js: `$`, `anots`, `anunciar`, `estado`, `lsGet`, `SEC_BY_ID`, `SINC`
+- de 00-base.js: `$`, `anots`, `anunciar`, `estado`, `fallo`, `lsGet`, `N`, `SEC_BY_ID`, `SINC`
 - de 10-libro.js: `irA`, `renderLibro`
 - de 20-guardado.js: `activarSoloLectura`, `cargarLocal`, `escribirCampos`, `guardarLocal`, `podarLocal`
 - de 45-pintar.js: `pintarTodo`

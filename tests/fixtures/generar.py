@@ -69,10 +69,13 @@ NAV = _xhtml(
 )
 
 
-def _opf(con_nav: bool) -> str:
+def _opf(con_nav: bool, sin_ids: bool = False) -> str:
     nav = '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>' if con_nav else ""
     ncx = "" if con_nav else '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
-    toc = "" if con_nav else ' toc="ncx"'
+    toc = "" if con_nav or sin_ids else ' toc="ncx"'
+    # un EPUB mal formado: un ítem sin id y una referencia sin idref (que no deben juntarse en un capítulo fantasma)
+    fantasma = '<item href="fantasma.xhtml" media-type="application/xhtml+xml"/>' if sin_ids else ""
+    ref = "<itemref/>" if sin_ids else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -84,9 +87,9 @@ def _opf(con_nav: bool) -> str:
     <item id="c1" href="cap1.xhtml" media-type="application/xhtml+xml"/>
     <item id="c2" href="cap2.xhtml" media-type="application/xhtml+xml"/>
     <item id="img" href="img/punto.png" media-type="image/png"/>
-    <item id="css" href="estilo.css" media-type="text/css"/>
+    <item id="css" href="estilo.css" media-type="text/css"/>{fantasma}
   </manifest>
-  <spine{toc}><itemref idref="c1"/><itemref idref="c2"/></spine>
+  <spine{toc}><itemref idref="c1"/><itemref idref="c2"/>{ref}</spine>
 </package>"""
 
 
@@ -97,17 +100,21 @@ NCX = """<?xml version="1.0" encoding="UTF-8"?>
 </navMap></ncx>"""
 
 
-def epub(destino: Path, con_nav: bool = True) -> None:
+def epub(destino: Path, con_nav: bool = True, sin_ids: bool = False) -> None:
     entradas = [
         ("mimetype", "application/epub+zip"),
         ("META-INF/container.xml", CONTAINER),
-        ("OEBPS/contenido.opf", _opf(con_nav)),
+        ("OEBPS/contenido.opf", _opf(con_nav, sin_ids)),
         ("OEBPS/cap1.xhtml", CAP1),
         ("OEBPS/cap2.xhtml", CAP2),
         ("OEBPS/img/punto.png", PNG),
         ("OEBPS/estilo.css", "p { margin: 0 }"),
     ]
     entradas.append(("OEBPS/nav.xhtml", NAV) if con_nav else ("OEBPS/toc.ncx", NCX))
+    if sin_ids:
+        entradas.append(
+            ("OEBPS/fantasma.xhtml", _xhtml("Fantasma", "<h1>Capítulo fantasma</h1><p>No debe entrar.</p>"))
+        )
     _zip(destino, entradas)
 
 
@@ -216,5 +223,6 @@ def docx(destino: Path) -> None:
 if __name__ == "__main__":
     epub(AQUI / "ejemplo.epub")
     epub(AQUI / "ejemplo-ncx.epub", con_nav=False)
+    epub(AQUI / "ejemplo-sin-ids.epub", con_nav=False, sin_ids=True)
     docx(AQUI / "ejemplo.docx")
     print("ok", *(p.name for p in sorted(AQUI.glob("ejemplo*"))))

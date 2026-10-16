@@ -139,7 +139,9 @@
     if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     try {
       history.replaceState(null, '', '#' + sid);
-    } catch (e) {}
+    } catch (e) {
+      P.fallo('historial', e);
+    }
     P.lsSet(E.LOCAL_KEY + ':ultima', sid);
     var lect = P.$('#lectura');
     if (pid) {
@@ -156,7 +158,9 @@
     if (E.lectura && E.lectura.sid !== sid) {
       try {
         window.speechSynthesis.cancel();
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('voz', e);
+      }
       P.detenerLectura();
     }
     if (P.V.tab === 'capitulo') P.renderPanel();

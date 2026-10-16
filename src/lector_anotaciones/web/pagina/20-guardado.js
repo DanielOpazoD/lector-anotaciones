@@ -55,6 +55,8 @@
     // tiene el documento; si no, entera). Si `update` no encuentra el documento (otra sesión lo borró), se crea entero.
     // Un rechazo transitorio se reintenta una sola vez tras un retardo corto y aleatorio; el segundo rechazo (o uno
     // definitivo) lo decide `rechazoEscritura`. Si entre tanto la anotación se borró, no hay nada que escribir.
+    if (!E.col) return; // sin base no hay dónde escribir (quien llama ya lo comprobó)
+    var col = E.col;
     var e0 = P.SINC.escritura(id);
     if (!e0) {
       delete P.SINC.enVuelo[id];
@@ -62,7 +64,7 @@
     }
     P.SINC.enVuelo[id] = 1;
     var a = e0.anotacion,
-      doc = E.col.doc(id);
+      doc = col.doc(id);
     var rechazo = function (e) {
       rechazoEscritura(e, id, previa, 'guardar');
       if (alRechazar) alRechazar(e);
@@ -222,7 +224,9 @@
     else
       try {
         localStorage.removeItem(E.LOCAL_KEY + ':campos');
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('almacenamiento', e);
+      }
   }
   function leerLocal() {
     try {
@@ -235,7 +239,9 @@
     if (Object.keys(datos).length) return P.lsSet(E.LOCAL_KEY, JSON.stringify(datos));
     try {
       localStorage.removeItem(E.LOCAL_KEY);
-    } catch (e) {}
+    } catch (e) {
+      P.fallo('almacenamiento', e);
+    }
     return true;
   }
   function guardarLocal(ids) {
@@ -286,7 +292,9 @@
       anteriores.forEach(function (k) {
         try {
           viejas[k] = JSON.parse(P.lsGet(k) || '{}');
-        } catch (e) {}
+        } catch (e) {
+          P.fallo('claves anteriores: ' + k, e);
+        }
       });
       var migradas = P.N.migrarClaves(j, viejas),
         guardadas = true;
@@ -297,7 +305,9 @@
           anteriores.forEach(function (k) {
             try {
               localStorage.removeItem(k);
-            } catch (e) {}
+            } catch (e) {
+              P.fallo('almacenamiento', e);
+            }
           });
       }
       var r = P.SINC.fusionarLocal(j, campos, filtro);

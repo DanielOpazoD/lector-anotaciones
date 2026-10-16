@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from lector_anotaciones import __version__
 from lector_anotaciones.cli import main
 from lector_anotaciones.pagina import WEB, empaquetar, escribir_pagina, esta_al_dia
 
@@ -17,9 +18,14 @@ def test_web_index_esta_al_dia_con_las_fuentes():
 
 def test_la_pagina_empaquetada_no_tiene_marcas_sin_sustituir():
     html = empaquetar()
-    for marca in ("{{ESTILOS}}", "{{NUCLEO}}", "{{PAGINA}}"):
+    for marca in ("{{ESTILOS}}", "{{NUCLEO}}", "{{PAGINA}}", "{{VERSION}}"):
         assert marca not in html
     assert html.count("<script>") == html.count("</script>")
+
+
+def test_la_pagina_dice_su_version():
+    """El diagnóstico de la página («Copiar diagnóstico») la lee de aquí."""
+    assert f'<meta name="generator" content="lector-anotaciones {__version__}">' in empaquetar()
 
 
 def _copia_de_web(tmp_path: Path) -> Path:
@@ -51,7 +57,11 @@ def test_los_fragmentos_se_concatenan_por_orden_de_nombre(tmp_path: Path):
     (web / "pagina" / "99-ultimo.js").write_text("  // marca-ultimo\n", encoding="utf-8")
     (web / "pagina" / "01-primero.js").write_text("  // marca-primero\n", encoding="utf-8")
     html = empaquetar(web)
-    assert html.index("E.LIBRO = null") < html.index("marca-primero") < html.index("function renderLibro")
+    assert (
+        html.index("E.LIBRO = /** @type {Libro | null} */ (null)")
+        < html.index("marca-primero")
+        < html.index("function renderLibro")
+    )
     assert html.index("function arrancar") < html.index("marca-ultimo")
 
 

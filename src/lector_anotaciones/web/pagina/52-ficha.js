@@ -296,7 +296,9 @@
     if (E.punteroAbajo || ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
     try {
       ta.setSelectionRange(ta.value.length, ta.value.length);
-    } catch (e) {}
+    } catch (e) {
+      P.fallo('cursor', e);
+    }
   }
   // Esc o Ctrl/Cmd+Enter en un cuadro de la ficha guarda (al perder el foco) y vuelve al texto.
   function teclaSalir(id) {

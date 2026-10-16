@@ -6,6 +6,7 @@
   P.copiarSeleccion = copiarSeleccion;
   P.exportarJSON = exportarJSON;
   P.exportarMD = exportarMD;
+  P.diagnostico = diagnostico;
   P.copiar = copiar;
   var reabierta = P.N.reabierta,
     lineaHilo = P.N.lineaHilo,
@@ -124,12 +125,48 @@
       .trim();
     copiar('[' + ref + ']\n«' + texto + '»', boton);
   }
+  // Lo que hace falta para entender un problema sin ver la pantalla: la versión, el libro, el modo, lo pendiente de
+  // guardar y los fallos que la página pasó por alto. Sin el texto de las anotaciones.
+  function diagnostico() {
+    var meta = /** @type {HTMLMetaElement | null} */ (document.querySelector('meta[name="generator"]')),
+      L = E.LIBRO,
+      sinGuardar = Object.keys(P.SINC.sinGuardar).length;
+    return [
+      'Diagnóstico del lector de anotaciones (' + P.ahora() + ')',
+      'Página: ' + (meta ? meta.content : 'versión desconocida'),
+      'Libro: ' +
+        (L
+          ? (L.titulo || 'sin título') + ' (' + (L.id || 'sin id') + ', generado ' + (L.generado || '¿?') + ')'
+          : 'ninguno') +
+        ' · origen: ' +
+        E.FUENTE.tipo,
+      'Modo: ' + E.modo + (E.SOLO_LECTURA ? ' · sólo lectura' : '') + (E.ME ? ' · con identidad' : ' · sin identidad'),
+      'Anotaciones: ' +
+        Object.keys(P.anots).length +
+        ' · sin guardar: ' +
+        sinGuardar +
+        ' · en vuelo: ' +
+        Object.keys(P.SINC.enVuelo).length +
+        ' · por subir: ' +
+        P.SINC.pendientes.length,
+      'Navegador: ' + navigator.userAgent,
+      'Fallos pasados por alto (' + P.FALLOS.length + ', del más reciente al más viejo):',
+    ]
+      .concat(
+        P.FALLOS.length
+          ? P.FALLOS.map(function (f) {
+              return '- ' + f.cuando + ' · ' + f.donde + ': ' + f.error;
+            })
+          : ['- ninguno']
+      )
+      .join('\n');
+  }
   function exportarJSON() {
     return JSON.stringify(
       {
         formato: 2,
-        libro: E.LIBRO.titulo,
-        generado: E.LIBRO.generado,
+        libro: P.libro().titulo,
+        generado: P.libro().generado,
         exportado: P.ahora(),
         anotaciones: Object.keys(P.anots)
           .map(function (k) {
@@ -151,7 +188,7 @@
       .sort(function (x, y) {
         return P.ordenKey(x) < P.ordenKey(y) ? -1 : 1;
       });
-    var out = ['# Anotaciones · ' + E.LIBRO.titulo, '', 'Exportado: ' + P.ahora(), ''];
+    var out = ['# Anotaciones · ' + P.libro().titulo, '', 'Exportado: ' + P.ahora(), ''];
     var sec = null;
     L.forEach(function (a) {
       var st = a.sidTitulo || 'General';

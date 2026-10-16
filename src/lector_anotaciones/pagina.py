@@ -2,8 +2,8 @@
 
 Las fuentes viven junto al paquete, en `web/`:
 
-- `plantilla.html`: el esqueleto, con tres marcas que el empaquetador sustituye una sola vez cada una:
-  `{{ESTILOS}}`, `{{NUCLEO}}` y `{{PAGINA}}`.
+- `plantilla.html`: el esqueleto, con cuatro marcas que el empaquetador sustituye una sola vez cada una:
+  `{{ESTILOS}}`, `{{NUCLEO}}`, `{{PAGINA}}` y `{{VERSION}}` (la del paquete, para el diagnóstico de la página).
 - `estilos.css`: la hoja de estilos.
 - `nucleo/*.js`: lógica pura, sin DOM (ubicar citas, fundir borradores, diferencias, Markdown…). Cada
   archivo funciona igual en el navegador (se registra en `LANucleo`) y en Node (se exporta con
@@ -20,8 +20,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import __version__
+
 WEB = Path(__file__).parent / "web"
-MARCAS = ("{{ESTILOS}}", "{{NUCLEO}}", "{{PAGINA}}")
+MARCAS = ("{{ESTILOS}}", "{{NUCLEO}}", "{{PAGINA}}", "{{VERSION}}")
 
 
 def _concatenar(carpeta: Path) -> str:
@@ -40,6 +42,7 @@ def empaquetar(web: Path = WEB) -> str:
         "{{ESTILOS}}": (web / "estilos.css").read_text(encoding="utf-8"),
         "{{NUCLEO}}": _concatenar(web / "nucleo"),
         "{{PAGINA}}": _concatenar(web / "pagina"),
+        "{{VERSION}}": f"lector-anotaciones {__version__}",
     }
     for marca, texto in partes.items():
         cierre = "</style" if marca == "{{ESTILOS}}" else "</script"

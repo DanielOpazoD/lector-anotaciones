@@ -1,23 +1,41 @@
 // Núcleo · lectura de archivos ZIP (EPUB y Word son ZIP). Sin dependencias: se lee el directorio central y cada
 // entrada se descomprime con la función `inflar(bytes) → Promise<Uint8Array>` que se le pase (en el navegador,
 // DecompressionStream('deflate-raw'); en Node, zlib). Admite entradas guardadas (método 0) y comprimidas (método 8).
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  // Una entrada del directorio central: cómo está guardada, cuánto ocupa comprimida y dónde está su cabecera local.
+  /** @typedef {{ metodo: number, comprimido: number, local: number }} EntradaZip */
+  // Lo que devuelve abrirZip y la función que descomprime una entrada (declarados en globales.d.ts).
+  /** @typedef {ReturnType<Nucleo['abrirZip']>} Zip */
+  /** @typedef {NonNullable<OpcionesImportar['inflar']>} Inflar */
   var FIN_DIRECTORIO = 0x06054b50,
     ENTRADA_CENTRAL = 0x02014b50,
     CABECERA_LOCAL = 0x04034b50;
+  /**
+   * @param {Uint8Array} b
+   * @param {number} i
+   */
   function u16(b, i) {
     return b[i] | (b[i + 1] << 8);
   }
+  /**
+   * @param {Uint8Array} b
+   * @param {number} i
+   */
   function u32(b, i) {
     return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
   }
+  /** @param {Uint8Array} bytes */
   function decodificar(bytes) {
     if (typeof TextDecoder !== 'undefined') return new TextDecoder('utf-8').decode(bytes);
     var s = '';
@@ -28,6 +46,7 @@
       return s;
     }
   }
+  /** @type {Inflar} */
   function inflarNavegador(datos) {
     if (typeof DecompressionStream === 'undefined')
       return Promise.reject(new Error('este navegador no descomprime ZIP (falta DecompressionStream)'));
@@ -37,6 +56,11 @@
     });
   }
   // bytes: Uint8Array con el ZIP entero. Devuelve { nombres, tiene(n), bytes(n), texto(n) }; lanza si no es un ZIP.
+  /**
+   * @param {Uint8Array} bytes
+   * @param {Inflar} [inflar]
+   * @returns {Zip}
+   */
   function abrirZip(bytes, inflar) {
     inflar = inflar || inflarNavegador;
     var fin = -1;
@@ -49,7 +73,7 @@
     if (fin < 0) throw new Error('no es un archivo ZIP (EPUB y Word lo son)');
     var total = u16(bytes, fin + 10),
       p = u32(bytes, fin + 16),
-      entradas = {},
+      entradas = /** @type {Record<string, EntradaZip>} */ ({}),
       nombres = [];
     for (var n = 0; n < total; n++) {
       if (u32(bytes, p) !== ENTRADA_CENTRAL) throw new Error('directorio del ZIP dañado');
@@ -64,6 +88,7 @@
       nombres.push(nombre);
       p += 46 + largoNombre + largoExtra + largoComentario;
     }
+    /** @param {string} nombre */
     function leer(nombre) {
       var e = entradas[nombre];
       if (!e) return Promise.reject(new Error('falta ' + nombre + ' dentro del archivo'));
@@ -71,7 +96,7 @@
       var ini = e.local + 30 + u16(bytes, e.local + 26) + u16(bytes, e.local + 28),
         datos = bytes.subarray(ini, ini + e.comprimido);
       if (e.metodo === 0) return Promise.resolve(datos);
-      if (e.metodo === 8) return Promise.resolve(inflar(datos));
+      if (e.metodo === 8) return Promise.resolve(/** @type {Inflar} */ (inflar)(datos)); // ya con su valor por omisión
       return Promise.reject(new Error('compresión no admitida (método ' + e.metodo + ') en ' + nombre));
     }
     return {

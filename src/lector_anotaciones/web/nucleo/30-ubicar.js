@@ -4,15 +4,24 @@
 // esa sección cambian. Por eso nunca se pinta un subrayado sin comprobar que la cita guardada sigue en el lugar
 // guardado; si no, se busca (primero en el bloque, luego en la sección, luego en el libro, exigiendo contexto
 // fuera del bloque) y, si no aparece, se declara perdido. Nada de esto modifica la anotación guardada.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Índice de la cita en `txt`, desambiguado con el contexto: { i, puntos } (puntos de 0 a 2) o null.
+  /**
+   * @param {string} txt
+   * @param {Anotacion} a
+   * @returns {{ i: number, puntos: number } | null}
+   */
   function buscarCita(txt, a) {
     if (!a.cita) return null;
     var mejor = null;
@@ -30,20 +39,28 @@
   // El orden: la cita donde estaba; si no, el bloque con la misma huella que cuando se anotó (`bh`: el mismo texto,
   // aunque su id haya cambiado porque se insertaron o quitaron bloques antes), donde la ubicación sigue siendo exacta;
   // si no, la búsqueda por la cita y su contexto, en su bloque y después fuera.
+  /**
+   * @param {Anotacion} a
+   * @param {{ existe(pid: string): boolean, texto(pid: string): string, candidatos(a: Anotacion): string[], porHuella?(h: string): string[] }} ctx
+   * @returns {Ubicacion | null}
+   */
   function ubicarEn(a, ctx) {
     if (a.tipo !== 'subrayado' || !a.pid) return null;
+    // un subrayado trae siempre su cita y dónde empieza y termina (lo exige el esquema)
+    var cita = /** @type {string} */ (a.cita),
+      ini = /** @type {number} */ (a.inicio),
+      fin = /** @type {number} */ (a.fin);
     var existe = ctx.existe(a.pid),
       txt = existe ? ctx.texto(a.pid) : '';
-    if (existe && txt.slice(a.inicio, a.fin) === a.cita)
-      return { pid: a.pid, inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    if (existe && txt.slice(ini, fin) === cita) return { pid: a.pid, inicio: ini, fin: fin, estado: 'exacto' };
     if (a.bh && ctx.porHuella) {
       var mismos = ctx.porHuella(a.bh);
       for (var k = 0; k < mismos.length; k++)
-        if (mismos[k] !== a.pid && ctx.texto(mismos[k]).slice(a.inicio, a.fin) === a.cita)
-          return { pid: mismos[k], inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+        if (mismos[k] !== a.pid && ctx.texto(mismos[k]).slice(ini, fin) === cita)
+          return { pid: mismos[k], inicio: ini, fin: fin, estado: 'exacto' };
     }
     var m = existe ? buscarCita(txt, a) : null;
-    if (m) return { pid: a.pid, inicio: m.i, fin: m.i + a.cita.length, estado: 'reubicado' };
+    if (m) return { pid: a.pid, inicio: m.i, fin: m.i + cita.length, estado: 'reubicado' };
     // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque
     // entero, o es larga) vale sólo si es la única en todo el libro.
     var candidatos = ctx.candidatos(a),
@@ -55,12 +72,12 @@
       if (p === a.pid) continue;
       var m2 = buscarCita(ctx.texto(p), a);
       if (!m2) continue;
-      var h = { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, puntos: m2.puntos };
+      var h = { pid: p, inicio: m2.i, fin: m2.i + cita.length, puntos: m2.puntos };
       if (m2.puntos > 0 && (!mejor || m2.puntos > mejor.puntos)) mejor = h;
       hallazgos.push(h);
     }
     if (mejor) return { pid: mejor.pid, inicio: mejor.inicio, fin: mejor.fin, estado: 'reubicado' };
-    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40))
+    if (hallazgos.length === 1 && (sinContexto || cita.length >= 40))
       return { pid: hallazgos[0].pid, inicio: hallazgos[0].inicio, fin: hallazgos[0].fin, estado: 'reubicado' };
     return { pid: null, inicio: 0, fin: 0, estado: 'perdido' };
   }

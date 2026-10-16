@@ -7,7 +7,7 @@
   P.reubicarTodo = reubicarTodo;
   P.pidEfectivo = pidEfectivo;
   var TXT = {}; // pid -> texto plano del bloque
-  E.UBIC = {}; // id de anotación -> { pid, inicio, fin, estado: 'exacto' | 'reubicado' | 'perdido' }
+  E.UBIC = /** @type {Record<string, Ubicacion>} */ ({}); // id de anotación → dónde quedó en esta versión
   function textoPlano(pid) {
     if (TXT[pid] === undefined) {
       var w = P.el('div', { html: P.ORIG[pid] || '' });

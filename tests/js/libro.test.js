@@ -309,3 +309,15 @@ test('importar texto que no está en UTF-8: windows-1252 con aviso, o el charset
   assert.equal(r16.libro.secciones[0].bloques[0].html, 'ñandú');
   assert.deepEqual(r16.avisos, []);
 });
+
+// Lo que encontró el tipado estricto del núcleo (0.6): un libro de fuera con secciones o bloques que no son objetos se
+// informa como inválido, no hace saltar un TypeError (que la biblioteca no reconocía y repetía en cada carga).
+test('validarLibro y sanearLibro con secciones o bloques que no son objetos: se informa, no se lanza', () => {
+  for (const malo of [null, 3, 'texto', ['a']]) {
+    const libro = { secciones: [{ id: 'cap-01', titulo: 'C', bloques: [malo] }, null] };
+    assert.doesNotThrow(() => N.sanearLibro(libro), `sanear con ${JSON.stringify(malo)}`);
+    const p = N.validarLibro(libro);
+    assert.ok(p.includes('bloque 1 de cap-01 no es un objeto'), `${JSON.stringify(malo)}: ${p.join(' | ')}`);
+    assert.ok(p.includes('sección sin id o sin bloques'));
+  }
+});

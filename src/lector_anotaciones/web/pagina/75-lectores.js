@@ -41,7 +41,9 @@
         });
         if (cambio) P.renderPanel();
       })
-      .catch(function () {});
+      .catch(function (e) {
+        P.fallo('perfiles', e);
+      });
   }
   // Las etiquetas de la nota (#así), como botones que filtran por ellas; null si no tiene. Puro: lo usa la ficha al dibujar.
   function etiquetasFicha(a) {

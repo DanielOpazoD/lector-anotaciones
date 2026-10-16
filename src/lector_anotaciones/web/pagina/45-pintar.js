@@ -160,7 +160,7 @@
                 .join(' '),
             title: ks
               .map(function (k) {
-                return (E.LIBRO.capas || {})[k] || k;
+                return (P.libro().capas || {})[k] || k;
               })
               .join(' · '),
           });
@@ -257,9 +257,10 @@
     var b = P.BLOQUES[pid],
       out = [];
     if (!b || !b.m) return out;
-    Object.keys(b.m).forEach(function (k) {
+    var m = b.m;
+    Object.keys(m).forEach(function (k) {
       if (E.CAPAS_ON[k])
-        b.m[k].forEach(function (r) {
+        m[k].forEach(function (r) {
           out.push({ k: k, inicio: r[0], fin: r[1] });
         });
     });

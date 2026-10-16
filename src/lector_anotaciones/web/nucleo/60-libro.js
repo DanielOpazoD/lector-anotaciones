@@ -1,16 +1,35 @@
 // Núcleo · armar y validar un libro.json (formato 2), como `construir.py` cuando no hay PDF ni capas: huella de cada
 // bloque (SHA-1 del texto que muestra la página, 12 cifras), páginas vacías y los datos del libro. También vuelve a
 // escribir un libro como Markdown del dialecto del lector, para seguir trabajándolo con la línea de órdenes.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  /**
+   * Los datos del libro que `armarLibro` no saca de las secciones (lo que falta toma un valor por omisión).
+   * @typedef {object} MetaLibro
+   * @property {string} [titulo]
+   * @property {string} [subtitulo]
+   * @property {string} [autor]
+   * @property {string[]} [fuentes]
+   * @property {string} [generador]
+   * @property {string} [generado]
+   */
+
   var FORMATO = 2;
 
+  /**
+   * @param {string} s
+   * @returns {Uint8Array}
+   */
   function utf8(s) {
     if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(s);
     var b = unescape(encodeURIComponent(s)),
@@ -19,6 +38,10 @@
     return out;
   }
   // SHA-1 sin dependencias (síncrono, igual en el navegador y en Node): la huella no protege nada, sólo identifica.
+  /**
+   * @param {string} texto
+   * @returns {string}
+   */
   function sha1(texto) {
     var bytes = utf8(texto),
       n = bytes.length,
@@ -85,11 +108,15 @@
       .join('');
   }
   // Los trozos de texto con que la página compone el bloque: uno por ítem o celda, o uno solo (`partes_render`).
+  /**
+   * @param {Bloque} b
+   * @returns {string[]}
+   */
   function partesRender(b) {
     var h = b.html;
     if (typeof h === 'string') return [N.textoDeHtml(h)];
     if (Array.isArray(h)) {
-      var partes = [];
+      var partes = /** @type {string[]} */ ([]);
       h.forEach(function (x) {
         if (Array.isArray(x))
           x.forEach(function (c) {
@@ -103,9 +130,17 @@
     return [];
   }
   // El texto del bloque tal como lo muestra la página: el sistema de coordenadas de los subrayados.
+  /**
+   * @param {Bloque} b
+   * @returns {string}
+   */
   function textoRender(b) {
     return partesRender(b).join('');
   }
+  /**
+   * @param {string} texto
+   * @returns {string}
+   */
   function huella(texto) {
     return sha1(texto).slice(0, 12);
   }
@@ -115,6 +150,11 @@
   }
 
   // Secciones ya parseadas (con ids) → libro.json. meta: { titulo, subtitulo, autor, fuentes, generador, generado }.
+  /**
+   * @param {Seccion[]} secciones
+   * @param {MetaLibro} [meta]
+   * @returns {Libro}
+   */
   function armarLibro(secciones, meta) {
     meta = meta || {};
     secciones.forEach(function (sec) {
@@ -151,13 +191,18 @@
   var ID_SEGURO = /^[A-Za-z0-9_-]+$/; // los ids van en selectores, rutas de la base y claves: sin comillas ni barras
   // Las invariantes de las que dependen los subrayados (`validar` de construir.py), más la forma básica que la página
   // necesita para mostrar un libro que llega de fuera: devuelve la lista de problemas.
+  /**
+   * @param {any} libro un libro.json cualquiera, de fuera: esto es lo que revisa su forma
+   * @returns {string[]}
+   */
   function validarLibro(libro) {
-    var problemas = [],
-      vistos = {},
+    var problemas = /** @type {string[]} */ ([]),
+      vistos = /** @type {Record<string, boolean>} */ ({}),
       ultima = 0;
     if (!libro || typeof libro !== 'object' || !Array.isArray(libro.secciones))
       return ['no es un libro.json (falta la lista de secciones)'];
-    libro.secciones.forEach(function (sec) {
+    // las secciones y sus bloques son tan de fuera como el libro: se revisan aquí mismo
+    /** @type {any[]} */ (libro.secciones).forEach(function (sec) {
       if (!sec || typeof sec.id !== 'string' || !Array.isArray(sec.bloques)) {
         problemas.push('sección sin id o sin bloques');
         return;
@@ -165,7 +210,11 @@
       if (!ID_SEGURO.test(sec.id)) problemas.push('id de sección con caracteres no admitidos: ' + sec.id);
       if (vistos[sec.id]) problemas.push('id de sección repetido: ' + sec.id);
       vistos[sec.id] = true;
-      sec.bloques.forEach(function (b, i) {
+      /** @type {any[]} */ (sec.bloques).forEach(function (b, i) {
+        if (!b || typeof b !== 'object' || Array.isArray(b)) {
+          problemas.push('bloque ' + (i + 1) + ' de ' + sec.id + ' no es un objeto');
+          return;
+        }
         ['id', 't', 'html', 'src'].forEach(function (k) {
           if (!(k in b)) problemas.push('bloque sin «' + k + '» en ' + sec.id);
         });
@@ -192,9 +241,17 @@
   // sueltos quedan escapados. Las imágenes, sólo con ruta relativa o como data:image. Es lo mismo que produce el
   // Markdown, así que un libro legítimo no cambia (ni sus huellas).
   var ETIQUETA = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;
+  /**
+   * @param {string} x
+   * @returns {string}
+   */
   function escaparSignos(x) {
     return x.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  /**
+   * @param {unknown} h
+   * @returns {string}
+   */
   function sanearHtml(h) {
     var s = String(h === null || h === undefined ? '' : h),
       out = '',
@@ -212,10 +269,17 @@
   // ruta relativa a la página (sin esquema, sin barra inicial —que con dos sería otro sitio— y sin barras invertidas, que
   // el navegador toma por barras) o una imagen incrustada
   var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|(?![\/\\])[^:\\]*)$/;
+  /**
+   * @param {Libro} libro
+   * @returns {Libro}
+   */
   function sanearLibro(libro) {
+    // lo que no es una sección o un bloque se deja como está: `validarLibro` lo informa
     (libro.secciones || []).forEach(function (s) {
+      if (!s || typeof s !== 'object') return;
       s.titulo = String(s.titulo || '');
       (s.bloques || []).forEach(function (b) {
+        if (!b || typeof b !== 'object') return;
         // la forma que cada tipo de bloque espera, aunque el archivo traiga otra
         var h = b.html,
           t = b.t,
@@ -242,6 +306,10 @@
     return libro;
   }
   // HTML del lector (sólo <strong>, <em> y texto escapado) → Markdown en línea.
+  /**
+   * @param {unknown} h
+   * @returns {string}
+   */
   function mdEnLinea(h) {
     return N.textoDeHtml(
       String(h || '')
@@ -251,33 +319,38 @@
     );
   }
   // El libro como Markdown del dialecto del lector: lo que `lector-anotaciones construir` vuelve a leer.
+  /**
+   * @param {Libro} libro
+   * @returns {string}
+   */
   function libroAMarkdown(libro) {
-    var out = [];
+    var out = /** @type {string[]} */ ([]);
     libro.secciones.forEach(function (s) {
       if (s.titulo === 'Portada' && s.bloques.length === 1 && s.bloques[0].t === 'portada') {
         out.push('[PORTADA]');
-        s.bloques[0].html.forEach(function (l) {
+        /** @type {string[]} */ (s.bloques[0].html).forEach(function (l) {
           out.push(mdEnLinea(l));
         });
         out.push('[/PORTADA]', '');
         return;
       }
       out.push((s.nivel === 1 ? '# ' : '## ') + s.titulo, '');
+      // la forma de `html` depende de `t` (la que fija sanearLibro): en cada caso se dice cuál es
       s.bloques.forEach(function (b) {
         var h = b.html;
         if (b.t === 'h3') out.push('### ' + mdEnLinea(h));
         else if (b.t === 'h4') out.push('#### ' + mdEnLinea(h));
         else if (b.t === 'ul')
-          h.forEach(function (x) {
+          /** @type {string[]} */ (h).forEach(function (x) {
             out.push('- ' + mdEnLinea(x));
           });
         else if (b.t === 'ol')
-          h.forEach(function (x, i) {
+          /** @type {string[]} */ (h).forEach(function (x, i) {
             out.push(i + 1 + '. ' + mdEnLinea(x));
           });
         else if (b.t === 'quote') out.push('> ' + mdEnLinea(h));
         else if (b.t === 'table')
-          h.forEach(function (fila, i) {
+          /** @type {string[][]} */ (h).forEach(function (fila, i) {
             out.push('| ' + fila.map(mdEnLinea).join(' | ') + ' |');
             if (i === 0)
               out.push(
@@ -290,16 +363,17 @@
                   '|'
               );
           });
-        else if (b.t === 'figure')
+        else if (b.t === 'figure') {
+          var fig = /** @type {{ src: string, caption?: string }} */ (h);
           out.push(
             '[FIGURA: ' +
-              (/^data:/.test(h.src || '') || !h.src ? 'figura' : String(h.src).replace(/^.*\//, '')) +
+              (/^data:/.test(fig.src || '') || !fig.src ? 'figura' : String(fig.src).replace(/^.*\//, '')) +
               ' | ' +
-              (mdEnLinea(h.caption) || 'Figura') +
+              (mdEnLinea(fig.caption) || 'Figura') +
               ']'
           );
-        else if (b.t === 'portada')
-          h.forEach(function (l) {
+        } else if (b.t === 'portada')
+          /** @type {string[]} */ (h).forEach(function (l) {
             out.push(mdEnLinea(l));
           });
         else out.push(mdEnLinea(h));

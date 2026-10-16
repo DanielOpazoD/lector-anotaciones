@@ -14,7 +14,8 @@
   P.rutaBase = rutaBase;
   P.mostrarSinLibro = mostrarSinLibro;
   var ABIERTO_KEY = 'lector-anotaciones.abierto:' + location.pathname; // '' = el de la página; 'base:<id>' o 'local:<id>'
-  E.FUENTE = { tipo: 'pagina', id: null };
+  // de dónde viene el libro abierto: el de la página, uno de la biblioteca compartida o uno guardado en el navegador
+  E.FUENTE = /** @type {{ tipo: 'pagina' | 'base' | 'local', id: string | null }} */ ({ tipo: 'pagina', id: null });
   var PARTE_MAX = 180 * 1024,
     PARTES_MAX = 2000;
   var usoDb = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
@@ -46,7 +47,9 @@
     if (v === null)
       try {
         v = sessionStorage.getItem(ABIERTO_KEY);
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('almacenamiento', e);
+      }
     return v || '';
   }
   function guardarEleccion(v) {
@@ -323,7 +326,9 @@
                 col
                   .doc(rutaParte(previa, i))
                   .delete()
-                  .catch(function () {})
+                  .catch(function (e) {
+                    P.fallo('biblioteca: limpiar partes viejas', e);
+                  })
               );
             return Promise.all(b);
           },
@@ -333,7 +338,9 @@
               col
                 .doc(r)
                 .delete()
-                .catch(function () {});
+                .catch(function (e) {
+                  P.fallo('biblioteca: limpiar partes viejas', e);
+                });
             });
             throw e;
           }
@@ -355,7 +362,9 @@
                   .collection('libros/' + id + '/partes')
                   .doc(rutaParte(m, i))
                   .delete()
-                  .catch(function () {})
+                  .catch(function (e) {
+                    P.fallo('biblioteca: limpiar partes viejas', e);
+                  })
               );
             return Promise.all(b);
           });
@@ -389,7 +398,9 @@
       if (vuelo.length) P.guardarLocal(vuelo);
       try {
         history.replaceState(null, '', location.pathname + location.search);
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('historial', e);
+      }
       location.reload();
     })();
     return true;
@@ -640,7 +651,9 @@
             ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) {
               try {
                 localStorage.removeItem(claveLocalDe('local', x.id) + s);
-              } catch (e) {}
+              } catch (e) {
+                P.fallo('almacenamiento', e);
+              }
             });
           });
     hecho.then(

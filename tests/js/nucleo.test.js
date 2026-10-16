@@ -255,3 +255,22 @@ test('propuesta: el texto que un subrayado propone, salvo vacío o igual a la ci
   assert.equal(N.propuesta(s), '');
   assert.equal(N.propuesta({ id: 'b', tipo: 'pagina', sugerencia: 'x' }), '', 'sólo los subrayados proponen');
 });
+
+// Lo que llega de la base lo escribió cualquier colaborador: sólo entra lo que tiene forma de anotación (0.6).
+test('problemaDeAnotacion: lo que la página no podría mostrar, según el esquema', () => {
+  const sub = { id: 's', tipo: 'subrayado', pid: 'cap-01-b1', inicio: 0, fin: 4, cita: 'Un h', color: 'duda' };
+  assert.equal(N.problemaDeAnotacion(sub), null);
+  assert.equal(N.problemaDeAnotacion({ id: 'g', tipo: 'general', nota: 'n', autor: null }), null);
+  assert.equal(N.problemaDeAnotacion({ id: 'p', tipo: 'pagina', pagina: 4 }), null);
+  assert.equal(N.problemaDeAnotacion(null), 'no es un objeto');
+  assert.equal(N.problemaDeAnotacion({ tipo: 'otra' }), 'tipo desconocido: otra');
+  assert.equal(N.problemaDeAnotacion(Object.assign({}, sub, { cita: undefined })), 'subrayado sin pasaje o sin cita');
+  assert.equal(N.problemaDeAnotacion(Object.assign({}, sub, { inicio: '0' })), 'subrayado sin inicio o fin');
+  assert.equal(N.problemaDeAnotacion({ tipo: 'general', replica: 3, nota: [] }), 'no es texto: nota, replica');
+  assert.equal(N.problemaDeAnotacion({ tipo: 'general', autor: 7 }), 'sección, autor o libro que no es texto');
+  assert.equal(
+    N.problemaDeAnotacion({ tipo: 'general', hilo: [{ de: 'autor' }] }),
+    'conversación anterior mal formada'
+  );
+  assert.equal(N.problemaDeAnotacion({ tipo: 'pagina', pagina: 'cuatro' }), 'nota de página sin página');
+});

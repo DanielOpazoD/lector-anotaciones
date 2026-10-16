@@ -3,13 +3,15 @@
 /** Lo que cada fragmento de la página ofrece a los demás (LAPagina, `P` dentro de cada módulo). */
 interface Pagina {
   // 00-base.js
-  SEC_BY_ID: Record<string, any>;
-  BLOQUE_SEC: Record<string, any>;
-  POS_BLOQUE: Record<string, any>;
-  ORIG: Record<string, any>;
-  BLOQUES: Record<string, any>;
-  PERFILES: Record<string, any>;
-  PERFILES_PEDIDOS: Record<string, any>;
+  libro: () => any;
+  fallo: (donde?: string, e?: any) => void;
+  SEC_BY_ID: Record<string, Seccion>;
+  BLOQUE_SEC: Record<string, string>;
+  POS_BLOQUE: Record<string, number>;
+  ORIG: Record<string, string>;
+  BLOQUES: Record<string, Bloque>;
+  PERFILES: Record<string, Perfil>;
+  PERFILES_PEDIDOS: Record<string, number>;
   RESPALDO_MAX: number;
   N: Nucleo;
   SINC: Sincronia;
@@ -20,6 +22,7 @@ interface Pagina {
   $$: (s?: any, r?: any) => any[];
   el: (tag?: any, attrs?: any, kids?: any) => any;
   ahora: () => string;
+  FALLOS: { cuando: string; donde: string; error: string }[];
   uid: () => string;
   estado: (t?: any, aviso?: any) => void;
   anunciar: (t?: any) => void;
@@ -41,7 +44,7 @@ interface Pagina {
   escribirCampos: (ids?: any) => void;
   guardarLocal: (ids?: any) => void;
   podarLocal: (ids?: any) => void;
-  cargarLocal: (filtro?: any) => { migradas: any; guardadas: boolean; nuevas: any; existentes: any };
+  cargarLocal: (filtro?: any) => { migradas: number; guardadas: boolean; nuevas: any; existentes: any };
   // 30-crear.js
   notaPagina: (pg?: any, sid?: any) => void;
   notaSeccion: () => void;
@@ -51,7 +54,7 @@ interface Pagina {
   ancestroPid: (n?: any) => any;
   // 40-ubicar.js
   textoPlano: (pid?: any) => any;
-  ubicar: (a?: any) => any;
+  ubicar: (a?: any) => Ubicacion | null;
   reubicarTodo: () => void;
   pidEfectivo: (a?: any) => any;
   // 45-pintar.js
@@ -63,7 +66,7 @@ interface Pagina {
   marcasPagina: () => void;
   // 50-panel.js
   cambiarTab: (t?: any) => void;
-  porRevisar: (a?: any) => any;
+  porRevisar: (a?: any) => boolean;
   cuantasPorRevisar: () => number;
   lista: (todoElLibro?: any) => any[];
   listaNavegable: () => any[];
@@ -102,6 +105,7 @@ interface Pagina {
   copiarSeleccion: (boton?: any) => void;
   exportarJSON: () => string;
   exportarMD: () => string;
+  diagnostico: () => string;
   copiar: (txt?: any, boton?: any) => void;
   // 65-buscar.js
   buscar: (q?: any) => void;
@@ -124,13 +128,13 @@ interface Pagina {
   etiquetasFicha: (a?: any) => any;
   pintarEtiquetas: (f?: any, a?: any) => void;
   renderSelectores: () => void;
-  etiquetasDe: any;
+  etiquetasDe: (a?: Anotacion) => string[];
   // 80-cambios.js
   registrarVisto: (sid?: any) => void;
   marcarCambio: (b?: any, node?: any) => void;
   alternarDiff: (pid?: any, abrir?: any) => void;
   lsJSON: (k?: any) => any;
-  diffPalabras: any;
+  diffPalabras: (antes?: string, ahora?: string) => ['=' | '-' | '+', string][];
   // 82-capas.js
   renderCapasMenu: () => void;
   // 84-progreso-voz.js
@@ -148,25 +152,25 @@ interface Pagina {
   obtenerLibro: () => any;
   rutaBase: (nombre?: any) => any;
   mostrarSinLibro: (motivo?: any) => void;
-  usoDb: any;
-  usoUser: any;
+  usoDb: Promise<BaseCompartida | null>;
+  usoUser: Promise<Usuario | null>;
 }
 
 /** El estado que los fragmentos comparten y reasignan (LAEstado, `E` dentro de cada módulo). */
 interface Estado {
   // 00-base.js
-  LIBRO: any;
-  SECS: any;
-  db: any;
-  col: any;
+  LIBRO: Libro | null;
+  SECS: Seccion[];
+  db: BaseCompartida | null;
+  col: ColeccionBase | null;
   modo: 'cargando' | 'local' | 'db';
-  LOCAL_KEY: any;
-  USER: any;
-  ME: any;
-  CAPAS_ON: any;
-  VISTO: any;
-  LEIDAS: any;
-  ultimoBorrado: any;
+  LOCAL_KEY: string;
+  USER: Usuario | null;
+  ME: string | null;
+  CAPAS_ON: Record<string, boolean>;
+  VISTO: Record<string, string>;
+  LEIDAS: Record<string, boolean>;
+  ultimoBorrado: Anotacion | null;
   lectura: { sid: any; boton: any; i: number } | null;
   SOLO_LECTURA: false | true;
   respaldoHoy: string | null;
@@ -174,13 +178,13 @@ interface Estado {
   avisoRevisar: false | true;
   ESCRIBIENDO: 0;
   // 40-ubicar.js
-  UBIC: Record<string, any>;
+  UBIC: Record<string, Ubicacion>;
   // 55-margen.js
   punteroAbajo: false | true;
   // 70-interfaz.js
-  volverA: any;
+  volverA: Element | null;
   // 88-biblioteca.js
-  FUENTE: any;
+  FUENTE: { tipo: 'base' | 'pagina' | 'local'; id: string | null };
 }
 
 declare var LAPagina: Pagina;

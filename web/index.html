@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="lector-anotaciones 0.5.0">
 <title>Lector de anotaciones</title>
 <link rel="icon" href="data:,">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -511,7 +512,7 @@
           <div class="leyenda"><span class="l-revisar">revisar o reescribir</span><span class="l-cortar">cortar</span><span class="l-duda">duda o verificar</span><span class="l-conservar">conservar, me gusta</span></div>
         </details>
         <details class="plegable" id="exportar-det"><summary>Exportar</summary>
-          <div class="exportar"><button class="btn peq" id="b-copiar" type="button">Copiar todo (JSON)</button><button class="btn peq" id="b-copiar-md" type="button">Copiar todo (Markdown)</button></div>
+          <div class="exportar"><button class="btn peq" id="b-copiar" type="button">Copiar todo (JSON)</button><button class="btn peq" id="b-copiar-md" type="button">Copiar todo (Markdown)</button><button class="btn peq" id="b-diagnostico" type="button" title="Para informar un problema: la versión, el estado de la página y los fallos que se pasaron por alto">Copiar diagnóstico</button></div>
         </details>
       </div>
       <div class="lista" id="lista" role="tabpanel" aria-labelledby="tab-capitulo"><div class="vacio">Aún no hay anotaciones. Selecciona texto para subrayarlo; haz clic en un número de página para dejarle una nota.</div></div>
@@ -575,15 +576,20 @@
 
 <script>
 // Núcleo · texto: normalización, identificadores y comparación de objetos. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Minúsculas y sin diacríticos: la forma con que se busca en el libro y en las notas.
+  /** @param {unknown} s */
   function normalizar(s) {
     return String(s || '')
       .normalize('NFD')
@@ -591,6 +597,10 @@
       .toLowerCase();
   }
   // Igual que `util.slug` del paquete Python: ASCII en minúsculas separado por guiones, nunca vacío.
+  /**
+   * @param {unknown} s
+   * @param {number} [maximo]
+   */
   function slug(s, maximo) {
     maximo = maximo || 40;
     var t = String(s || '')
@@ -602,9 +612,11 @@
     t = t.slice(0, maximo).replace(/-+$/, '');
     return t || 's';
   }
+  /** @type {Record<string, string>} */
   var ENTIDADES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
   // El texto de un fragmento HTML generado por el lector (etiquetas fuera, entidades resueltas), como
   // `html.unescape(texto_plano(...))` en Python: es el sistema de coordenadas de subrayados y capas.
+  /** @param {unknown} h */
   function textoDeHtml(h) {
     return String(h || '')
       .replace(/<[^>]+>/g, '')
@@ -616,11 +628,15 @@
         return Object.prototype.hasOwnProperty.call(ENTIDADES, e.toLowerCase()) ? ENTIDADES[e.toLowerCase()] : todo;
       });
   }
+  /** @param {unknown} s */
   function escaparHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // Una copia con las claves en orden (sólo el primer nivel), para comparar objetos por su JSON.
+  /** @param {any} o cualquier valor; sólo los objetos se copian */
   function ordenado(o) {
     if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
+    /** @type {Record<string, unknown>} */
     var r = {};
     Object.keys(o)
       .sort()
@@ -629,10 +645,15 @@
       });
     return r;
   }
+  /**
+   * @param {unknown} a
+   * @param {unknown} b
+   */
   function igual(a, b) {
     return JSON.stringify(ordenado(a)) === JSON.stringify(ordenado(b));
   }
   // Las #etiquetas de la nota y la réplica, en minúsculas y sin repetir.
+  /** @param {Anotacion | null | undefined} a */
   function etiquetasDe(a) {
     var out = [],
       re = /#([\p{L}\d_-]{2,})/gu,
@@ -655,18 +676,27 @@
   };
 });
 // Núcleo · diferencias palabra por palabra entre dos versiones de un bloque. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Subsecuencia común más larga sobre palabras y espacios; devuelve tramos [op, texto] con op '=', '-' o '+'. Lo común
   // al principio y al final se aparta antes de comparar (un cambio de una palabra en un párrafo largo cuesta lo que
   // mide el párrafo, no su cuadrado). Si lo que queda en medio pasa de 250 000 celdas, no se compara: sale quitado
   // entero y añadido entero, entre lo común.
+  /**
+   * @param {string} a
+   * @param {string} b
+   * @returns {['=' | '-' | '+', string][]}
+   */
   function diffPalabras(a, b) {
     var A = a.split(/(\s+)/).filter(function (x) {
         return x !== '';
@@ -682,7 +712,12 @@
       fa--;
       fb--;
     }
+    /** @type {['=' | '-' | '+', string][]} */
     var out = [];
+    /**
+     * @param {'=' | '-' | '+'} op
+     * @param {string} t
+     */
     var push = function (op, t) {
       if (!t) return;
       if (out.length && out[out.length - 1][0] === op) out[out.length - 1][1] += t;
@@ -740,15 +775,24 @@
 // esa sección cambian. Por eso nunca se pinta un subrayado sin comprobar que la cita guardada sigue en el lugar
 // guardado; si no, se busca (primero en el bloque, luego en la sección, luego en el libro, exigiendo contexto
 // fuera del bloque) y, si no aparece, se declara perdido. Nada de esto modifica la anotación guardada.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Índice de la cita en `txt`, desambiguado con el contexto: { i, puntos } (puntos de 0 a 2) o null.
+  /**
+   * @param {string} txt
+   * @param {Anotacion} a
+   * @returns {{ i: number, puntos: number } | null}
+   */
   function buscarCita(txt, a) {
     if (!a.cita) return null;
     var mejor = null;
@@ -766,20 +810,28 @@
   // El orden: la cita donde estaba; si no, el bloque con la misma huella que cuando se anotó (`bh`: el mismo texto,
   // aunque su id haya cambiado porque se insertaron o quitaron bloques antes), donde la ubicación sigue siendo exacta;
   // si no, la búsqueda por la cita y su contexto, en su bloque y después fuera.
+  /**
+   * @param {Anotacion} a
+   * @param {{ existe(pid: string): boolean, texto(pid: string): string, candidatos(a: Anotacion): string[], porHuella?(h: string): string[] }} ctx
+   * @returns {Ubicacion | null}
+   */
   function ubicarEn(a, ctx) {
     if (a.tipo !== 'subrayado' || !a.pid) return null;
+    // un subrayado trae siempre su cita y dónde empieza y termina (lo exige el esquema)
+    var cita = /** @type {string} */ (a.cita),
+      ini = /** @type {number} */ (a.inicio),
+      fin = /** @type {number} */ (a.fin);
     var existe = ctx.existe(a.pid),
       txt = existe ? ctx.texto(a.pid) : '';
-    if (existe && txt.slice(a.inicio, a.fin) === a.cita)
-      return { pid: a.pid, inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+    if (existe && txt.slice(ini, fin) === cita) return { pid: a.pid, inicio: ini, fin: fin, estado: 'exacto' };
     if (a.bh && ctx.porHuella) {
       var mismos = ctx.porHuella(a.bh);
       for (var k = 0; k < mismos.length; k++)
-        if (mismos[k] !== a.pid && ctx.texto(mismos[k]).slice(a.inicio, a.fin) === a.cita)
-          return { pid: mismos[k], inicio: a.inicio, fin: a.fin, estado: 'exacto' };
+        if (mismos[k] !== a.pid && ctx.texto(mismos[k]).slice(ini, fin) === cita)
+          return { pid: mismos[k], inicio: ini, fin: fin, estado: 'exacto' };
     }
     var m = existe ? buscarCita(txt, a) : null;
-    if (m) return { pid: a.pid, inicio: m.i, fin: m.i + a.cita.length, estado: 'reubicado' };
+    if (m) return { pid: a.pid, inicio: m.i, fin: m.i + cita.length, estado: 'reubicado' };
     // Fuera del bloque original: vale una coincidencia con contexto; sin contexto (la cita ocupaba el bloque
     // entero, o es larga) vale sólo si es la única en todo el libro.
     var candidatos = ctx.candidatos(a),
@@ -791,29 +843,39 @@
       if (p === a.pid) continue;
       var m2 = buscarCita(ctx.texto(p), a);
       if (!m2) continue;
-      var h = { pid: p, inicio: m2.i, fin: m2.i + a.cita.length, puntos: m2.puntos };
+      var h = { pid: p, inicio: m2.i, fin: m2.i + cita.length, puntos: m2.puntos };
       if (m2.puntos > 0 && (!mejor || m2.puntos > mejor.puntos)) mejor = h;
       hallazgos.push(h);
     }
     if (mejor) return { pid: mejor.pid, inicio: mejor.inicio, fin: mejor.fin, estado: 'reubicado' };
-    if (hallazgos.length === 1 && (sinContexto || a.cita.length >= 40))
+    if (hallazgos.length === 1 && (sinContexto || cita.length >= 40))
       return { pid: hallazgos[0].pid, inicio: hallazgos[0].inicio, fin: hallazgos[0].fin, estado: 'reubicado' };
     return { pid: null, inicio: 0, fin: 0, estado: 'perdido' };
   }
   return { buscarCita: buscarCita, ubicarEn: ubicarEn };
 });
 // Núcleo · borradores que la base todavía no tiene: qué campos cambió el lector y cómo se funden. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Lo que el lector edita en la página; el resto (respuesta, cierre, commit…) lo escribe quien edita las fuentes.
+  /** @type {(keyof Anotacion)[]} */
   var CAMPOS_LECTOR = ['nota', 'replica', 'sugerencia', 'color', 'estado', 'revisado'];
   // Suma a `marcas` (objeto campo → true) los campos del lector que difieren entre `antes` y `despues`.
+  /**
+   * @param {Record<string, boolean>} marcas
+   * @param {Anotacion} antes
+   * @param {Anotacion} despues
+   */
   function marcarCampos(marcas, antes, despues) {
     CAMPOS_LECTOR.forEach(function (k) {
       if (antes[k] !== despues[k]) marcas[k] = true;
@@ -823,25 +885,87 @@
   // Un borrador que no subió aporta sólo los campos que el lector cambió (si no se sabe cuáles, la nota y la
   // réplica); respuesta, cierre y demás los manda la base, para que recuperar el borrador no borre lo que otra
   // sesión escribió entre tanto.
+  /**
+   * @param {Anotacion} deBase
+   * @param {Anotacion} borrador
+   * @param {Record<string, boolean> | null} [campos]
+   * @returns {Anotacion}
+   */
   function fundirBorrador(deBase, borrador, campos) {
     var r = Object.assign({}, deBase),
-      lista = campos && Object.keys(campos).length ? Object.keys(campos) : ['nota', 'replica'];
+      lista = /** @type {(keyof Anotacion)[]} */ (
+        campos && Object.keys(campos).length ? Object.keys(campos) : ['nota', 'replica']
+      );
     lista.forEach(function (c) {
-      if (borrador[c] !== undefined && borrador[c] !== deBase[c]) r[c] = borrador[c];
+      if (borrador[c] !== undefined && borrador[c] !== deBase[c]) copiarCampo(r, borrador, c);
     });
     r.editado = borrador.editado || r.editado;
     return r;
   }
-  return { CAMPOS_LECTOR: CAMPOS_LECTOR, marcarCampos: marcarCampos, fundirBorrador: fundirBorrador };
+  // Un campo de una anotación a otra, por su nombre (genérica para que TypeScript sepa que es el mismo campo).
+  /**
+   * @template {keyof Anotacion} K
+   * @param {Anotacion} destino
+   * @param {Anotacion} origen
+   * @param {K} k
+   */
+  function copiarCampo(destino, origen, k) {
+    destino[k] = origen[k];
+  }
+  // Lo que le falta a un documento de fuera (la base la escribe cualquier colaborador) para ser una anotación que la
+  // página pueda mostrar sin romperse, según esquemas/anotacion.schema.json; null si no le falta nada. No juzga el
+  // contenido: sólo la forma de lo que la página lee.
+  var TEXTOS = ['nota', 'sugerencia', 'respuesta', 'replica', 'cita', 'antes', 'despues', 'commit', 'respondido'];
+  var TEXTOS_MAS = ['revisado', 'creado', 'editado', 'src', 'grupo', 'bh', 'color', 'estado', 'cierre'];
+  /**
+   * @param {any} a
+   * @returns {string | null}
+   */
+  function problemaDeAnotacion(a) {
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return 'no es un objeto';
+    if (['subrayado', 'pagina', 'capitulo', 'general'].indexOf(a.tipo) < 0) return 'tipo desconocido: ' + a.tipo;
+    var mal = TEXTOS.concat(TEXTOS_MAS).filter(function (k) {
+      return a[k] !== undefined && a[k] !== null && typeof a[k] !== 'string';
+    });
+    if (mal.length) return 'no es texto: ' + mal.join(', ');
+    if (
+      ['sid', 'sidTitulo', 'autor', 'libro'].some(function (k) {
+        return a[k] !== undefined && a[k] !== null && typeof a[k] !== 'string';
+      })
+    )
+      return 'sección, autor o libro que no es texto';
+    /** @param {any} h */
+    var entradaValida = function (h) {
+      return h && typeof h === 'object' && typeof h.texto === 'string';
+    };
+    if (a.hilo !== undefined && !(Array.isArray(a.hilo) && a.hilo.every(entradaValida)))
+      return 'conversación anterior mal formada';
+    if (a.tipo === 'subrayado') {
+      if (typeof a.pid !== 'string' || typeof a.cita !== 'string') return 'subrayado sin pasaje o sin cita';
+      if (!Number.isInteger(a.inicio) || !Number.isInteger(a.fin)) return 'subrayado sin inicio o fin';
+    }
+    if (a.tipo === 'pagina' && a.pagina !== null && !Number.isInteger(a.pagina)) return 'nota de página sin página';
+    return null;
+  }
+  return {
+    problemaDeAnotacion: problemaDeAnotacion,
+    CAMPOS_LECTOR: CAMPOS_LECTOR,
+    marcarCampos: marcarCampos,
+    fundirBorrador: fundirBorrador,
+  };
 });
 // Núcleo · revisar respuestas y recorrer anotaciones. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // Una respuesta (de Claude o de quien edita las fuentes) está por revisar si es de una anotación propia —o sin autor,
   // como las de un navegador sin identidad— y el autor no revisó todavía esa respuesta. `respondido` lo escribe quien
@@ -849,6 +973,10 @@
   // `respondido` de la respuesta revisada (`marcaRevision`), no la hora del navegador: así no se comparan dos relojes,
   // y cualquier `respondido` distinto —también uno anterior— es una respuesta nueva. Sin identidad conocida (`yo`
   // nulo) sólo cuentan las anotaciones sin autor: las de otros lectores no son para revisar aquí.
+  /**
+   * @param {Anotacion | null | undefined} a
+   * @param {string | null} yo
+   */
   function porRevisar(a, yo) {
     if (!a || !(a.respuesta || a.cierre)) return false;
     if (a.autor && a.autor !== yo) return false;
@@ -856,6 +984,11 @@
     return !!a.respondido && a.respondido !== a.revisado;
   }
   // Lo que se guarda en `revisado` al revisar: el `respondido` de la respuesta, o la hora si no lo trae.
+  /**
+   * @param {Anotacion | null | undefined} a
+   * @param {string} ahora
+   * @returns {string}
+   */
   function marcaRevision(a, ahora) {
     return (a && a.respondido) || ahora;
   }
@@ -863,6 +996,13 @@
   // más en esa dirección. Si la actual ya no está en la lista (un filtro la sacó) y se da `orden` (la clave de orden
   // de la actual y la función que la calcula para cada elemento), se sigue desde donde estaba; si no, desde el
   // principio (o el final al retroceder).
+  /**
+   * @template {{ id: string }} T
+   * @param {T[]} lista
+   * @param {string | null} actual
+   * @param {number} d
+   * @param {{ de: (x: T) => number, clave: number | null }} [orden]
+   */
   function vecina(lista, actual, d, orden) {
     var i = -1,
       k;
@@ -884,10 +1024,12 @@
   }
   // Respondida (sin pregunta: atendida, descartada o sin cierre) y devuelta por el autor desde «Por revisar» (como
   // `reabierta` en exportar.py).
+  /** @param {Anotacion} a */
   function reabierta(a) {
     return !!a.revisado && !!(a.respuesta || a.cierre) && a.cierre !== 'pregunta' && a.estado !== 'resuelta';
   }
   // Una entrada anterior de la conversación, como texto (como `linea_hilo` en exportar.py).
+  /** @param {NonNullable<Anotacion['hilo']>[number]} h */
   function lineaHilo(h) {
     var detalle = [h.cierre, h.commit, (h.cuando || '').slice(0, 10)].filter(Boolean).join(', ');
     return (
@@ -900,9 +1042,10 @@
   }
   // Lo que un subrayado propone en lugar de su cita (`sugerencia`, sin espacios en los extremos), o '' si no propone
   // nada: sin propuesta, vacía o igual a la cita (como `propuesta` en exportar.py).
+  /** @param {Anotacion | null | undefined} a */
   function propuesta(a) {
     var s = a && a.tipo === 'subrayado' && typeof a.sugerencia === 'string' ? a.sugerencia.trim() : '';
-    return s && s !== (a.cita || '').trim() ? s : '';
+    return s && a && s !== (a.cita || '').trim() ? s : '';
   }
   return {
     propuesta: propuesta,
@@ -920,19 +1063,25 @@
 //
 // `estadoLibro()` es también el armazón con que los importadores de HTML, EPUB y Word van abriendo secciones y
 // añadiendo bloques, para que todos los libros salgan con los mismos ids.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  /** @type {Record<string, number>} */
   var ROMANOS = { I: 1, II: 2, III: 3, IV: 4, V: 5 };
   // Los espacios de str.isspace() de Python (incluye \x1c-\x1f y \x85; no incluye \ufeff), para que strip(), \s y \d
   // signifiquen aquí lo mismo que en markdown.py.
   var ESP = '\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
   var BORDES = new RegExp('^[' + ESP + ']+|[' + ESP + ']+$', 'g');
+  /** @param {string} s */
   function strip(s) {
     return s.replace(BORDES, '');
   }
@@ -941,10 +1090,11 @@
   var SEPARADOR_TABLA = new RegExp('^\\|[' + ESP + ']*:?-{2,}');
   var ITEM_NUMERADO = /^(\p{Nd}+)\. /u;
   // int() de Python con dígitos de cualquier escritura: cada bloque de dígitos Unicode va del 0 al 9 seguidos
+  /** @param {string} digitos */
   function entero(digitos) {
     var n = 0;
     Array.from(digitos).forEach(function (ch) {
-      var cp = ch.codePointAt(0),
+      var cp = /** @type {number} */ (ch.codePointAt(0)),
         z = cp;
       while (z > 0 && /\p{Nd}/u.test(String.fromCodePoint(z - 1)) && cp - z < 60) z--;
       n = n * 10 + ((cp - z) % 10);
@@ -955,10 +1105,15 @@
   // \w de Python sobre texto: letras y números de cualquier escritura, y el guion bajo
   var CURSIVA = /(?<![\p{L}\p{N}_∗])\*([^*\n]+)\*(?![\p{L}\p{N}_])/gu;
 
+  /** @param {number} n */
   function dos(n) {
     return n < 10 ? '0' + n : String(n);
   }
   // Id estable y legible para una sección; se registra en `usados` para evitar duplicados.
+  /**
+   * @param {string} titulo
+   * @param {Record<string, boolean>} usados
+   */
   function seccionId(titulo, usados) {
     var m, base;
     if ((m = /^Capítulo (\p{Nd}+)\./u.exec(titulo))) base = 'cap-' + dos(entero(m[1]));
@@ -976,27 +1131,43 @@
     return sid;
   }
   // Escapa HTML y convierte **negrita** y *cursiva*.
+  /** @param {string} s */
   function inline(s) {
     return N.escaparHtml(s).replace(NEGRITA, '<strong>$1</strong>').replace(CURSIVA, '<em>$1</em>');
   }
   // El armazón del libro: las secciones abiertas y la actual. Un bloque antes de toda sección abre «Preliminares».
+  /** @param {string} [figs] */
   function estadoLibro(figs) {
-    /** @type {{ figs: string, usados: Record<string, number>, secciones: any[], sec: any, [k: string]: any }} */
-    var st = { figs: figs === undefined ? 'figs/' : figs, usados: {}, secciones: [], sec: null };
-    st.nueva = function (titulo, nivel, src) {
-      st.sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };
-      st.secciones.push(st.sec);
-      return st.sec;
-    };
-    st.bloque = function (t, contenido, src) {
-      if (!st.sec) st.nueva('Preliminares', 1, src);
-      var b = { id: st.sec.id + '-b' + (st.sec.bloques.length + 1), t: t, html: contenido, src: src };
-      st.sec.bloques.push(b);
-      return b;
+    /** @type {EstadoLibro} */
+    var st = {
+      figs: figs === undefined ? 'figs/' : figs,
+      usados: {},
+      secciones: [],
+      sec: null,
+      nueva: function (titulo, nivel, src) {
+        var sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };
+        st.sec = sec;
+        st.secciones.push(sec);
+        return sec;
+      },
+      bloque: function (t, contenido, src) {
+        var sec = st.sec || st.nueva('Preliminares', 1, src);
+        /** @type {Bloque} */
+        var b = { id: sec.id + '-b' + (sec.bloques.length + 1), t: t, html: contenido, src: src };
+        sec.bloques.push(b);
+        return b;
+      },
     };
     return st;
   }
+  /**
+   * @param {string[]} lines
+   * @param {number} i
+   * @param {string} cierre
+   * @returns {[string[], number]}
+   */
   function leerMarcado(lines, i, cierre) {
+    /** @type {string[]} */
     var buf = [];
     i += 1;
     while (i < lines.length && lines[i].indexOf(cierre) !== 0) {
@@ -1006,16 +1177,28 @@
     if (i >= lines.length) throw new Error('falta el cierre ' + cierre);
     return [buf, i + 1];
   }
+  /**
+   * @param {string} s
+   * @param {string} p
+   */
   function empieza(s, p) {
     return s.slice(0, p.length) === p;
   }
+  /**
+   * @param {string[]} lines
+   * @param {string} nombre
+   * @param {EstadoLibro} st
+   */
   function parseLineas(lines, nombre, st) {
-    var i = 0,
-      m,
-      r,
-      buf,
-      items,
-      filas;
+    var i = 0;
+    /** @type {RegExpExecArray | null} */
+    var m;
+    /** @type {[string[], number]} */
+    var r;
+    /** @type {string[]} */
+    var buf, items;
+    /** @type {string[][]} */
+    var filas;
     while (i < lines.length) {
       var linea = lines[i],
         src = nombre + ':' + (i + 1);
@@ -1120,6 +1303,10 @@
   }
   // Uno o varios Markdown, en orden: [{ nombre, texto }]. Una sección abierta en un archivo sigue recibiendo bloques
   // si el siguiente empieza sin título, como cuando un libro largo se parte en varios archivos.
+  /**
+   * @param {{ nombre: string, texto: string }[]} archivos
+   * @param {string} [figs]
+   */
   function parsearMarkdown(archivos, figs) {
     var st = estadoLibro(figs);
     archivos.forEach(function (a) {
@@ -1131,28 +1318,41 @@
   return { seccionId: seccionId, inline: inline, estadoLibro: estadoLibro, parsearMarkdown: parsearMarkdown };
 });
 // Núcleo · notas al margen: dónde va cada ficha para quedar a la altura de su pasaje sin pisarse con las vecinas. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // items: [{ id, y, h }] (y: altura del pasaje, h: alto de la ficha; y = null si no tiene pasaje a la vista). Como los
   // comentarios de un procesador de texto: cada ficha va a la altura de su pasaje; si choca con la anterior, baja. La
   // activa manda: queda exactamente junto a su pasaje, las de abajo se corren hacia abajo y las de arriba hacia arriba.
   // Las que no tienen pasaje van al final, en su orden. Devuelve { tops: { id: top }, alto }.
+  /**
+   * @param {{ id: string, y: number | null, h: number }[]} items
+   * @param {string | null} activo
+   * @param {number} [separacion]
+   */
   function apilar(items, activo, separacion) {
-    var gap = separacion === undefined ? 8 : separacion,
-      conY = [],
-      sinY = [];
+    /** @typedef {{ id: string, y: number, h: number, i: number, top: number }} Pieza */
+    var gap = separacion === undefined ? 8 : separacion;
+    /** @type {Pieza[]} */
+    var conY = [];
+    /** @type {Pieza[]} */
+    var sinY = [];
     items.forEach(function (it, i) {
       (it.y === null || it.y === undefined || !isFinite(it.y) ? sinY : conY).push({
         id: it.id,
-        y: it.y,
+        y: /** @type {number} */ (it.y), // sin pasaje: se le da su lugar al final, abajo
         h: it.h,
         i: i,
+        top: 0, // se calcula abajo
       });
     });
     conY.sort(function (a, b) {
@@ -1164,9 +1364,9 @@
       conY.push(it);
     });
     var k = -1,
-      i,
-      fondo,
-      techo;
+      /** @type {number} */ i,
+      /** @type {number} */ fondo,
+      /** @type {number} */ techo;
     for (i = 0; i < conY.length; i++)
       if (conY[i].id === activo) {
         k = i;
@@ -1191,6 +1391,7 @@
         techo = conY[i].top - gap;
       }
     }
+    /** @type {Record<string, number>} */
     var tops = {},
       alto = 0;
     conY.forEach(function (it) {
@@ -1203,14 +1404,26 @@
 });
 // Núcleo · el estado de la vista en un solo sitio: qué sección se lee, qué pestaña y qué filtros tiene el panel, qué
 // ficha está activa, qué se revisó en esta visita a la bandeja y si las fichas van al margen. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  /**
+   * Quien escucha cambios de la vista (`alCambiar`).
+   * @typedef {object} OyenteVista
+   * @property {(keyof EstadoVista)[] | null} claves las que le interesan (null: todas)
+   * @property {(cambiadas: string[], estado: EstadoVista) => void} fn a quién avisar
+   */
+
+  /** @type {EstadoVista} */
   var INICIAL = {
     secActual: null,
     tab: 'capitulo',
@@ -1223,12 +1436,23 @@
   };
   // `estado` es el objeto vivo (se lee directamente, nunca se escribe); `cambiar(parche)` es la única forma de cambiarlo:
   // aplica las reglas, avisa a quien escucha esas claves y devuelve las que cambiaron.
+  /**
+   * @param {Partial<EstadoVista>} [inicial]
+   * @returns {Vista}
+   */
   function crearVista(inicial) {
-    var estado = Object.assign({}, INICIAL, { revisadas: {} }, inicial || {}),
-      oyentes = [];
+    // `cambiar` lo lee y escribe también por nombre de clave, ya comprobada contra INICIAL
+    var estado = /** @type {EstadoVista & Record<string, unknown>} */ (
+        Object.assign({}, INICIAL, { revisadas: {} }, inicial || {})
+      ),
+      oyentes = /** @type {OyenteVista[]} */ ([]);
+    /**
+     * @param {Partial<EstadoVista>} parche
+     * @returns {string[]}
+     */
     function cambiar(parche) {
-      var p = Object.assign({}, parche),
-        cambiadas = [];
+      var p = /** @type {Record<string, unknown>} */ (Object.assign({}, parche)),
+        cambiadas = /** @type {string[]} */ ([]);
       // regla: al salir de «Por revisar», lo revisado en esta visita deja la bandeja (sea cual sea el camino de salida)
       if ('tab' in p && estado.tab === 'revisar' && p.tab !== 'revisar' && !('revisadas' in p)) p.revisadas = {};
       Object.keys(p).forEach(function (k) {
@@ -1278,16 +1502,35 @@
 // Núcleo · armar y validar un libro.json (formato 2), como `construir.py` cuando no hay PDF ni capas: huella de cada
 // bloque (SHA-1 del texto que muestra la página, 12 cifras), páginas vacías y los datos del libro. También vuelve a
 // escribir un libro como Markdown del dialecto del lector, para seguir trabajándolo con la línea de órdenes.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  /**
+   * Los datos del libro que `armarLibro` no saca de las secciones (lo que falta toma un valor por omisión).
+   * @typedef {object} MetaLibro
+   * @property {string} [titulo]
+   * @property {string} [subtitulo]
+   * @property {string} [autor]
+   * @property {string[]} [fuentes]
+   * @property {string} [generador]
+   * @property {string} [generado]
+   */
+
   var FORMATO = 2;
 
+  /**
+   * @param {string} s
+   * @returns {Uint8Array}
+   */
   function utf8(s) {
     if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(s);
     var b = unescape(encodeURIComponent(s)),
@@ -1296,6 +1539,10 @@
     return out;
   }
   // SHA-1 sin dependencias (síncrono, igual en el navegador y en Node): la huella no protege nada, sólo identifica.
+  /**
+   * @param {string} texto
+   * @returns {string}
+   */
   function sha1(texto) {
     var bytes = utf8(texto),
       n = bytes.length,
@@ -1362,11 +1609,15 @@
       .join('');
   }
   // Los trozos de texto con que la página compone el bloque: uno por ítem o celda, o uno solo (`partes_render`).
+  /**
+   * @param {Bloque} b
+   * @returns {string[]}
+   */
   function partesRender(b) {
     var h = b.html;
     if (typeof h === 'string') return [N.textoDeHtml(h)];
     if (Array.isArray(h)) {
-      var partes = [];
+      var partes = /** @type {string[]} */ ([]);
       h.forEach(function (x) {
         if (Array.isArray(x))
           x.forEach(function (c) {
@@ -1380,9 +1631,17 @@
     return [];
   }
   // El texto del bloque tal como lo muestra la página: el sistema de coordenadas de los subrayados.
+  /**
+   * @param {Bloque} b
+   * @returns {string}
+   */
   function textoRender(b) {
     return partesRender(b).join('');
   }
+  /**
+   * @param {string} texto
+   * @returns {string}
+   */
   function huella(texto) {
     return sha1(texto).slice(0, 12);
   }
@@ -1392,6 +1651,11 @@
   }
 
   // Secciones ya parseadas (con ids) → libro.json. meta: { titulo, subtitulo, autor, fuentes, generador, generado }.
+  /**
+   * @param {Seccion[]} secciones
+   * @param {MetaLibro} [meta]
+   * @returns {Libro}
+   */
   function armarLibro(secciones, meta) {
     meta = meta || {};
     secciones.forEach(function (sec) {
@@ -1428,13 +1692,18 @@
   var ID_SEGURO = /^[A-Za-z0-9_-]+$/; // los ids van en selectores, rutas de la base y claves: sin comillas ni barras
   // Las invariantes de las que dependen los subrayados (`validar` de construir.py), más la forma básica que la página
   // necesita para mostrar un libro que llega de fuera: devuelve la lista de problemas.
+  /**
+   * @param {any} libro un libro.json cualquiera, de fuera: esto es lo que revisa su forma
+   * @returns {string[]}
+   */
   function validarLibro(libro) {
-    var problemas = [],
-      vistos = {},
+    var problemas = /** @type {string[]} */ ([]),
+      vistos = /** @type {Record<string, boolean>} */ ({}),
       ultima = 0;
     if (!libro || typeof libro !== 'object' || !Array.isArray(libro.secciones))
       return ['no es un libro.json (falta la lista de secciones)'];
-    libro.secciones.forEach(function (sec) {
+    // las secciones y sus bloques son tan de fuera como el libro: se revisan aquí mismo
+    /** @type {any[]} */ (libro.secciones).forEach(function (sec) {
       if (!sec || typeof sec.id !== 'string' || !Array.isArray(sec.bloques)) {
         problemas.push('sección sin id o sin bloques');
         return;
@@ -1442,7 +1711,11 @@
       if (!ID_SEGURO.test(sec.id)) problemas.push('id de sección con caracteres no admitidos: ' + sec.id);
       if (vistos[sec.id]) problemas.push('id de sección repetido: ' + sec.id);
       vistos[sec.id] = true;
-      sec.bloques.forEach(function (b, i) {
+      /** @type {any[]} */ (sec.bloques).forEach(function (b, i) {
+        if (!b || typeof b !== 'object' || Array.isArray(b)) {
+          problemas.push('bloque ' + (i + 1) + ' de ' + sec.id + ' no es un objeto');
+          return;
+        }
         ['id', 't', 'html', 'src'].forEach(function (k) {
           if (!(k in b)) problemas.push('bloque sin «' + k + '» en ' + sec.id);
         });
@@ -1469,9 +1742,17 @@
   // sueltos quedan escapados. Las imágenes, sólo con ruta relativa o como data:image. Es lo mismo que produce el
   // Markdown, así que un libro legítimo no cambia (ni sus huellas).
   var ETIQUETA = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;
+  /**
+   * @param {string} x
+   * @returns {string}
+   */
   function escaparSignos(x) {
     return x.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  /**
+   * @param {unknown} h
+   * @returns {string}
+   */
   function sanearHtml(h) {
     var s = String(h === null || h === undefined ? '' : h),
       out = '',
@@ -1489,10 +1770,17 @@
   // ruta relativa a la página (sin esquema, sin barra inicial —que con dos sería otro sitio— y sin barras invertidas, que
   // el navegador toma por barras) o una imagen incrustada
   var IMAGEN_SEGURA = /^(data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|(?![\/\\])[^:\\]*)$/;
+  /**
+   * @param {Libro} libro
+   * @returns {Libro}
+   */
   function sanearLibro(libro) {
+    // lo que no es una sección o un bloque se deja como está: `validarLibro` lo informa
     (libro.secciones || []).forEach(function (s) {
+      if (!s || typeof s !== 'object') return;
       s.titulo = String(s.titulo || '');
       (s.bloques || []).forEach(function (b) {
+        if (!b || typeof b !== 'object') return;
         // la forma que cada tipo de bloque espera, aunque el archivo traiga otra
         var h = b.html,
           t = b.t,
@@ -1519,6 +1807,10 @@
     return libro;
   }
   // HTML del lector (sólo <strong>, <em> y texto escapado) → Markdown en línea.
+  /**
+   * @param {unknown} h
+   * @returns {string}
+   */
   function mdEnLinea(h) {
     return N.textoDeHtml(
       String(h || '')
@@ -1528,33 +1820,38 @@
     );
   }
   // El libro como Markdown del dialecto del lector: lo que `lector-anotaciones construir` vuelve a leer.
+  /**
+   * @param {Libro} libro
+   * @returns {string}
+   */
   function libroAMarkdown(libro) {
-    var out = [];
+    var out = /** @type {string[]} */ ([]);
     libro.secciones.forEach(function (s) {
       if (s.titulo === 'Portada' && s.bloques.length === 1 && s.bloques[0].t === 'portada') {
         out.push('[PORTADA]');
-        s.bloques[0].html.forEach(function (l) {
+        /** @type {string[]} */ (s.bloques[0].html).forEach(function (l) {
           out.push(mdEnLinea(l));
         });
         out.push('[/PORTADA]', '');
         return;
       }
       out.push((s.nivel === 1 ? '# ' : '## ') + s.titulo, '');
+      // la forma de `html` depende de `t` (la que fija sanearLibro): en cada caso se dice cuál es
       s.bloques.forEach(function (b) {
         var h = b.html;
         if (b.t === 'h3') out.push('### ' + mdEnLinea(h));
         else if (b.t === 'h4') out.push('#### ' + mdEnLinea(h));
         else if (b.t === 'ul')
-          h.forEach(function (x) {
+          /** @type {string[]} */ (h).forEach(function (x) {
             out.push('- ' + mdEnLinea(x));
           });
         else if (b.t === 'ol')
-          h.forEach(function (x, i) {
+          /** @type {string[]} */ (h).forEach(function (x, i) {
             out.push(i + 1 + '. ' + mdEnLinea(x));
           });
         else if (b.t === 'quote') out.push('> ' + mdEnLinea(h));
         else if (b.t === 'table')
-          h.forEach(function (fila, i) {
+          /** @type {string[][]} */ (h).forEach(function (fila, i) {
             out.push('| ' + fila.map(mdEnLinea).join(' | ') + ' |');
             if (i === 0)
               out.push(
@@ -1567,16 +1864,17 @@
                   '|'
               );
           });
-        else if (b.t === 'figure')
+        else if (b.t === 'figure') {
+          var fig = /** @type {{ src: string, caption?: string }} */ (h);
           out.push(
             '[FIGURA: ' +
-              (/^data:/.test(h.src || '') || !h.src ? 'figura' : String(h.src).replace(/^.*\//, '')) +
+              (/^data:/.test(fig.src || '') || !fig.src ? 'figura' : String(fig.src).replace(/^.*\//, '')) +
               ' | ' +
-              (mdEnLinea(h.caption) || 'Figura') +
+              (mdEnLinea(fig.caption) || 'Figura') +
               ']'
           );
-        else if (b.t === 'portada')
-          h.forEach(function (l) {
+        } else if (b.t === 'portada')
+          /** @type {string[]} */ (h).forEach(function (l) {
             out.push(mdEnLinea(l));
           });
         else out.push(mdEnLinea(h));
@@ -1600,18 +1898,24 @@
 // Núcleo · sincronía de las anotaciones entre la memoria, la base compartida y la copia del navegador. Sin DOM ni
 // entrada y salida: aquí se decide qué escribir, qué hacer ante una confirmación o un rechazo y cómo fundir lo que
 // llega (una foto de la base, la copia local); la página hace las escrituras, los temporizadores y lo que se ve.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
 
   // Códigos de rechazo de la base (db.d.ts). Los transitorios se reintentan una vez; uno desconocido se trata como
   // `unavailable`, como manda el contrato. Los de permiso son definitivos para la visita: pasan a sólo lectura.
+  /** @type {Record<string, number>} */
   var TRANSITORIOS = { unavailable: 1, resource_exhausted: 1 };
+  /** @type {Record<string, number>} */
   var CONOCIDOS = {
     invalid_argument: 1,
     resource_exhausted: 1,
@@ -1623,11 +1927,17 @@
     capability_removed: 1,
     transform_error: 1,
   };
+  /** @param {string} [codigo] */
   function esTransitorio(codigo) {
     return !codigo || !!TRANSITORIOS[codigo] || !CONOCIDOS[codigo];
   }
   // `invalid_argument` sobre un documento pequeño es un permiso que no se dice (la página de sólo lectura no puede
   // escribir); sobre uno grande, el tamaño. En un respaldo nunca es de permiso.
+  /**
+   * @param {string} codigo
+   * @param {number} tamano
+   * @param {string} verbo
+   */
   function esDePermiso(codigo, tamano, verbo) {
     return (
       codigo === 'not_granted' ||
@@ -1635,6 +1945,11 @@
       (codigo === 'invalid_argument' && verbo !== 'respaldo' && tamano < 200000)
     );
   }
+  /**
+   * @template T
+   * @param {T} a
+   * @returns {T}
+   */
   function copia(a) {
     return JSON.parse(JSON.stringify(a));
   }
@@ -1646,16 +1961,19 @@
   //   enVuelo     id → 1 mientras una escritura espera respuesta (reintento incluido)
   //   enBase      id → 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
   //   pendientes  ids que esperan su primera subida (anotadas mientras conectaba, recuperadas del navegador)
+  /** @returns {Sincronia} */
   function crearSincronia() {
-    var S = {
+    // los métodos se añaden abajo, cada uno con su tipo de `Sincronia` (tipos/globales.d.ts)
+    var S = /** @type {Sincronia} */ ({
       anots: {},
       campos: {},
       sinGuardar: {},
       enVuelo: {},
       enBase: {},
       pendientes: /** @type {string[]} */ ([]),
-    };
+    });
 
+    /** @param {string} id */
     function pendiente(id) {
       if (S.pendientes.indexOf(id) < 0) S.pendientes.push(id);
     }
@@ -1665,7 +1983,8 @@
     S.limpiarCampos = function (id, enBase) {
       var c = S.campos[id];
       if (!c) return;
-      Object.keys(c).forEach(function (k) {
+      // las marcas son nombres de campos de la anotación
+      /** @type {(keyof Anotacion)[]} */ (Object.keys(c)).forEach(function (k) {
         if (!enBase || !S.anots[id] || S.anots[id][k] === enBase[k]) delete c[k];
       });
       if (!Object.keys(c).length) delete S.campos[id];
@@ -1689,8 +2008,8 @@
       var a = S.anots[id];
       if (!a) return null;
       if (!S.enBase[id] || S.sinGuardar[id]) return { modo: 'set', datos: a, anotacion: a };
-      var p = { editado: a.editado };
-      Object.keys(S.campos[id] || {}).forEach(function (k) {
+      var p = /** @type {Record<string, unknown>} */ ({ editado: a.editado });
+      /** @type {(keyof Anotacion)[]} */ (Object.keys(S.campos[id] || {})).forEach(function (k) {
         p[k] = a[k] === undefined ? null : a[k];
       });
       return { modo: 'update', datos: p, anotacion: a };
@@ -1761,7 +2080,8 @@
           }
         } else if (ch.datos) {
           S.enBase[ch.id] = 1;
-          var nuevo = Object.assign({}, ch.datos, { id: ch.id });
+          // el documento entra como anotación tal como llega: aquí no se revisa su forma
+          var nuevo = /** @type {Anotacion} */ (Object.assign({}, ch.datos, { id: ch.id }));
           if (S.sinGuardar[ch.id] && S.anots[ch.id]) nuevo = N.fundirBorrador(nuevo, S.anots[ch.id], S.campos[ch.id]);
           if (!N.igual(S.anots[ch.id], nuevo)) {
             S.anots[ch.id] = nuevo;
@@ -1777,8 +2097,8 @@
     // puede dejar algo fuera (de otra cuenta): se queda en la copia sin cargarse. Devuelve las ids cargadas (`nuevas`)
     // y las que ya estaban (`existentes`).
     S.fusionarLocal = function (local, campos, filtro) {
-      var nuevas = [],
-        existentes = [];
+      var nuevas = /** @type {string[]} */ ([]),
+        existentes = /** @type {string[]} */ ([]);
       Object.keys(local).forEach(function (k) {
         var mem = S.anots[k],
           loc = local[k];
@@ -1817,15 +2137,16 @@
     // Resultado de la subida de la cola: `resultados[i]` es true o el código del rechazo de `ids[i]`; `escritas[id]`, lo
     // que se subió. Devuelve las que subieron sin cambios posteriores (su copia local sobra) y las que fallaron.
     S.alSubir = function (ids, resultados, escritas) {
-      var soltar = [],
-        fallidas = [];
+      var soltar = /** @type {string[]} */ ([]),
+        fallidas = /** @type {string[]} */ ([]);
       ids.forEach(function (id, i) {
-        if (resultados[i] === true) {
+        var res = resultados[i]; // en una variable, para que el tipo se estreche a código en el `else`
+        if (res === true) {
           S.enBase[id] = 1;
           S.limpiarCampos(id, escritas[id]);
           if (S.anots[id] === escritas[id]) soltar.push(id);
         } else {
-          S.sinGuardar[id] = resultados[i];
+          S.sinGuardar[id] = res;
           fallidas.push(id);
         }
       });
@@ -1847,6 +2168,11 @@
 
   // Migración de claves locales: copia en `local` lo de versiones anteriores de la página (`viejas`: clave → objeto),
   // sin pisar lo que ya hay. Devuelve cuántas anotaciones se copiaron.
+  /**
+   * @param {Record<string, Anotacion>} local
+   * @param {Record<string, Record<string, Anotacion>>} viejas
+   * @returns {number}
+   */
   function migrarClaves(local, viejas) {
     var n = 0;
     Object.keys(viejas).forEach(function (k) {
@@ -1871,23 +2197,41 @@
 // Núcleo · lectura de archivos ZIP (EPUB y Word son ZIP). Sin dependencias: se lee el directorio central y cada
 // entrada se descomprime con la función `inflar(bytes) → Promise<Uint8Array>` que se le pase (en el navegador,
 // DecompressionStream('deflate-raw'); en Node, zlib). Admite entradas guardadas (método 0) y comprimidas (método 8).
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  // Una entrada del directorio central: cómo está guardada, cuánto ocupa comprimida y dónde está su cabecera local.
+  /** @typedef {{ metodo: number, comprimido: number, local: number }} EntradaZip */
+  // Lo que devuelve abrirZip y la función que descomprime una entrada (declarados en globales.d.ts).
+  /** @typedef {ReturnType<Nucleo['abrirZip']>} Zip */
+  /** @typedef {NonNullable<OpcionesImportar['inflar']>} Inflar */
   var FIN_DIRECTORIO = 0x06054b50,
     ENTRADA_CENTRAL = 0x02014b50,
     CABECERA_LOCAL = 0x04034b50;
+  /**
+   * @param {Uint8Array} b
+   * @param {number} i
+   */
   function u16(b, i) {
     return b[i] | (b[i + 1] << 8);
   }
+  /**
+   * @param {Uint8Array} b
+   * @param {number} i
+   */
   function u32(b, i) {
     return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
   }
+  /** @param {Uint8Array} bytes */
   function decodificar(bytes) {
     if (typeof TextDecoder !== 'undefined') return new TextDecoder('utf-8').decode(bytes);
     var s = '';
@@ -1898,6 +2242,7 @@
       return s;
     }
   }
+  /** @type {Inflar} */
   function inflarNavegador(datos) {
     if (typeof DecompressionStream === 'undefined')
       return Promise.reject(new Error('este navegador no descomprime ZIP (falta DecompressionStream)'));
@@ -1907,6 +2252,11 @@
     });
   }
   // bytes: Uint8Array con el ZIP entero. Devuelve { nombres, tiene(n), bytes(n), texto(n) }; lanza si no es un ZIP.
+  /**
+   * @param {Uint8Array} bytes
+   * @param {Inflar} [inflar]
+   * @returns {Zip}
+   */
   function abrirZip(bytes, inflar) {
     inflar = inflar || inflarNavegador;
     var fin = -1;
@@ -1919,7 +2269,7 @@
     if (fin < 0) throw new Error('no es un archivo ZIP (EPUB y Word lo son)');
     var total = u16(bytes, fin + 10),
       p = u32(bytes, fin + 16),
-      entradas = {},
+      entradas = /** @type {Record<string, EntradaZip>} */ ({}),
       nombres = [];
     for (var n = 0; n < total; n++) {
       if (u32(bytes, p) !== ENTRADA_CENTRAL) throw new Error('directorio del ZIP dañado');
@@ -1934,6 +2284,7 @@
       nombres.push(nombre);
       p += 46 + largoNombre + largoExtra + largoComentario;
     }
+    /** @param {string} nombre */
     function leer(nombre) {
       var e = entradas[nombre];
       if (!e) return Promise.reject(new Error('falta ' + nombre + ' dentro del archivo'));
@@ -1941,7 +2292,7 @@
       var ini = e.local + 30 + u16(bytes, e.local + 26) + u16(bytes, e.local + 28),
         datos = bytes.subarray(ini, ini + e.comprimido);
       if (e.metodo === 0) return Promise.resolve(datos);
-      if (e.metodo === 8) return Promise.resolve(inflar(datos));
+      if (e.metodo === 8) return Promise.resolve(/** @type {Inflar} */ (inflar)(datos)); // ya con su valor por omisión
       return Promise.reject(new Error('compresión no admitida (método ' + e.metodo + ') en ' + nombre));
     }
     return {
@@ -1965,16 +2316,57 @@
 // y Word entran como imágenes data: si caben (por imagen y en total); si no, queda su leyenda.
 //
 // Necesita un analizador de XML/HTML: `opciones.parsear(texto, tipo) → Document` (DOMParser en el navegador).
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  // Un archivo elegido por el lector.
+  /** @typedef {{ nombre: string, bytes: Uint8Array }} Archivo */
+  // Las opciones de importarLibro (OpcionesImportar): las del entorno y, si se dan, el título y el autor.
+  /** @typedef {OpcionesImportar} Opciones */
+  // Las de HTML, EPUB y Word, que necesitan el analizador (importarLibro lo comprueba antes de llamarlas).
+  /** @typedef {Opciones & { parsear: NonNullable<OpcionesImportar['parsear']> }} ConAnalizador */
+  // Lo que deja cada formato antes de armar el libro: las secciones, lo que encontró del libro y los avisos.
+  /**
+   * @typedef {{ secciones: Seccion[], meta: { titulo?: string, autor?: string, subtitulo?: string },
+   *   avisos: string[] }} Importado
+   */
+  // El html de un bloque de figura.
+  /** @typedef {{ src: string, caption?: string }} Figura */
+  // Una imagen pedida: el bloque de figura que la mostrará y su ruta (en el ZIP, o el nombre junto al Markdown).
+  /** @typedef {{ b: Bloque, ruta: string }} ImagenPedida */
+  // La cola de imágenes (ver colaImagenes).
+  /**
+   * @typedef {{ enTexto: number, pedir(b: Bloque, ruta: string | null): void, resolver(): Promise<void> }} ColaImagenes
+   */
+  // Qué es cada nivel de título en uso (ver mapaNiveles): una sección de nivel 1 o 2, o un subtítulo.
+  /**
+   * @typedef {Record<string, { sec: 1 | 2, t?: undefined } | { t: 'h3' | 'h4', sec?: undefined }>} MapaNiveles
+   */
+  // Lo que bloquesHtml necesita de quien lo llama (ver allí).
+  /**
+   * @typedef {{ st: EstadoLibro, niveles: MapaNiveles, nombre: string, imagenes: ColaImagenes,
+   *   rutaImagen: (src: string) => string | null }} ContextoHtml
+   */
+  // Un ítem del manifiesto de un EPUB, con su ruta ya resuelta dentro del ZIP.
+  /** @typedef {{ id: string | null, ruta: string, tipo: string, props: string }} ItemEpub */
+  // Un estilo de párrafo de Word: nombre en minúsculas, nivel de esquema, si numera y el estilo del que hereda.
+  /** @typedef {{ nombre: string, esquema: number | null, num: boolean, base: string | null }} EstiloWord */
+  // Un tramo de texto de un párrafo de Word, con su negrita y su cursiva.
+  /** @typedef {{ s: string, b: boolean, i: boolean }} Segmento */
+  // Una figura de Word mientras se mira si el párrafo siguiente es su leyenda (la marca se borra al terminar).
+  /** @typedef {Bloque & { sinLeyenda?: boolean }} FiguraWord */
   var IMAGEN_MAX = 300 * 1024,
     IMAGENES_MAX = 4 * 1024 * 1024;
+  /** @type {Record<string, string>} */
   var TIPOS_IMAGEN = {
     png: 'image/png',
     jpg: 'image/jpeg',
@@ -1984,22 +2376,34 @@
     svg: 'image/svg+xml',
   };
 
+  /** @param {string} nombre */
   function extension(nombre) {
     var m = /\.([a-z0-9]+)$/i.exec(nombre || '');
     return m ? m[1].toLowerCase() : '';
   }
+  /**
+   * @param {Node} n
+   * @returns {Node[]}
+   */
   function hijos(n) {
     return Array.prototype.slice.call(n.childNodes || []);
   }
+  /** @param {Node & { localName?: string | null }} n un nodo cualquiera; sólo los elementos tienen localName */
   function local(n) {
     return (n.localName || n.nodeName || '').toLowerCase();
   }
+  /** @param {string} s */
   function espacios(s) {
     return s.replace(/\s+/g, ' ').trim();
   }
+  /**
+   * @param {string} tag
+   * @param {string} s
+   */
   function envolver(tag, s) {
     return s.trim() ? '<' + tag + '>' + s + '</' + tag + '>' : s;
   }
+  /** @param {Uint8Array} bytes */
   function base64(bytes) {
     var s = '',
       i;
@@ -2008,7 +2412,16 @@
   }
   // Texto de un archivo: UTF-8 (o UTF-16 con su marca); si no lo es, el juego de caracteres que declare un HTML o, en
   // su defecto, windows-1252 (lo que guardan el Bloc de notas «ANSI» y Word como página web), con un aviso.
+  /**
+   * @param {Uint8Array} bytes
+   * @param {string} nombre
+   * @param {string[]} avisos
+   */
   function decodificarTexto(bytes, nombre, avisos) {
+    /**
+     * @param {string} cs
+     * @param {boolean} [fatal]
+     */
     var dec = function (cs, fatal) {
       return new TextDecoder(cs, fatal ? { fatal: true } : undefined).decode(bytes);
     };
@@ -2036,10 +2449,15 @@
     avisos.push(nombre + ' no está en UTF-8: se leyó como ' + cs + '.');
     return texto;
   }
+  /** @param {Node | null} n */
   function textoLibre(n) {
     return espacios(n ? n.textContent || '' : '');
   }
   // Rutas dentro de un ZIP: relativa a la carpeta de `desde`, sin «..» ni fragmento.
+  /**
+   * @param {string} desde
+   * @param {string | null} href
+   */
   function resolver(desde, href) {
     href = String(href || '').split('#')[0];
     try {
@@ -2057,12 +2475,18 @@
   }
   // Imágenes: se piden durante el recorrido y se resuelven al final, respetando los topes; la huella de una figura sólo
   // depende de su leyenda, así que poner la imagen después no cambia nada.
+  /**
+   * @param {(ruta: string) => Promise<Uint8Array>} leer
+   * @param {string[]} avisos
+   * @returns {ColaImagenes}
+   */
   function colaImagenes(leer, avisos) {
+    /** @type {ImagenPedida[]} */
     var pendientes = [];
     return {
       enTexto: 0, // imágenes metidas entre el texto de un párrafo, que no se pueden mostrar como figura
       pedir: function (b, ruta) {
-        b.html.src = '';
+        /** @type {Figura} */ (b.html).src = '';
         if (ruta) pendientes.push({ b: b, ruta: ruta });
       },
       resolver: function () {
@@ -2084,7 +2508,7 @@
                     return;
                   }
                   total += bytes.length;
-                  x.b.html.src = 'data:' + tipo + ';base64,' + base64(bytes);
+                  /** @type {Figura} */ (x.b.html).src = 'data:' + tipo + ';base64,' + base64(bytes);
                 },
                 function () {
                   omitidas++;
@@ -2112,13 +2536,17 @@
   }
   // Niveles de título en uso → qué es sección (nivel 1 o 2) y qué subtítulo (h3, h4). Con un solo nivel, cada título
   // es una sección de nivel 2 (capítulos sin partes).
+  /**
+   * @param {Record<number, number>} usados los niveles de título en uso (nivel → 1)
+   * @returns {MapaNiveles}
+   */
   function mapaNiveles(usados) {
     var l = Object.keys(usados)
         .map(Number)
         .sort(function (a, b) {
           return a - b;
         }),
-      m = {};
+      m = /** @type {MapaNiveles} */ ({});
     if (l.length === 1) {
       m[l[0]] = { sec: 2 };
       return m;
@@ -2134,6 +2562,10 @@
     /^(a|abbr|b|bdi|bdo|cite|code|data|dfn|em|font|i|kbd|mark|q|s|samp|small|span|strike|strong|sub|sup|time|tt|u|var|wbr|br|img|ins|del|label|ruby|rt|rp)$/;
   var OMITIR =
     /^(script|style|noscript|template|head|title|meta|link|svg|math|iframe|object|button|input|select|textarea|hr|nav)$/;
+  /**
+   * @param {Node} n
+   * @returns {string}
+   */
   function enLinea(n) {
     if (n.nodeType === 3 || n.nodeType === 4) return N.escaparHtml(n.nodeValue);
     if (n.nodeType !== 1) return '';
@@ -2147,14 +2579,18 @@
     // pega su texto al vecino
     return EN_LINEA.test(t) ? dentro : ' ' + dentro + ' ';
   }
+  /** @param {Node} n */
   function htmlEnLinea(n) {
     return espacios(hijos(n).map(enLinea).join(''));
   }
+  /** @param {Node} n */
   function textoEnLinea(n) {
     return espacios(N.textoDeHtml(htmlEnLinea(n)));
   }
   // las filas de una tabla, sin las de las tablas anidadas en sus celdas (que ya van en el texto de la celda)
+  /** @param {Node} tabla */
   function filasHtml(tabla) {
+    /** @type {Node[]} */
     var filas = [];
     hijos(tabla).forEach(function (x) {
       if (x.nodeType !== 1) return;
@@ -2167,10 +2603,15 @@
     });
     return filas;
   }
+  /** @param {Node} n */
   function nivelTitulo(n) {
     var m = /^h([1-6])$/.exec(local(n));
     return m && textoLibre(n) ? parseInt(m[1], 10) : 0;
   }
+  /**
+   * @param {Document} doc
+   * @param {Record<number, number>} usados
+   */
   function nivelesHtml(doc, usados) {
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach(function (h, i) {
       var ns = doc.getElementsByTagName(h);
@@ -2183,6 +2624,10 @@
   }
   // Recorre el cuerpo de un documento HTML y agrega sus bloques al libro. `ctx`: { st, niveles, nombre, imagenes,
   // rutaImagen(src) → ruta en el ZIP o null }.
+  /**
+   * @param {Node} cuerpo
+   * @param {ContextoHtml} ctx
+   */
   function bloquesHtml(cuerpo, ctx) {
     var st = ctx.st,
       orden = 0;
@@ -2190,10 +2635,15 @@
       orden++;
       return ctx.nombre + ':' + orden;
     };
+    /** @param {string} h */
     var parrafo = function (h) {
       h = espacios(h);
       if (N.textoDeHtml(h).trim()) st.bloque('p', h, src());
     };
+    /**
+     * @param {Element} img
+     * @param {string} leyenda
+     */
     var figura = function (img, leyenda) {
       var b = st.bloque(
         'figure',
@@ -2206,6 +2656,8 @@
       );
       ctx.imagenes.pedir(b, ctx.rutaImagen(img.getAttribute('src') || img.getAttribute('xlink:href') || ''));
     };
+    // un hijo `n` que pasó la prueba de nodeType es un elemento: de ahí los @type {Element}
+    /** @param {Node} nodo */
     function contenedor(nodo) {
       var pendiente = '';
       var soltar = function () {
@@ -2224,12 +2676,14 @@
         if (OMITIR.test(t)) return;
         if (t === 'img') {
           soltar();
-          figura(n, '');
+          figura(/** @type {Element} */ (n), '');
           return;
         }
         if (EN_LINEA.test(t)) {
           // una imagen dentro de un enlace o un span: sola, es una figura; entre texto, se omite y se avisa
-          var dentroImgs = n.getElementsByTagName ? n.getElementsByTagName('img') : [];
+          var dentroImgs = /** @type {Element} */ (n).getElementsByTagName
+            ? /** @type {Element} */ (n).getElementsByTagName('img')
+            : [];
           if (dentroImgs.length && !textoLibre(n)) {
             soltar();
             for (var k = 0; k < dentroImgs.length; k++) figura(dentroImgs[k], '');
@@ -2248,7 +2702,7 @@
           return;
         }
         if (t === 'p' || t === 'dt' || t === 'dd' || t === 'caption' || t === 'address') {
-          var imgs = n.getElementsByTagName('img');
+          var imgs = /** @type {Element} */ (n).getElementsByTagName('img');
           if (imgs.length && !textoLibre(n)) {
             for (var k = 0; k < imgs.length; k++) figura(imgs[k], '');
             return;
@@ -2299,8 +2753,8 @@
           return;
         }
         if (t === 'figure') {
-          var img = n.getElementsByTagName('img')[0],
-            cap = n.getElementsByTagName('figcaption')[0];
+          var img = /** @type {Element} */ (n).getElementsByTagName('img')[0],
+            cap = /** @type {Element} */ (n).getElementsByTagName('figcaption')[0];
           if (img) {
             figura(img, cap ? htmlEnLinea(cap) : '');
             return;
@@ -2318,6 +2772,11 @@
     }
     contenedor(cuerpo);
   }
+  /**
+   * @param {string} texto
+   * @param {ConAnalizador['parsear']} parsear
+   * @param {boolean} xhtml
+   */
   function documentoHtml(texto, parsear, xhtml) {
     var doc = null;
     if (xhtml) {
@@ -2326,14 +2785,20 @@
     }
     return doc || parsear(texto, 'text/html');
   }
+  /** @param {Document} doc */
   function cuerpoDe(doc) {
     return doc.getElementsByTagName('body')[0] || doc.documentElement;
   }
 
+  /**
+   * @param {Archivo[]} archivos
+   * @param {ConAnalizador} opciones
+   * @returns {Promise<Importado>}
+   */
   function importarHtml(archivos, opciones) {
-    var avisos = [],
+    var avisos = /** @type {string[]} */ ([]),
       st = N.estadoLibro(''),
-      usados = {},
+      usados = /** @type {Record<number, number>} */ ({}),
       docs = archivos.map(function (a) {
         var d = documentoHtml(
           decodificarTexto(a.bytes, a.nombre, avisos),
@@ -2371,18 +2836,33 @@
   }
 
   // ------------------------------------------------------------------ EPUB
+  /**
+   * @param {Document | Element} doc
+   * @param {string} nombre
+   * @returns {Element | null}
+   */
   function primeroNS(doc, nombre) {
     var ns = doc.getElementsByTagNameNS ? doc.getElementsByTagNameNS('*', nombre) : [];
     return ns.length ? ns[0] : doc.getElementsByTagName(nombre)[0] || null;
   }
+  /**
+   * @param {Document | Element} doc
+   * @param {string} nombre
+   * @returns {Element[]}
+   */
   function todosNS(doc, nombre) {
     var ns = doc.getElementsByTagNameNS ? doc.getElementsByTagNameNS('*', nombre) : [];
     return Array.prototype.slice.call(ns.length ? ns : doc.getElementsByTagName(nombre));
   }
+  /**
+   * @param {Archivo} archivo
+   * @param {ConAnalizador} opciones
+   * @returns {Promise<Importado>}
+   */
   function importarEpub(archivo, opciones) {
-    var avisos = [],
+    var avisos = /** @type {string[]} */ ([]),
       zip = N.abrirZip(archivo.bytes, opciones.inflar),
-      xml = function (t) {
+      xml = /** @param {string} t */ function (t) {
         return opciones.parsear(t, 'application/xml');
       };
     return zip
@@ -2392,21 +2872,23 @@
           opf = rf && rf.getAttribute('full-path');
         if (!opf) throw new Error('EPUB sin rootfile en META-INF/container.xml');
         return zip.texto(opf).then(function (t) {
-          return { ruta: opf, doc: xml(t) };
+          // opf ya se comprobó, pero con el @returns de importarEpub TypeScript pierde aquí ese estrechamiento
+          return { ruta: /** @type {string} */ (opf), doc: xml(t) };
         });
       })
       .then(function (opf) {
-        var manifiesto = {},
-          porRuta = {};
+        // un ítem sin id no se puede citar desde el orden de lectura: no entra
+        var manifiesto = /** @type {Record<string, ItemEpub>} */ ({});
         todosNS(opf.doc, 'item').forEach(function (it) {
+          var id = it.getAttribute('id');
+          if (!id) return;
           var x = {
-            id: it.getAttribute('id'),
+            id: id,
             ruta: resolver(opf.ruta, it.getAttribute('href')),
             tipo: it.getAttribute('media-type') || '',
             props: it.getAttribute('properties') || '',
           };
-          manifiesto[x.id] = x;
-          porRuta[x.ruta] = x;
+          manifiesto[id] = x;
         });
         var spine = primeroNS(opf.doc, 'spine'),
           orden = todosNS(opf.doc, 'itemref')
@@ -2414,7 +2896,7 @@
               return r.getAttribute('linear') !== 'no';
             })
             .map(function (r) {
-              return manifiesto[r.getAttribute('idref')];
+              return manifiesto[r.getAttribute('idref') || ''];
             })
             .filter(function (x) {
               return x && /html|xml/.test(x.tipo);
@@ -2425,7 +2907,7 @@
           autor: textoLibre(primeroNS(opf.doc, 'creator')),
         };
         // títulos del índice del EPUB, para los capítulos que no traen encabezado propio
-        var etiquetas = {},
+        var etiquetas = /** @type {Record<string, string>} */ ({}),
           nav = Object.keys(manifiesto)
             .map(function (k) {
               return manifiesto[k];
@@ -2434,7 +2916,7 @@
               return /\bnav\b/.test(x.props);
             })[0];
         var ncx =
-          (spine && manifiesto[spine.getAttribute('toc')]) ||
+          (spine && manifiesto[spine.getAttribute('toc') || '']) ||
           Object.keys(manifiesto)
             .map(function (k) {
               return manifiesto[k];
@@ -2478,7 +2960,7 @@
           })
           .then(function (docs) {
             var st = N.estadoLibro(''),
-              usados = {};
+              usados = /** @type {Record<number, number>} */ ({});
             docs.forEach(function (d) {
               nivelesHtml(d.doc, usados);
             });
@@ -2497,7 +2979,7 @@
               bloquesHtml(cuerpo, {
                 st: st,
                 niveles: niveles,
-                nombre: d.x.ruta.split('/').pop(),
+                nombre: /** @type {string} */ (d.x.ruta.split('/').pop()), // split da al menos un elemento
                 imagenes: imagenes,
                 rutaImagen: function (s) {
                   return s && !/^(data|https?):/i.test(s) ? resolver(d.x.ruta, s) : null;
@@ -2513,26 +2995,43 @@
 
   // ------------------------------------------------------------------ Word (.docx)
   var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  /**
+   * @param {Element | null} n
+   * @param {string} nombre
+   */
   function wAttr(n, nombre) {
     return n ? n.getAttributeNS(W, nombre) || n.getAttribute('w:' + nombre) || '' : '';
   }
+  /**
+   * @param {Node | null} n
+   * @param {string} nombre
+   * @returns {Element | null}
+   */
   function wHijo(n, nombre) {
     if (!n) return null;
     nombre = nombre.toLowerCase();
-    for (var c = n.firstChild; c; c = c.nextSibling) if (c.nodeType === 1 && local(c) === nombre) return c;
+    for (var c = n.firstChild; c; c = c.nextSibling)
+      if (c.nodeType === 1 && local(c) === nombre) return /** @type {Element} */ (c);
     return null;
   }
+  /** @param {Element | null} n */
   function wActivo(n) {
     if (!n) return false;
     var v = wAttr(n, 'val').toLowerCase();
     return v !== '0' && v !== 'false' && v !== 'off' && v !== 'none';
   }
+  /**
+   * @param {Archivo} archivo
+   * @param {ConAnalizador} opciones
+   * @returns {Promise<Importado>}
+   */
   function importarDocx(archivo, opciones) {
-    var avisos = [],
+    var avisos = /** @type {string[]} */ ([]),
       zip = N.abrirZip(archivo.bytes, opciones.inflar),
-      xml = function (t) {
+      xml = /** @param {string} t */ function (t) {
         return opciones.parsear(t, 'application/xml');
       };
+    /** @param {string} r */
     var opcional = function (r) {
       return zip.tiene(r) ? zip.texto(r).then(xml) : Promise.resolve(null);
     };
@@ -2546,9 +3045,9 @@
       opcional('docProps/core.xml'),
     ]).then(function (r) {
       var doc = r[0],
-        estilos = {},
-        formatos = {},
-        rels = {};
+        estilos = /** @type {Record<string, EstiloWord>} */ ({}),
+        formatos = /** @type {Record<string, Record<string, string>>} */ ({}), // numId → ilvl → formato
+        rels = /** @type {Record<string, string>} */ ({});
       // estilos: nombre, nivel de esquema y numeración, heredados por basedOn
       if (r[1])
         todosNS(r[1], 'style').forEach(function (s) {
@@ -2562,23 +3061,30 @@
             base: base ? wAttr(base, 'val') : null,
           };
         });
+      /** @param {string} id */
       var estilo = function (id) {
         var e = estilos[id],
-          vistos = {},
-          out = { nombre: e ? e.nombre : String(id || '').toLowerCase(), esquema: null, num: false };
+          vistos = /** @type {Record<string, number>} */ ({}),
+          out = /** @type {Omit<EstiloWord, 'base'>} */ ({
+            nombre: e ? e.nombre : String(id || '').toLowerCase(),
+            esquema: null,
+            num: false,
+          });
         while (e && !vistos[id]) {
           vistos[id] = 1;
           if (out.esquema === null && e.esquema !== null) out.esquema = e.esquema;
           out.num = out.num || e.num;
-          id = e.base;
+          id = /** @type {string} */ (e.base); // null (sin estilo base) es la clave «null», que no está
           e = estilos[id];
         }
         return out;
       };
       // numeración: numId → ¿lista ordenada?
       if (r[2]) {
+        /** @type {Record<string, Record<string, string>>} */
         var abstractos = {};
         todosNS(r[2], 'abstractNum').forEach(function (a) {
+          /** @type {Record<string, string>} */
           var lv = {};
           todosNS(a, 'lvl').forEach(function (l) {
             lv[wAttr(l, 'ilvl')] = wAttr(wHijo(l, 'numFmt'), 'val');
@@ -2591,7 +3097,7 @@
       }
       if (r[3])
         todosNS(r[3], 'Relationship').forEach(function (x) {
-          rels[x.getAttribute('Id')] = resolver('word/document.xml', x.getAttribute('Target'));
+          rels[/** @type {string} */ (x.getAttribute('Id'))] = resolver('word/document.xml', x.getAttribute('Target'));
         });
       var meta = {
         titulo: r[4] ? textoLibre(primeroNS(r[4], 'title')) : '',
@@ -2602,12 +3108,13 @@
       if (!cuerpo) throw new Error('documento de Word sin cuerpo');
       // párrafos y tablas del cuerpo, en orden (los controles de contenido se abren). Una tabla de una sola columna es
       // un marco de maquetación (una figura con su leyenda, un recuadro): se recorre su contenido como texto corrido.
-      var piezas = [],
-        directos = function (n, nombre) {
+      var piezas = /** @type {Element[]} */ ([]),
+        directos = /** @param {Node} n @param {string} nombre */ function (n, nombre) {
           return hijos(n).filter(function (x) {
             return x.nodeType === 1 && local(x) === nombre;
           });
         };
+      /** @param {Node} tbl */
       var esMarco = function (tbl) {
         var filas = directos(tbl, 'tr');
         return (
@@ -2617,21 +3124,22 @@
           })
         );
       };
-      (function recorrer(n) {
+      (function recorrer(/** @type {Node} */ n) {
         for (var c = n.firstChild; c; c = c.nextSibling) {
           if (c.nodeType !== 1) continue;
           var t = local(c);
-          if (t === 'p') piezas.push(c);
+          if (t === 'p') piezas.push(/** @type {Element} */ (c));
           else if (t === 'tbl') {
             if (esMarco(c))
               directos(c, 'tr').forEach(function (tr) {
                 directos(tr, 'tc').forEach(recorrer);
               });
-            else piezas.push(c);
+            else piezas.push(/** @type {Element} */ (c));
           } else if (t === 'sdt' || t === 'sdtcontent' || t === 'customxml') recorrer(c);
         }
       })(cuerpo);
       // título de cada párrafo: estilo Heading/Título n o nivel de esquema
+      /** @param {Element} p */
       var nivelDe = function (p) {
         var ppr = wHijo(p, 'pPr'),
           est = estilo(wAttr(wHijo(ppr, 'pStyle'), 'val')),
@@ -2641,7 +3149,9 @@
         var v = ol ? parseInt(wAttr(ol, 'val'), 10) : est.esquema;
         return v !== null && v >= 0 && v < 9 ? v + 1 : 0; // el nivel 9 es texto normal
       };
+      /** @param {Node} p */
       var segmentos = function (p) {
+        /** @type {Segmento[]} */
         var segs = [];
         (function recorrer(n, b, i) {
           for (var c = n.firstChild; c; c = c.nextSibling) {
@@ -2664,7 +3174,8 @@
               for (var x = c.firstChild; x; x = x.nextSibling) {
                 if (x.nodeType !== 1) continue;
                 var tx = local(x);
-                if (tx === 't') segs.push({ s: x.textContent, b: bb, i: ii });
+                if (tx === 't')
+                  segs.push({ s: /** @type {string} */ (x.textContent), b: bb, i: ii }); // un elemento: nunca null
                 else if (tx === 'tab' || tx === 'br' || tx === 'cr') segs.push({ s: ' ', b: bb, i: ii });
                 else if (tx === 'nobreakhyphen') segs.push({ s: '-', b: bb, i: ii });
               }
@@ -2673,9 +3184,10 @@
         })(p, false, false);
         return segs;
       };
+      /** @param {Node} p */
       var enLineaW = function (p) {
         var out = '',
-          act = null;
+          act = /** @type {Segmento | null} */ (null);
         segmentos(p).forEach(function (g) {
           if (act && act.b === g.b && act.i === g.i) act.s += g.s;
           else {
@@ -2685,6 +3197,7 @@
         });
         if (act) out += pintar(act);
         return espacios(out);
+        /** @param {Segmento} g */
         function pintar(g) {
           var h = N.escaparHtml(g.s);
           if (g.i) h = envolver('em', h);
@@ -2692,6 +3205,7 @@
           return h;
         }
       };
+      /** @type {Record<number, number>} */
       var usados = {};
       piezas.forEach(function (p) {
         if (local(p) === 'p') {
@@ -2703,8 +3217,8 @@
         st = N.estadoLibro(''),
         nombre = archivo.nombre,
         orden = 0,
-        lista = null,
-        cita = null;
+        lista = /** @type {{ t: 'ul' | 'ol', items: string[], src: string } | null} */ (null),
+        cita = /** @type {{ partes: string[], src: string } | null} */ (null);
       var imagenes = colaImagenes(function (ruta) {
         return zip.tiene(ruta) ? zip.bytes(ruta) : Promise.reject(new Error('falta'));
       }, avisos);
@@ -2717,6 +3231,7 @@
         lista = null;
         cita = null;
       };
+      /** @type {FiguraWord | null} */
       var ultimaFigura = null;
       piezas.forEach(function (p) {
         orden++;
@@ -2730,7 +3245,11 @@
                   return c.nodeType === 1 && local(c) === 'tc';
                 })
                 .map(function (tc) {
-                  return espacios(todosNS(tc, 'p').map(enLineaW).join(' '));
+                  return espacios(
+                    todosNS(/** @type {Element} */ (tc), 'p')
+                      .map(enLineaW)
+                      .join(' ')
+                  );
                 });
             })
             .filter(function (f) {
@@ -2749,12 +3268,14 @@
           blips.forEach(function (bl) {
             var dp = todosNS(p, 'docPr')[0],
               ley = dp ? espacios(dp.getAttribute('descr') || dp.getAttribute('title') || '') : '';
-            var b = st.bloque('figure', { src: '', caption: N.escaparHtml(ley) || 'Figura' }, src());
+            var b = /** @type {FiguraWord} */ (
+              st.bloque('figure', { src: '', caption: N.escaparHtml(ley) || 'Figura' }, src())
+            );
             b.sinLeyenda = !ley;
             var id =
               bl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed') ||
               bl.getAttribute('r:embed');
-            imagenes.pedir(b, rels[id] || null);
+            imagenes.pedir(b, rels[/** @type {string} */ (id)] || null); // sin id, la clave «null», que no está
             ultimaFigura = b;
           });
           return;
@@ -2779,7 +3300,7 @@
             /^(Figura|Fig\.|Figure|Imagen|Tabla)\s/.test(texto))
         ) {
           if (ultimaFigura.sinLeyenda) {
-            ultimaFigura.html.caption = h;
+            /** @type {Figura} */ (ultimaFigura.html).caption = h;
             delete ultimaFigura.sinLeyenda;
             ultimaFigura = null;
             return;
@@ -2802,6 +3323,7 @@
           var numId = wAttr(wHijo(numPr, 'numId'), 'val'),
             ilvl = wAttr(wHijo(numPr, 'ilvl'), 'val') || '0',
             fmt = (formatos[numId] || {})[ilvl] || 'bullet';
+          /** @type {'ul' | 'ol'} */
           var t = fmt === 'bullet' || fmt === 'none' ? 'ul' : 'ol';
           if (cita) cerrar();
           if (lista && lista.t !== t) cerrar();
@@ -2821,7 +3343,7 @@
       cerrar();
       st.secciones.forEach(function (s) {
         s.bloques.forEach(function (b) {
-          delete b.sinLeyenda;
+          delete (/** @type {FiguraWord} */ (b).sinLeyenda);
         });
       });
       return imagenes.resolver().then(function () {
@@ -2834,6 +3356,7 @@
   // En un .txt, las líneas sueltas del tipo «CAPÍTULO III» o «Chapter 3. Título» se toman como títulos de sección.
   var TITULO_TXT =
     /^(cap[ií]tulo|chapter|parte|part|libro|book|pr[oó]logo|prologue|ep[ií]logo|epilogue|introducci[oó]n|introduction)\b[^\n]{0,80}$/i;
+  /** @param {string} texto */
   function txtAMarkdown(texto) {
     var lineas = String(texto).replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
     return lineas
@@ -2845,27 +3368,34 @@
   }
 
   // ------------------------------------------------------------------ entrada única
-  // archivos: [{ nombre, bytes: Uint8Array }]. opciones: { parsear, inflar, titulo, autor, figs }.
+  // archivos: [{ nombre, bytes: Uint8Array }]. opciones: { parsear, inflar, titulo, autor } (OpcionesImportar).
   // → Promise<{ libro, avisos, origen }>; rechaza con un Error de mensaje legible.
+  /**
+   * @param {Archivo[]} archivos
+   * @param {Opciones} [opciones]
+   * @returns {Promise<{ libro: Libro, avisos: string[], origen: string }>}
+   */
   function importarLibro(archivos, opciones) {
-    opciones = opciones || {};
+    // Markdown, texto y libro.json no usan `parsear`: les basta `{}` (sin él, los demás formatos rechazan)
+    opciones = opciones || /** @type {Opciones} */ ({});
     if (!archivos || !archivos.length) return Promise.reject(new Error('no hay archivos'));
     archivos = archivos.slice().sort(function (a, b) {
       return a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0;
     });
     // las imágenes que acompañan a un Markdown resuelven sus [FIGURA: archivo | …]
+    /** @type {Record<string, Uint8Array>} */
     var figuras = {};
     archivos = archivos.filter(function (a) {
       if (TIPOS_IMAGEN[extension(a.nombre)]) {
-        figuras[a.nombre.split('/').pop()] = a.bytes;
+        figuras[/** @type {string} */ (a.nombre.split('/').pop())] = a.bytes; // split da al menos un elemento
         return false;
       }
       return true;
     });
     if (!archivos.length)
       return Promise.reject(new Error('elige el texto del libro (las imágenes sólo acompañan a un Markdown)'));
-    var tipos = {},
-      grupo = function (e) {
+    var tipos = /** @type {Record<string, number>} */ ({}),
+      grupo = /** @param {string} e */ function (e) {
         return /^(md|markdown|txt|text)$/.test(e) ? 'md' : /^(html|htm|xhtml)$/.test(e) ? 'html' : e;
       };
     archivos.forEach(function (a) {
@@ -2877,19 +3407,30 @@
     var tipo = vistos[0];
     if ((tipo === 'epub' || tipo === 'docx' || tipo === 'json') && archivos.length > 1)
       return Promise.reject(new Error('importa un solo archivo .' + tipo + ' a la vez'));
+    if ((tipo === 'html' || tipo === 'epub' || tipo === 'docx') && typeof opciones.parsear !== 'function')
+      return Promise.reject(
+        new Error('para importar ' + tipo + ' hace falta un analizador de HTML (opciones.parsear)')
+      );
+    /** @type {Promise<Importado>} */
     var trabajo;
     try {
       if (tipo === 'json') {
+        /** @type {unknown} */
         var libro = JSON.parse(N.decodificarUtf8(archivos[0].bytes).replace(/^﻿/, ''));
         var problemas = N.validarLibro(libro);
         if (problemas.length)
           throw new Error(
             'el libro.json no es válido: ' + problemas.slice(0, 3).join('; ') + (problemas.length > 3 ? '…' : '')
           );
-        return Promise.resolve({ libro: N.sanearLibro(libro), avisos: [], origen: 'libro.json' });
+        // validarLibro no encontró problemas: es un Libro
+        return Promise.resolve({
+          libro: N.sanearLibro(/** @type {Libro} */ (libro)),
+          avisos: [],
+          origen: 'libro.json',
+        });
       }
       if (tipo === 'md') {
-        var avisosMd = [],
+        var avisosMd = /** @type {string[]} */ ([]),
           secciones = N.parsearMarkdown(
             archivos.map(function (a) {
               var t = decodificarTexto(a.bytes, a.nombre, avisosMd);
@@ -2902,15 +3443,15 @@
         }, avisosMd);
         secciones.forEach(function (s) {
           s.bloques.forEach(function (b) {
-            if (b.t === 'figure') cola.pedir(b, b.html.src);
+            if (b.t === 'figure') cola.pedir(b, /** @type {Figura} */ (b.html).src);
           });
         });
         trabajo = cola.resolver().then(function () {
           return { secciones: secciones, meta: {}, avisos: avisosMd };
         });
-      } else if (tipo === 'html') trabajo = importarHtml(archivos, opciones);
-      else if (tipo === 'epub') trabajo = importarEpub(archivos[0], opciones);
-      else if (tipo === 'docx') trabajo = importarDocx(archivos[0], opciones);
+      } else if (tipo === 'html') trabajo = importarHtml(archivos, /** @type {ConAnalizador} */ (opciones));
+      else if (tipo === 'epub') trabajo = importarEpub(archivos[0], /** @type {ConAnalizador} */ (opciones));
+      else if (tipo === 'docx') trabajo = importarDocx(archivos[0], /** @type {ConAnalizador} */ (opciones));
       else
         return Promise.reject(
           new Error(
@@ -2948,32 +3489,47 @@
   var LAPagina = {},
     LAEstado = {};
 (function (P, E) {
-  E.LIBRO = null;
-  E.SECS = [];
+  // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
+  P.libro = libro;
+  P.fallo = fallo;
+  E.LIBRO = /** @type {Libro | null} */ (null);
+  // El libro abierto, para lo que sólo corre con él ya cargado (dibujar, exportar, respaldar).
+  function libro() {
+    if (!E.LIBRO) throw new Error('todavía no hay un libro abierto');
+    return E.LIBRO;
+  }
+  E.SECS = /** @type {Seccion[]} */ ([]);
+  /** @type {Record<string, Seccion>} */
   var SEC_BY_ID = {};
-  var BLOQUE_SEC = {};
+  /** @type {Record<string, string>} */
+  var BLOQUE_SEC = {}; // id de bloque → id de su sección
+  /** @type {Record<string, number>} */
   var POS_BLOQUE = {}; // id de bloque → su posición en la sección
-  var ORIG = {};
+  /** @type {Record<string, string>} */
+  var ORIG = {}; // id de bloque → su HTML sin marcas
   P.SEC_BY_ID = SEC_BY_ID;
   P.BLOQUE_SEC = BLOQUE_SEC;
   P.POS_BLOQUE = POS_BLOQUE;
   P.ORIG = ORIG;
-  E.db = null;
-  E.col = null;
+  E.db = /** @type {BaseCompartida | null} */ (null);
+  E.col = /** @type {ColeccionBase | null} */ (null);
   E.modo = 'cargando';
-  E.LOCAL_KEY = 'lector-anotaciones'; // se completa con el id del libro al cargarlo
+  E.LOCAL_KEY = /** @type {string} */ ('lector-anotaciones'); // se completa con el id del libro al cargarlo
+  /** @type {Record<string, Bloque>} */
   var BLOQUES = {}; // id de bloque -> bloque de libro.json
   P.BLOQUES = BLOQUES;
-  E.USER = null;
-  E.ME = null;
+  E.USER = /** @type {Usuario | null} */ (null);
+  E.ME = /** @type {string | null} */ (null);
+  /** @type {Record<string, Perfil>} */
   var PERFILES = {};
+  /** @type {Record<string, number>} */
   var PERFILES_PEDIDOS = {};
   P.PERFILES = PERFILES;
   P.PERFILES_PEDIDOS = PERFILES_PEDIDOS;
-  E.CAPAS_ON = {};
-  E.VISTO = {};
-  E.LEIDAS = {};
-  E.ultimoBorrado = null;
+  E.CAPAS_ON = /** @type {Record<string, boolean>} */ ({});
+  E.VISTO = /** @type {Record<string, string>} */ ({}); // id de bloque → la huella que el lector vio
+  E.LEIDAS = /** @type {Record<string, boolean>} */ ({}); // secciones marcadas leídas
+  E.ultimoBorrado = /** @type {Anotacion | null} */ (null);
   E.lectura = null;
   E.SOLO_LECTURA = false;
   E.respaldoHoy = null;
@@ -3027,6 +3583,27 @@
     return new Date().toISOString();
   };
   P.ahora = ahora;
+  // Los fallos que la página pasa por alto a propósito (un almacenamiento bloqueado, una voz que no está, una limpieza
+  // que no se pudo hacer: nada de eso impide seguir) quedan aquí, los 50 últimos, junto con los errores que nadie
+  // capturó, para «Copiar diagnóstico». No se muestran: sólo se copian cuando el lector informa un problema.
+  /** @type {{ cuando: string, donde: string, error: string }[]} */
+  var FALLOS = [];
+  P.FALLOS = FALLOS;
+  /**
+   * @param {string} donde
+   * @param {any} e
+   */
+  function fallo(donde, e) {
+    var error = e && typeof e === 'object' ? (e.code ? e.code + ': ' : '') + (e.message || String(e)) : String(e);
+    FALLOS.unshift({ cuando: ahora(), donde: donde, error: error });
+    if (FALLOS.length > 50) FALLOS.length = 50;
+  }
+  window.addEventListener('error', function (ev) {
+    fallo('sin capturar', ev.error || ev.message);
+  });
+  window.addEventListener('unhandledrejection', function (ev) {
+    fallo('promesa sin capturar', ev.reason);
+  });
   var uid = function () {
     return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   };
@@ -3227,7 +3804,9 @@
     if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     try {
       history.replaceState(null, '', '#' + sid);
-    } catch (e) {}
+    } catch (e) {
+      P.fallo('historial', e);
+    }
     P.lsSet(E.LOCAL_KEY + ':ultima', sid);
     var lect = P.$('#lectura');
     if (pid) {
@@ -3244,7 +3823,9 @@
     if (E.lectura && E.lectura.sid !== sid) {
       try {
         window.speechSynthesis.cancel();
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('voz', e);
+      }
       P.detenerLectura();
     }
     if (P.V.tab === 'capitulo') P.renderPanel();
@@ -3320,6 +3901,8 @@
     // tiene el documento; si no, entera). Si `update` no encuentra el documento (otra sesión lo borró), se crea entero.
     // Un rechazo transitorio se reintenta una sola vez tras un retardo corto y aleatorio; el segundo rechazo (o uno
     // definitivo) lo decide `rechazoEscritura`. Si entre tanto la anotación se borró, no hay nada que escribir.
+    if (!E.col) return; // sin base no hay dónde escribir (quien llama ya lo comprobó)
+    var col = E.col;
     var e0 = P.SINC.escritura(id);
     if (!e0) {
       delete P.SINC.enVuelo[id];
@@ -3327,7 +3910,7 @@
     }
     P.SINC.enVuelo[id] = 1;
     var a = e0.anotacion,
-      doc = E.col.doc(id);
+      doc = col.doc(id);
     var rechazo = function (e) {
       rechazoEscritura(e, id, previa, 'guardar');
       if (alRechazar) alRechazar(e);
@@ -3487,7 +4070,9 @@
     else
       try {
         localStorage.removeItem(E.LOCAL_KEY + ':campos');
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('almacenamiento', e);
+      }
   }
   function leerLocal() {
     try {
@@ -3500,7 +4085,9 @@
     if (Object.keys(datos).length) return P.lsSet(E.LOCAL_KEY, JSON.stringify(datos));
     try {
       localStorage.removeItem(E.LOCAL_KEY);
-    } catch (e) {}
+    } catch (e) {
+      P.fallo('almacenamiento', e);
+    }
     return true;
   }
   function guardarLocal(ids) {
@@ -3551,7 +4138,9 @@
       anteriores.forEach(function (k) {
         try {
           viejas[k] = JSON.parse(P.lsGet(k) || '{}');
-        } catch (e) {}
+        } catch (e) {
+          P.fallo('claves anteriores: ' + k, e);
+        }
       });
       var migradas = P.N.migrarClaves(j, viejas),
         guardadas = true;
@@ -3562,7 +4151,9 @@
           anteriores.forEach(function (k) {
             try {
               localStorage.removeItem(k);
-            } catch (e) {}
+            } catch (e) {
+              P.fallo('almacenamiento', e);
+            }
           });
       }
       var r = P.SINC.fusionarLocal(j, campos, filtro);
@@ -3752,7 +4343,7 @@
   P.reubicarTodo = reubicarTodo;
   P.pidEfectivo = pidEfectivo;
   var TXT = {}; // pid -> texto plano del bloque
-  E.UBIC = {}; // id de anotación -> { pid, inicio, fin, estado: 'exacto' | 'reubicado' | 'perdido' }
+  E.UBIC = /** @type {Record<string, Ubicacion>} */ ({}); // id de anotación → dónde quedó en esta versión
   function textoPlano(pid) {
     if (TXT[pid] === undefined) {
       var w = P.el('div', { html: P.ORIG[pid] || '' });
@@ -3983,7 +4574,7 @@
                 .join(' '),
             title: ks
               .map(function (k) {
-                return (E.LIBRO.capas || {})[k] || k;
+                return (P.libro().capas || {})[k] || k;
               })
               .join(' · '),
           });
@@ -4080,9 +4671,10 @@
     var b = P.BLOQUES[pid],
       out = [];
     if (!b || !b.m) return out;
-    Object.keys(b.m).forEach(function (k) {
+    var m = b.m;
+    Object.keys(m).forEach(function (k) {
       if (E.CAPAS_ON[k])
-        b.m[k].forEach(function (r) {
+        m[k].forEach(function (r) {
           out.push({ k: k, inicio: r[0], fin: r[1] });
         });
     });
@@ -4381,7 +4973,9 @@
         ta.focus({ preventScroll: true });
         try {
           ta.setSelectionRange(foco.ini, foco.fin);
-        } catch (e) {}
+        } catch (e) {
+          P.fallo('cursor', e);
+        }
         ta.scrollTop = foco.scroll;
       }
     } else if (focoBoton) {
@@ -4838,7 +5432,9 @@
     if (E.punteroAbajo || ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
     try {
       ta.setSelectionRange(ta.value.length, ta.value.length);
-    } catch (e) {}
+    } catch (e) {
+      P.fallo('cursor', e);
+    }
   }
   // Esc o Ctrl/Cmd+Enter en un cuadro de la ficha guarda (al perder el foco) y vuelve al texto.
   function teclaSalir(id) {
@@ -5196,7 +5792,9 @@
       ta.focus();
       try {
         ta.setSelectionRange(ta.value.length, ta.value.length);
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('cursor', e);
+      }
     }
   }
   function irARevisar(a) {
@@ -5595,6 +6193,7 @@
   P.copiarSeleccion = copiarSeleccion;
   P.exportarJSON = exportarJSON;
   P.exportarMD = exportarMD;
+  P.diagnostico = diagnostico;
   P.copiar = copiar;
   var reabierta = P.N.reabierta,
     lineaHilo = P.N.lineaHilo,
@@ -5713,12 +6312,48 @@
       .trim();
     copiar('[' + ref + ']\n«' + texto + '»', boton);
   }
+  // Lo que hace falta para entender un problema sin ver la pantalla: la versión, el libro, el modo, lo pendiente de
+  // guardar y los fallos que la página pasó por alto. Sin el texto de las anotaciones.
+  function diagnostico() {
+    var meta = /** @type {HTMLMetaElement | null} */ (document.querySelector('meta[name="generator"]')),
+      L = E.LIBRO,
+      sinGuardar = Object.keys(P.SINC.sinGuardar).length;
+    return [
+      'Diagnóstico del lector de anotaciones (' + P.ahora() + ')',
+      'Página: ' + (meta ? meta.content : 'versión desconocida'),
+      'Libro: ' +
+        (L
+          ? (L.titulo || 'sin título') + ' (' + (L.id || 'sin id') + ', generado ' + (L.generado || '¿?') + ')'
+          : 'ninguno') +
+        ' · origen: ' +
+        E.FUENTE.tipo,
+      'Modo: ' + E.modo + (E.SOLO_LECTURA ? ' · sólo lectura' : '') + (E.ME ? ' · con identidad' : ' · sin identidad'),
+      'Anotaciones: ' +
+        Object.keys(P.anots).length +
+        ' · sin guardar: ' +
+        sinGuardar +
+        ' · en vuelo: ' +
+        Object.keys(P.SINC.enVuelo).length +
+        ' · por subir: ' +
+        P.SINC.pendientes.length,
+      'Navegador: ' + navigator.userAgent,
+      'Fallos pasados por alto (' + P.FALLOS.length + ', del más reciente al más viejo):',
+    ]
+      .concat(
+        P.FALLOS.length
+          ? P.FALLOS.map(function (f) {
+              return '- ' + f.cuando + ' · ' + f.donde + ': ' + f.error;
+            })
+          : ['- ninguno']
+      )
+      .join('\n');
+  }
   function exportarJSON() {
     return JSON.stringify(
       {
         formato: 2,
-        libro: E.LIBRO.titulo,
-        generado: E.LIBRO.generado,
+        libro: P.libro().titulo,
+        generado: P.libro().generado,
         exportado: P.ahora(),
         anotaciones: Object.keys(P.anots)
           .map(function (k) {
@@ -5740,7 +6375,7 @@
       .sort(function (x, y) {
         return P.ordenKey(x) < P.ordenKey(y) ? -1 : 1;
       });
-    var out = ['# Anotaciones · ' + E.LIBRO.titulo, '', 'Exportado: ' + P.ahora(), ''];
+    var out = ['# Anotaciones · ' + P.libro().titulo, '', 'Exportado: ' + P.ahora(), ''];
     var sec = null;
     L.forEach(function (a) {
       var st = a.sidTitulo || 'General';
@@ -6134,6 +6769,9 @@
   P.$('#b-copiar-md').addEventListener('click', function () {
     P.copiar(P.exportarMD(), this);
   });
+  P.$('#b-diagnostico').addEventListener('click', function () {
+    P.copiar(P.diagnostico(), this);
+  });
   P.$('#buscar').addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter') P.buscar(this.value);
   });
@@ -6146,7 +6784,7 @@
     window.matchMedia ? window.matchMedia('(max-width: 1000px)') : { matches: false }
   );
   P.mqMovil = mqMovil;
-  E.volverA = null;
+  E.volverA = /** @type {Element | null} */ (null); // a dónde vuelve el foco al cerrar un cajón
   // Un destino de foco que de verdad se puede enfocar: en el documento, visible (no en una sección oculta ni en un panel
   // escondido por la concentración) y fuera de lo inerte.
   function enfocable(n) {
@@ -6202,7 +6840,8 @@
         (dentro || P.$('.cerrar', n)).focus({ preventScroll: true });
       }
     } else if (n.contains(activo) || !activo || activo === document.body) {
-      var destino = enfocable(E.volverA) && !E.volverA.closest('.cajon') ? E.volverA : null;
+      var v = E.volverA,
+        destino = v && enfocable(v) && !v.closest('.cajon') ? v : null;
       if (!destino && cual === 'panel' && P.V.fichaFoco) {
         var mf = P.$('mark.hl[data-aids~="' + P.V.fichaFoco + '"]');
         if (enfocable(mf)) destino = mf;
@@ -6397,7 +7036,9 @@
     if (E.lectura) {
       try {
         window.speechSynthesis.cancel();
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('voz', e);
+      }
       P.detenerLectura();
       return;
     }
@@ -6631,7 +7272,9 @@
         });
         if (cambio) P.renderPanel();
       })
-      .catch(function () {});
+      .catch(function (e) {
+        P.fallo('perfiles', e);
+      });
   }
   // Las etiquetas de la nota (#así), como botones que filtran por ellas; null si no tiene. Puro: lo usa la ficha al dibujar.
   function etiquetasFicha(a) {
@@ -6728,7 +7371,7 @@
   function tituloCambio(b) {
     return b.anterior
       ? 'Cambió en la última reconstrucción' +
-          (E.LIBRO.anterior_generado ? ' (antes: fuentes del ' + E.LIBRO.anterior_generado + ')' : '')
+          (P.libro().anterior_generado ? ' (antes: fuentes del ' + P.libro().anterior_generado + ')' : '')
       : 'Cambió desde tu última lectura';
   }
   function marcarCambio(b, node) {
@@ -6783,17 +7426,19 @@
   function renderCapasMenu() {
     var det = P.$('#capas'),
       menu = P.$('#capas-menu'),
-      claves = Object.keys(E.LIBRO.capas || {});
+      capas = P.libro().capas || {},
+      claves = Object.keys(capas);
     det.hidden = !claves.length;
     if (det.hidden) return;
     menu.innerHTML = '';
     var total = {};
     E.SECS.forEach(function (s) {
       s.bloques.forEach(function (b) {
-        if (b.m)
-          Object.keys(b.m).forEach(function (k) {
-            total[k] = (total[k] || 0) + b.m[k].length;
-          });
+        if (!b.m) return;
+        var m = b.m;
+        Object.keys(m).forEach(function (k) {
+          total[k] = (total[k] || 0) + m[k].length;
+        });
       });
     });
     claves.forEach(function (k) {
@@ -6809,7 +7454,7 @@
         P.el('label', {}, [
           cb,
           P.el('span', { 'class': 'muestra capa k-' + k }),
-          P.el('span', { text: E.LIBRO.capas[k] + ' (' + (total[k] || 0) + ')' }),
+          P.el('span', { text: capas[k] + ' (' + (total[k] || 0) + ')' }),
         ])
       );
     });
@@ -6821,13 +7466,14 @@
       if (!sp) return;
       var cuenta = {};
       s.bloques.forEach(function (b) {
-        if (b.m)
-          Object.keys(b.m).forEach(function (k) {
-            if (E.CAPAS_ON[k]) cuenta[k] = (cuenta[k] || 0) + b.m[k].length;
-          });
+        if (!b.m) return;
+        var m = b.m;
+        Object.keys(m).forEach(function (k) {
+          if (E.CAPAS_ON[k]) cuenta[k] = (cuenta[k] || 0) + m[k].length;
+        });
       });
       var partes = Object.keys(cuenta).map(function (k) {
-        return cuenta[k] + ' ' + ((E.LIBRO.capas || {})[k] || k).replace(/ \(.*\)$/, '');
+        return cuenta[k] + ' ' + ((P.libro().capas || {})[k] || k).replace(/ \(.*\)$/, '');
       });
       sp.textContent = partes.length ? partes.join(' · ') : '';
     });
@@ -7135,7 +7781,7 @@
       .then(function () {
         return colR
           .doc(hoy)
-          .set({ fecha: hoy, libro: E.LIBRO.generado, n: respaldadas, partes: partes.length, omitidas: omitidas });
+          .set({ fecha: hoy, libro: P.libro().generado, n: respaldadas, partes: partes.length, omitidas: omitidas });
       })
       .catch(function (e) {
         var codigo = (e && e.code) || 'error';
@@ -7165,7 +7811,8 @@
   P.rutaBase = rutaBase;
   P.mostrarSinLibro = mostrarSinLibro;
   var ABIERTO_KEY = 'lector-anotaciones.abierto:' + location.pathname; // '' = el de la página; 'base:<id>' o 'local:<id>'
-  E.FUENTE = { tipo: 'pagina', id: null };
+  // de dónde viene el libro abierto: el de la página, uno de la biblioteca compartida o uno guardado en el navegador
+  E.FUENTE = /** @type {{ tipo: 'pagina' | 'base' | 'local', id: string | null }} */ ({ tipo: 'pagina', id: null });
   var PARTE_MAX = 180 * 1024,
     PARTES_MAX = 2000;
   var usoDb = window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null);
@@ -7197,7 +7844,9 @@
     if (v === null)
       try {
         v = sessionStorage.getItem(ABIERTO_KEY);
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('almacenamiento', e);
+      }
     return v || '';
   }
   function guardarEleccion(v) {
@@ -7474,7 +8123,9 @@
                 col
                   .doc(rutaParte(previa, i))
                   .delete()
-                  .catch(function () {})
+                  .catch(function (e) {
+                    P.fallo('biblioteca: limpiar partes viejas', e);
+                  })
               );
             return Promise.all(b);
           },
@@ -7484,7 +8135,9 @@
               col
                 .doc(r)
                 .delete()
-                .catch(function () {});
+                .catch(function (e) {
+                  P.fallo('biblioteca: limpiar partes viejas', e);
+                });
             });
             throw e;
           }
@@ -7506,7 +8159,9 @@
                   .collection('libros/' + id + '/partes')
                   .doc(rutaParte(m, i))
                   .delete()
-                  .catch(function () {})
+                  .catch(function (e) {
+                    P.fallo('biblioteca: limpiar partes viejas', e);
+                  })
               );
             return Promise.all(b);
           });
@@ -7540,7 +8195,9 @@
       if (vuelo.length) P.guardarLocal(vuelo);
       try {
         history.replaceState(null, '', location.pathname + location.search);
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('historial', e);
+      }
       location.reload();
     })();
     return true;
@@ -7791,7 +8448,9 @@
             ['', ':campos', ':visto', ':leidas', ':capas', ':ultima', ':foco', ':respaldo'].forEach(function (s) {
               try {
                 localStorage.removeItem(claveLocalDe('local', x.id) + s);
-              } catch (e) {}
+              } catch (e) {
+                P.fallo('almacenamiento', e);
+              }
             });
           });
     hecho.then(
@@ -8108,12 +8767,14 @@
         var d = E.FUENTE.tipo === 'local' ? null : r[1];
         E.USER = r[2] || null;
         var listoUsuario = E.USER
-          ? Promise.all([E.USER.id(), E.USER.can('data.write')])
+          ? Promise.all([E.USER.id(), E.USER.can ? E.USER.can('data.write') : null])
               .then(function (u) {
                 E.ME = u[0] || null;
                 if (u[1] === false) P.activarSoloLectura();
               })
-              .catch(function () {})
+              .catch(function (e) {
+                P.fallo('identidad', e);
+              })
           : Promise.resolve();
         listoUsuario.then(function () {
           P.renderPanel();
@@ -8142,6 +8803,7 @@
           // vuelve a intentar en la próxima carga; de la copia local sólo sale lo que subió.
           listoUsuario.then(function () {
             if (!E.col) return;
+            var col = E.col;
             var rec = P.cargarLocal(function (id, a) {
               return !(a.autor && E.ME && a.autor !== E.ME);
             });
@@ -8164,7 +8826,7 @@
             Promise.all(
               ids.map(function (id) {
                 escritas[id] = P.anots[id];
-                return E.col
+                return col
                   .doc(id)
                   .set(P.anots[id])
                   .then(function () {
@@ -8216,16 +8878,25 @@
           P.estado(aviso, true);
           return;
         }
+        var col = d.collection(P.rutaBase('anotaciones'));
         E.db = d;
-        E.col = E.db.collection(P.rutaBase('anotaciones'));
+        E.col = col;
         E.modo = 'db';
         var primeraFoto = true;
-        E.col.onSnapshot(
+        col.onSnapshot(
           function (snap) {
             // lo que llega de la base entra en la memoria; un borrador sin guardar de esa anotación queda encima
-            var cambios = snap.docChanges().map(function (ch) {
-              return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
-            });
+            // lo que no tiene forma de anotación no entra (lo escribió cualquiera): queda en el diagnóstico
+            var cambios = snap
+              .docChanges()
+              .map(function (ch) {
+                return { tipo: ch.type, id: ch.doc.id, datos: ch.type === 'removed' ? null : ch.doc.data() };
+              })
+              .filter(function (ch) {
+                var mal = ch.datos && P.N.problemaDeAnotacion(ch.datos);
+                if (mal) P.fallo('base: ' + ch.id + ' no es una anotación válida', mal);
+                return !mal;
+              });
             var cambio = P.SINC.alFoto(cambios);
             // borrada en otra sesión: su cambio ya no se puede deshacer (el eco de un borrado propio no retira su aviso)
             cambios.forEach(function (ch) {

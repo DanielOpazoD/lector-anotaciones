@@ -95,7 +95,9 @@
       ta.focus();
       try {
         ta.setSelectionRange(ta.value.length, ta.value.length);
-      } catch (e) {}
+      } catch (e) {
+        P.fallo('cursor', e);
+      }
     }
   }
   function irARevisar(a) {

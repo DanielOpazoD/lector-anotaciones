@@ -280,7 +280,9 @@
         ta.focus({ preventScroll: true });
         try {
           ta.setSelectionRange(foco.ini, foco.fin);
-        } catch (e) {}
+        } catch (e) {
+          P.fallo('cursor', e);
+        }
         ta.scrollTop = foco.scroll;
       }
     } else if (focoBoton) {

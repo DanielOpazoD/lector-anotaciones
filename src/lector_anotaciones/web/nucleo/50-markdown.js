@@ -5,19 +5,25 @@
 //
 // `estadoLibro()` es también el armazón con que los importadores de HTML, EPUB y Word van abriendo secciones y
 // añadiendo bloques, para que todos los libros salgan con los mismos ids.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
+  /** @type {Record<string, number>} */
   var ROMANOS = { I: 1, II: 2, III: 3, IV: 4, V: 5 };
   // Los espacios de str.isspace() de Python (incluye \x1c-\x1f y \x85; no incluye \ufeff), para que strip(), \s y \d
   // signifiquen aquí lo mismo que en markdown.py.
   var ESP = '\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
   var BORDES = new RegExp('^[' + ESP + ']+|[' + ESP + ']+$', 'g');
+  /** @param {string} s */
   function strip(s) {
     return s.replace(BORDES, '');
   }
@@ -26,10 +32,11 @@
   var SEPARADOR_TABLA = new RegExp('^\\|[' + ESP + ']*:?-{2,}');
   var ITEM_NUMERADO = /^(\p{Nd}+)\. /u;
   // int() de Python con dígitos de cualquier escritura: cada bloque de dígitos Unicode va del 0 al 9 seguidos
+  /** @param {string} digitos */
   function entero(digitos) {
     var n = 0;
     Array.from(digitos).forEach(function (ch) {
-      var cp = ch.codePointAt(0),
+      var cp = /** @type {number} */ (ch.codePointAt(0)),
         z = cp;
       while (z > 0 && /\p{Nd}/u.test(String.fromCodePoint(z - 1)) && cp - z < 60) z--;
       n = n * 10 + ((cp - z) % 10);
@@ -40,10 +47,15 @@
   // \w de Python sobre texto: letras y números de cualquier escritura, y el guion bajo
   var CURSIVA = /(?<![\p{L}\p{N}_∗])\*([^*\n]+)\*(?![\p{L}\p{N}_])/gu;
 
+  /** @param {number} n */
   function dos(n) {
     return n < 10 ? '0' + n : String(n);
   }
   // Id estable y legible para una sección; se registra en `usados` para evitar duplicados.
+  /**
+   * @param {string} titulo
+   * @param {Record<string, boolean>} usados
+   */
   function seccionId(titulo, usados) {
     var m, base;
     if ((m = /^Capítulo (\p{Nd}+)\./u.exec(titulo))) base = 'cap-' + dos(entero(m[1]));
@@ -61,27 +73,43 @@
     return sid;
   }
   // Escapa HTML y convierte **negrita** y *cursiva*.
+  /** @param {string} s */
   function inline(s) {
     return N.escaparHtml(s).replace(NEGRITA, '<strong>$1</strong>').replace(CURSIVA, '<em>$1</em>');
   }
   // El armazón del libro: las secciones abiertas y la actual. Un bloque antes de toda sección abre «Preliminares».
+  /** @param {string} [figs] */
   function estadoLibro(figs) {
-    /** @type {{ figs: string, usados: Record<string, number>, secciones: any[], sec: any, [k: string]: any }} */
-    var st = { figs: figs === undefined ? 'figs/' : figs, usados: {}, secciones: [], sec: null };
-    st.nueva = function (titulo, nivel, src) {
-      st.sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };
-      st.secciones.push(st.sec);
-      return st.sec;
-    };
-    st.bloque = function (t, contenido, src) {
-      if (!st.sec) st.nueva('Preliminares', 1, src);
-      var b = { id: st.sec.id + '-b' + (st.sec.bloques.length + 1), t: t, html: contenido, src: src };
-      st.sec.bloques.push(b);
-      return b;
+    /** @type {EstadoLibro} */
+    var st = {
+      figs: figs === undefined ? 'figs/' : figs,
+      usados: {},
+      secciones: [],
+      sec: null,
+      nueva: function (titulo, nivel, src) {
+        var sec = { id: seccionId(titulo, st.usados), titulo: titulo, nivel: nivel, src: src, bloques: [] };
+        st.sec = sec;
+        st.secciones.push(sec);
+        return sec;
+      },
+      bloque: function (t, contenido, src) {
+        var sec = st.sec || st.nueva('Preliminares', 1, src);
+        /** @type {Bloque} */
+        var b = { id: sec.id + '-b' + (sec.bloques.length + 1), t: t, html: contenido, src: src };
+        sec.bloques.push(b);
+        return b;
+      },
     };
     return st;
   }
+  /**
+   * @param {string[]} lines
+   * @param {number} i
+   * @param {string} cierre
+   * @returns {[string[], number]}
+   */
   function leerMarcado(lines, i, cierre) {
+    /** @type {string[]} */
     var buf = [];
     i += 1;
     while (i < lines.length && lines[i].indexOf(cierre) !== 0) {
@@ -91,16 +119,28 @@
     if (i >= lines.length) throw new Error('falta el cierre ' + cierre);
     return [buf, i + 1];
   }
+  /**
+   * @param {string} s
+   * @param {string} p
+   */
   function empieza(s, p) {
     return s.slice(0, p.length) === p;
   }
+  /**
+   * @param {string[]} lines
+   * @param {string} nombre
+   * @param {EstadoLibro} st
+   */
   function parseLineas(lines, nombre, st) {
-    var i = 0,
-      m,
-      r,
-      buf,
-      items,
-      filas;
+    var i = 0;
+    /** @type {RegExpExecArray | null} */
+    var m;
+    /** @type {[string[], number]} */
+    var r;
+    /** @type {string[]} */
+    var buf, items;
+    /** @type {string[][]} */
+    var filas;
     while (i < lines.length) {
       var linea = lines[i],
         src = nombre + ':' + (i + 1);
@@ -205,6 +245,10 @@
   }
   // Uno o varios Markdown, en orden: [{ nombre, texto }]. Una sección abierta en un archivo sigue recibiendo bloques
   // si el siguiente empieza sin título, como cuando un libro largo se parte en varios archivos.
+  /**
+   * @param {{ nombre: string, texto: string }[]} archivos
+   * @param {string} [figs]
+   */
   function parsearMarkdown(archivos, figs) {
     var st = estadoLibro(figs);
     archivos.forEach(function (a) {

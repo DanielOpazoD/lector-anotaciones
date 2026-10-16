@@ -11,7 +11,7 @@
     "formato": "prettier --check 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js' 'src/lector_anotaciones/web/tipos/*.d.ts' 'herramientas/*.mjs'",
     "formatear": "prettier --write 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js' 'src/lector_anotaciones/web/tipos/*.d.ts' 'herramientas/*.mjs'",
     "estilos": "node tests/web/herramientas/comparar-estilos.mjs",
-    "tipos": "tsc -p tsconfig.json",
+    "tipos": "tsc -p tsconfig.json && tsc -p tsconfig.nucleo.json",
     "modulos": "node herramientas/modulos.mjs"
   },
   "devDependencies": {

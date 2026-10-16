@@ -23,7 +23,7 @@
   function tituloCambio(b) {
     return b.anterior
       ? 'Cambió en la última reconstrucción' +
-          (E.LIBRO.anterior_generado ? ' (antes: fuentes del ' + E.LIBRO.anterior_generado + ')' : '')
+          (P.libro().anterior_generado ? ' (antes: fuentes del ' + P.libro().anterior_generado + ')' : '')
       : 'Cambió desde tu última lectura';
   }
   function marcarCambio(b, node) {

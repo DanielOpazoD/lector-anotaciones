@@ -25,7 +25,7 @@ const lista = (c) =>
     .sort()
     .map((n) => path.join(WEB, c, n));
 
-// Un programa sin pagina.d.ts (P y E sin tipo) para inferir los tipos de lo que se exporta.
+// Un programa sin pagina.d.ts (P y E sin tipo, salvo el núcleo en P.N) para inferir los tipos de lo que se exporta.
 function programa(extra) {
   const archivos = [
     ...lista('nucleo'),
@@ -76,7 +76,7 @@ const asignacion = (st, ns) =>
     : null;
 
 function analizar() {
-  const prog = programa('declare var LAPagina: any;\ndeclare var LAEstado: any;\n');
+  const prog = programa('declare var LAPagina: { N: Nucleo; [k: string]: any };\ndeclare var LAEstado: any;\n');
   const tc = prog.getTypeChecker();
   const texto = (t) =>
     tc.typeToString(t, undefined, ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseFullyQualifiedType);
@@ -108,13 +108,21 @@ function analizar() {
     if (nombre === DIBUJO.archivo) comprobarDibujo(sf);
     usa[nombre] = { P: new Set(), E: new Set() };
     for (const st of cuerpo(sf)) {
-      // el estado se declara donde se le da su primer valor en el nivel del módulo
+      // el estado se declara donde se le da su primer valor en el nivel del módulo; si ese valor lleva un tipo
+      // (`E.x = /** @type {T} */ (valor);`), ése es su tipo, y tsc comprueba las demás asignaciones contra él
       const e = asignacion(st, 'E');
       if (e) {
         const x = e.left.name.text;
         if (estado[x] && estado[x].declarado)
           throw new Error(`E.${x} se declara dos veces (${estado[x].archivo} y ${nombre})`);
-        estado[x] = { archivo: nombre, tipos: (estado[x] && estado[x].tipos) || new Set(), declarado: true };
+        const conTipo =
+          ts.isParenthesizedExpression(e.right) && ts.getJSDocTags(e.right).some((t) => ts.isJSDocTypeTag(t));
+        estado[x] = {
+          archivo: nombre,
+          tipos: (estado[x] && estado[x].tipos) || new Set(),
+          declarado: true,
+          tipo: conTipo ? texto(tc.getTypeAtLocation(e.right)) : null,
+        };
       }
       const a = asignacion(st, 'P');
       if (!a) continue;
@@ -248,7 +256,7 @@ function escribir({ ofrece, estado, usa }) {
   const estadoArch = porArchivo(estado);
   for (const a of Object.keys(estadoArch).sort()) {
     dts.push(`  // ${a}`);
-    for (const x of estadoArch[a]) dts.push(`  ${x}: ${tipoEstado(estado[x].tipos)};`);
+    for (const x of estadoArch[a]) dts.push(`  ${x}: ${estado[x].tipo || tipoEstado(estado[x].tipos)};`);
   }
   dts.push('}', '', 'declare var LAPagina: Pagina;', 'declare var LAEstado: Estado;', '');
 

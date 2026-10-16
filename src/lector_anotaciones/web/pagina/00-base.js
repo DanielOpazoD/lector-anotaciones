@@ -1,30 +1,45 @@
 (function (P, E) {
-  E.LIBRO = null;
-  E.SECS = [];
+  // lo que este fragmento ofrece a los demás (las funciones se elevan: están desde el principio)
+  P.libro = libro;
+  P.fallo = fallo;
+  E.LIBRO = /** @type {Libro | null} */ (null);
+  // El libro abierto, para lo que sólo corre con él ya cargado (dibujar, exportar, respaldar).
+  function libro() {
+    if (!E.LIBRO) throw new Error('todavía no hay un libro abierto');
+    return E.LIBRO;
+  }
+  E.SECS = /** @type {Seccion[]} */ ([]);
+  /** @type {Record<string, Seccion>} */
   var SEC_BY_ID = {};
-  var BLOQUE_SEC = {};
+  /** @type {Record<string, string>} */
+  var BLOQUE_SEC = {}; // id de bloque → id de su sección
+  /** @type {Record<string, number>} */
   var POS_BLOQUE = {}; // id de bloque → su posición en la sección
-  var ORIG = {};
+  /** @type {Record<string, string>} */
+  var ORIG = {}; // id de bloque → su HTML sin marcas
   P.SEC_BY_ID = SEC_BY_ID;
   P.BLOQUE_SEC = BLOQUE_SEC;
   P.POS_BLOQUE = POS_BLOQUE;
   P.ORIG = ORIG;
-  E.db = null;
-  E.col = null;
+  E.db = /** @type {BaseCompartida | null} */ (null);
+  E.col = /** @type {ColeccionBase | null} */ (null);
   E.modo = 'cargando';
-  E.LOCAL_KEY = 'lector-anotaciones'; // se completa con el id del libro al cargarlo
+  E.LOCAL_KEY = /** @type {string} */ ('lector-anotaciones'); // se completa con el id del libro al cargarlo
+  /** @type {Record<string, Bloque>} */
   var BLOQUES = {}; // id de bloque -> bloque de libro.json
   P.BLOQUES = BLOQUES;
-  E.USER = null;
-  E.ME = null;
+  E.USER = /** @type {Usuario | null} */ (null);
+  E.ME = /** @type {string | null} */ (null);
+  /** @type {Record<string, Perfil>} */
   var PERFILES = {};
+  /** @type {Record<string, number>} */
   var PERFILES_PEDIDOS = {};
   P.PERFILES = PERFILES;
   P.PERFILES_PEDIDOS = PERFILES_PEDIDOS;
-  E.CAPAS_ON = {};
-  E.VISTO = {};
-  E.LEIDAS = {};
-  E.ultimoBorrado = null;
+  E.CAPAS_ON = /** @type {Record<string, boolean>} */ ({});
+  E.VISTO = /** @type {Record<string, string>} */ ({}); // id de bloque → la huella que el lector vio
+  E.LEIDAS = /** @type {Record<string, boolean>} */ ({}); // secciones marcadas leídas
+  E.ultimoBorrado = /** @type {Anotacion | null} */ (null);
   E.lectura = null;
   E.SOLO_LECTURA = false;
   E.respaldoHoy = null;
@@ -78,6 +93,27 @@
     return new Date().toISOString();
   };
   P.ahora = ahora;
+  // Los fallos que la página pasa por alto a propósito (un almacenamiento bloqueado, una voz que no está, una limpieza
+  // que no se pudo hacer: nada de eso impide seguir) quedan aquí, los 50 últimos, junto con los errores que nadie
+  // capturó, para «Copiar diagnóstico». No se muestran: sólo se copian cuando el lector informa un problema.
+  /** @type {{ cuando: string, donde: string, error: string }[]} */
+  var FALLOS = [];
+  P.FALLOS = FALLOS;
+  /**
+   * @param {string} donde
+   * @param {any} e
+   */
+  function fallo(donde, e) {
+    var error = e && typeof e === 'object' ? (e.code ? e.code + ': ' : '') + (e.message || String(e)) : String(e);
+    FALLOS.unshift({ cuando: ahora(), donde: donde, error: error });
+    if (FALLOS.length > 50) FALLOS.length = 50;
+  }
+  window.addEventListener('error', function (ev) {
+    fallo('sin capturar', ev.error || ev.message);
+  });
+  window.addEventListener('unhandledrejection', function (ev) {
+    fallo('promesa sin capturar', ev.reason);
+  });
   var uid = function () {
     return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   };

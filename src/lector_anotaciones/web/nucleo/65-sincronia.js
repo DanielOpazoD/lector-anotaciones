@@ -1,18 +1,24 @@
 // Núcleo · sincronía de las anotaciones entre la memoria, la base compartida y la copia del navegador. Sin DOM ni
 // entrada y salida: aquí se decide qué escribir, qué hacer ante una confirmación o un rechazo y cómo fundir lo que
 // llega (una foto de la base, la copia local); la página hace las escrituras, los temporizadores y lo que se ve.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
 
   // Códigos de rechazo de la base (db.d.ts). Los transitorios se reintentan una vez; uno desconocido se trata como
   // `unavailable`, como manda el contrato. Los de permiso son definitivos para la visita: pasan a sólo lectura.
+  /** @type {Record<string, number>} */
   var TRANSITORIOS = { unavailable: 1, resource_exhausted: 1 };
+  /** @type {Record<string, number>} */
   var CONOCIDOS = {
     invalid_argument: 1,
     resource_exhausted: 1,
@@ -24,11 +30,17 @@
     capability_removed: 1,
     transform_error: 1,
   };
+  /** @param {string} [codigo] */
   function esTransitorio(codigo) {
     return !codigo || !!TRANSITORIOS[codigo] || !CONOCIDOS[codigo];
   }
   // `invalid_argument` sobre un documento pequeño es un permiso que no se dice (la página de sólo lectura no puede
   // escribir); sobre uno grande, el tamaño. En un respaldo nunca es de permiso.
+  /**
+   * @param {string} codigo
+   * @param {number} tamano
+   * @param {string} verbo
+   */
   function esDePermiso(codigo, tamano, verbo) {
     return (
       codigo === 'not_granted' ||
@@ -36,6 +48,11 @@
       (codigo === 'invalid_argument' && verbo !== 'respaldo' && tamano < 200000)
     );
   }
+  /**
+   * @template T
+   * @param {T} a
+   * @returns {T}
+   */
   function copia(a) {
     return JSON.parse(JSON.stringify(a));
   }
@@ -47,16 +64,19 @@
   //   enVuelo     id → 1 mientras una escritura espera respuesta (reintento incluido)
   //   enBase      id → 1 si la base tiene el documento (llegó en una foto o se confirmó su escritura)
   //   pendientes  ids que esperan su primera subida (anotadas mientras conectaba, recuperadas del navegador)
+  /** @returns {Sincronia} */
   function crearSincronia() {
-    var S = {
+    // los métodos se añaden abajo, cada uno con su tipo de `Sincronia` (tipos/globales.d.ts)
+    var S = /** @type {Sincronia} */ ({
       anots: {},
       campos: {},
       sinGuardar: {},
       enVuelo: {},
       enBase: {},
       pendientes: /** @type {string[]} */ ([]),
-    };
+    });
 
+    /** @param {string} id */
     function pendiente(id) {
       if (S.pendientes.indexOf(id) < 0) S.pendientes.push(id);
     }
@@ -66,7 +86,8 @@
     S.limpiarCampos = function (id, enBase) {
       var c = S.campos[id];
       if (!c) return;
-      Object.keys(c).forEach(function (k) {
+      // las marcas son nombres de campos de la anotación
+      /** @type {(keyof Anotacion)[]} */ (Object.keys(c)).forEach(function (k) {
         if (!enBase || !S.anots[id] || S.anots[id][k] === enBase[k]) delete c[k];
       });
       if (!Object.keys(c).length) delete S.campos[id];
@@ -90,8 +111,8 @@
       var a = S.anots[id];
       if (!a) return null;
       if (!S.enBase[id] || S.sinGuardar[id]) return { modo: 'set', datos: a, anotacion: a };
-      var p = { editado: a.editado };
-      Object.keys(S.campos[id] || {}).forEach(function (k) {
+      var p = /** @type {Record<string, unknown>} */ ({ editado: a.editado });
+      /** @type {(keyof Anotacion)[]} */ (Object.keys(S.campos[id] || {})).forEach(function (k) {
         p[k] = a[k] === undefined ? null : a[k];
       });
       return { modo: 'update', datos: p, anotacion: a };
@@ -162,7 +183,8 @@
           }
         } else if (ch.datos) {
           S.enBase[ch.id] = 1;
-          var nuevo = Object.assign({}, ch.datos, { id: ch.id });
+          // el documento entra como anotación tal como llega: aquí no se revisa su forma
+          var nuevo = /** @type {Anotacion} */ (Object.assign({}, ch.datos, { id: ch.id }));
           if (S.sinGuardar[ch.id] && S.anots[ch.id]) nuevo = N.fundirBorrador(nuevo, S.anots[ch.id], S.campos[ch.id]);
           if (!N.igual(S.anots[ch.id], nuevo)) {
             S.anots[ch.id] = nuevo;
@@ -178,8 +200,8 @@
     // puede dejar algo fuera (de otra cuenta): se queda en la copia sin cargarse. Devuelve las ids cargadas (`nuevas`)
     // y las que ya estaban (`existentes`).
     S.fusionarLocal = function (local, campos, filtro) {
-      var nuevas = [],
-        existentes = [];
+      var nuevas = /** @type {string[]} */ ([]),
+        existentes = /** @type {string[]} */ ([]);
       Object.keys(local).forEach(function (k) {
         var mem = S.anots[k],
           loc = local[k];
@@ -218,15 +240,16 @@
     // Resultado de la subida de la cola: `resultados[i]` es true o el código del rechazo de `ids[i]`; `escritas[id]`, lo
     // que se subió. Devuelve las que subieron sin cambios posteriores (su copia local sobra) y las que fallaron.
     S.alSubir = function (ids, resultados, escritas) {
-      var soltar = [],
-        fallidas = [];
+      var soltar = /** @type {string[]} */ ([]),
+        fallidas = /** @type {string[]} */ ([]);
       ids.forEach(function (id, i) {
-        if (resultados[i] === true) {
+        var res = resultados[i]; // en una variable, para que el tipo se estreche a código en el `else`
+        if (res === true) {
           S.enBase[id] = 1;
           S.limpiarCampos(id, escritas[id]);
           if (S.anots[id] === escritas[id]) soltar.push(id);
         } else {
-          S.sinGuardar[id] = resultados[i];
+          S.sinGuardar[id] = res;
           fallidas.push(id);
         }
       });
@@ -248,6 +271,11 @@
 
   // Migración de claves locales: copia en `local` lo de versiones anteriores de la página (`viejas`: clave → objeto),
   // sin pisar lo que ya hay. Devuelve cuántas anotaciones se copiaron.
+  /**
+   * @param {Record<string, Anotacion>} local
+   * @param {Record<string, Record<string, Anotacion>>} viejas
+   * @returns {number}
+   */
   function migrarClaves(local, viejas) {
     var n = 0;
     Object.keys(viejas).forEach(function (k) {

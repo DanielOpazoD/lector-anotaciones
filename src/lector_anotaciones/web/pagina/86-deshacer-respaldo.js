@@ -160,7 +160,7 @@
       .then(function () {
         return colR
           .doc(hoy)
-          .set({ fecha: hoy, libro: E.LIBRO.generado, n: respaldadas, partes: partes.length, omitidas: omitidas });
+          .set({ fecha: hoy, libro: P.libro().generado, n: respaldadas, partes: partes.length, omitidas: omitidas });
       })
       .catch(function (e) {
         var codigo = (e && e.code) || 'error';

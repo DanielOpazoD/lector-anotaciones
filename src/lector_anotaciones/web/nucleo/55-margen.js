@@ -1,26 +1,39 @@
 // Núcleo · notas al margen: dónde va cada ficha para quedar a la altura de su pasaje sin pisarse con las vecinas. Sin DOM.
-(function (raiz, crear) {
-  var N = (raiz.LANucleo = raiz.LANucleo || {}),
-    m = crear(N);
-  Object.keys(m).forEach(function (k) {
-    N[k] = m[k];
-  });
-})(typeof self !== 'undefined' ? self : globalThis, function (N) {
+// La envoltura de cada archivo del núcleo: `crear` recibe el núcleo (con lo de los archivos anteriores) y devuelve lo
+// suyo, que se le añade; cada función devuelta se revisa contra su firma en `Nucleo` (tipos/globales.d.ts).
+/** @type {(raiz: any, crear: (N: Nucleo) => Partial<Nucleo>) => void} */ (
+  function (raiz, crear) {
+    var N = /** @type {any} */ (raiz.LANucleo = raiz.LANucleo || {}),
+      m = /** @type {any} */ (crear(N));
+    Object.keys(m).forEach(function (k) {
+      N[k] = m[k];
+    });
+  }
+)(typeof self !== 'undefined' ? self : globalThis, function (N) {
   'use strict';
   // items: [{ id, y, h }] (y: altura del pasaje, h: alto de la ficha; y = null si no tiene pasaje a la vista). Como los
   // comentarios de un procesador de texto: cada ficha va a la altura de su pasaje; si choca con la anterior, baja. La
   // activa manda: queda exactamente junto a su pasaje, las de abajo se corren hacia abajo y las de arriba hacia arriba.
   // Las que no tienen pasaje van al final, en su orden. Devuelve { tops: { id: top }, alto }.
+  /**
+   * @param {{ id: string, y: number | null, h: number }[]} items
+   * @param {string | null} activo
+   * @param {number} [separacion]
+   */
   function apilar(items, activo, separacion) {
-    var gap = separacion === undefined ? 8 : separacion,
-      conY = [],
-      sinY = [];
+    /** @typedef {{ id: string, y: number, h: number, i: number, top: number }} Pieza */
+    var gap = separacion === undefined ? 8 : separacion;
+    /** @type {Pieza[]} */
+    var conY = [];
+    /** @type {Pieza[]} */
+    var sinY = [];
     items.forEach(function (it, i) {
       (it.y === null || it.y === undefined || !isFinite(it.y) ? sinY : conY).push({
         id: it.id,
-        y: it.y,
+        y: /** @type {number} */ (it.y), // sin pasaje: se le da su lugar al final, abajo
         h: it.h,
         i: i,
+        top: 0, // se calcula abajo
       });
     });
     conY.sort(function (a, b) {
@@ -32,9 +45,9 @@
       conY.push(it);
     });
     var k = -1,
-      i,
-      fondo,
-      techo;
+      /** @type {number} */ i,
+      /** @type {number} */ fondo,
+      /** @type {number} */ techo;
     for (i = 0; i < conY.length; i++)
       if (conY[i].id === activo) {
         k = i;
@@ -59,6 +72,7 @@
         techo = conY[i].top - gap;
       }
     }
+    /** @type {Record<string, number>} */
     var tops = {},
       alto = 0;
     conY.forEach(function (it) {

@@ -21,9 +21,9 @@ etapa.
 | F1 | Medir la cobertura: Python, núcleo (`node --test`) y página (V8 en Playwright, por fragmento); pisos en la CI | hecho |
 | F2 | La página en módulos: cada fragmento en su ámbito; lo compartido por un espacio de nombres tipado y el estado por un objeto explícito; `50-panel.js` partido | hecho |
 | F3 | La ficha como función de (anotación, vista): la firma sale de la vista, no de una lista a mano | hecho |
-| F4 | Pruebas de navegador cortas, con preparaciones compartidas | pendiente |
-| F5 | Tipos: `libro.json` tipado, sin `any`, `noImplicitAny` en el núcleo; mypy para Python | pendiente |
-| F6 | Menores: una función por orden en `cli.py`; los errores silenciados, a un diagnóstico copiable | pendiente |
+| F4 | Pruebas de navegador cortas, con preparaciones compartidas | hecho |
+| F5 | Tipos: `libro.json` tipado, sin `any`, `noImplicitAny` en el núcleo; mypy para Python | hecho |
+| F6 | Menores: una función por orden en `cli.py`; los errores silenciados, a un diagnóstico copiable | hecho |
 | F7 | Revisión independiente, documentación y publicación de la 0.6.0 | pendiente |
 
 ## F1 · Lo que midió la cobertura
@@ -70,3 +70,46 @@ función pura y los selectores de lector y etiqueta se rehacen una vez por redib
 ficha activa, dejada o con la propuesta abierta no se rehace en un redibujo, y la rehecha vuelve con el cuadro abierto;
 cae al quitar cualquiera de las cuatro llamadas a `vistaEnSitio` o al vaciar `perfil` de la vista, y las pruebas
 existentes caen al vaciar `sinGuardar` o `revisada`. Las 64 pruebas de navegador pasan.
+
+## F4 · Pruebas cortas
+
+`tests/web/ayudas.mjs` ofrece el servidor como fixture por proceso (`base`) y `abrir(opciones)`, que crea el contexto,
+siembra la base simulada o el navegador, navega, espera y lo cierra todo al terminar; `sinErrores(p, …)` comprueba los
+errores de la página. Cada archivo arma sus escenarios con preparaciones que llaman todas las pruebas que los usan
+(`cuatroRespondidas`, `casosLimite`, `conUsuario`, `epubAnotado`…). De 64 pruebas a 142 (más las 3 nuevas de F5 y F6);
+la más larga, de 459 líneas a 92. En los seis archivos partidos corrían 343 comprobaciones y ahora 408: todas las de
+antes, con el mismo texto (comparado con `LISTAR=1` antes y después de cada archivo), más las de errores de página por
+prueba. Al partir aparecieron dos verdes falsos: las dos pruebas S19 (la barra de selección a 320 y 360 px) medían sin
+afirmar nada, y «el enlace de deshacer sobrevive al eco» comprobaba antes de que el eco llegara (la base simulada cuenta
+ahora sus ecos, `__ecos`). Las dos caen ya con su mutación. El precio: la suite tarda 2,0 min en vez de 1,3 (cada prueba
+arma su estado). Cuatro agentes partieron los archivos grandes en paralelo y cada uno verificó con el recuento de
+mensajes; los recuentos se volvieron a comprobar sobre sus registros.
+
+## F5 · Tipos
+
+- **Python:** `mypy --strict` pasa (82 errores → 0) y la CI lo corre. `tipos.py` nombra los datos en JSON (`Anotacion`,
+  `Libro`, `Seccion`, `Bloque`, `Json`). mypy encontró que `escrituras` con respuestas sin id y otras repetidas lanzaba
+  `TypeError` en vez del `ValueError` con los problemas.
+- **La página:** `libro.json` tipado (`Libro`, `Seccion`, `Bloque`), y también lo que viene de claude.ai (`Usuario`,
+  `Perfil`, `BaseCompartida`). El estado compartido declara su tipo donde se declara (`E.LIBRO = /** @type {Libro |
+  null} */ (null)`), y `herramientas/modulos.mjs` lo respeta: los miembros de `P` y `E` sin tipo pasan de 25 a 0. Los
+  23 sitios que el tipo nulo destapó se resolvieron sin cambiar el comportamiento (`P.libro()` para lo que sólo corre
+  con el libro abierto; comprobaciones donde `E.col` podía faltar).
+- **El núcleo, sin tipos implícitos** (`tsconfig.nucleo.json`, 523 errores → 0, en paralelo con dos agentes), y la
+  envoltura de cada archivo revisa lo que devuelve contra su firma en `Nucleo` (cae si una firma no coincide).
+  `Ubicacion.pid` puede ser null (lo es en lo perdido). Los tipos mostraron cuatro defectos, cada uno con su prueba, que
+  falla sin el arreglo: `validarLibro` y `sanearLibro` lanzaban `TypeError` con una sección o un bloque que no es un
+  objeto (un libro de la biblioteca así repetía el fallo en cada carga); en un EPUB, un ítem sin id y una referencia
+  sin idref se juntaban en la clave «null» y sumaban un capítulo fantasma (y le quitaban al segundo su título del
+  índice); e importar HTML, EPUB o Word sin analizador daba un `TypeError` en vez de un mensaje.
+
+## F6 · Menores
+
+- `cli.py`: una función por orden, registrada con `set_defaults`; `main` sólo la llama.
+- Los 18 errores que la página pasaba por alto en silencio (`catch (e) {}`, `.catch(function () {})`) van a
+  `P.fallo('dónde', e)`, que guarda los 50 últimos junto con los errores que nadie capturó. «Copiar diagnóstico» (en
+  Exportar) los copia con la versión de la página (el empaquetador la escribe en `<meta name="generator">`), el libro,
+  el modo, lo pendiente de guardar y el navegador; nunca el texto de las anotaciones.
+- Al tipar `alFoto` apareció que lo que llega de la base entraba sin revisar, y un solo documento mal formado (un
+  subrayado sin cita, escrito por cualquier colaborador) dejaba el panel vacío para todos. Ahora `problemaDeAnotacion`
+  (núcleo) lo deja fuera y queda en el diagnóstico.

@@ -554,6 +554,24 @@ test('Una página sin libro propio invita a importar uno con la biblioteca abier
   );
 });
 
+// Lo que encontró el tipado estricto del importador (0.6): un atributo que falta era la clave «null», así que un ítem
+// sin id y una referencia sin idref se juntaban en un capítulo que el libro no tiene.
+test('Un EPUB mal formado (un ítem sin id, una referencia sin idref) no suma un capítulo fantasma', async ({
+  abrir,
+}) => {
+  const p = await paginaSinBase(abrir);
+  const imp = await importar(p, [muestra('ejemplo-sin-ids.epub')]);
+  const secciones = await p.$$eval('nav a.sec', (as) => as.map((a) => a.textContent));
+  check(
+    !imp.error &&
+      secciones.some((t) => /Capítulo 1/.test(t)) &&
+      secciones.some((t) => /Capítulo 2/.test(t)) &&
+      !secciones.some((t) => /fantasma/i.test(t)),
+    `importa los dos capítulos, el segundo con su título del índice, y nada más (${JSON.stringify({ error: imp.error, secciones })})`
+  );
+  sinErrores(p, 'al importar un EPUB mal formado');
+});
+
 // ------------------------------------------------------------ la biblioteca compartida (base simulada)
 // Con la base que sobrevive a las recargas, la página en su portada.
 const conBiblioteca = (abrir) => abrir({ hash: '', modo: 'ninguno', previo: [conBasePersistente] });
