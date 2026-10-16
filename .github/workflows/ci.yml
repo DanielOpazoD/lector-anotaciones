@@ -28,7 +28,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
       - run: ruff check .
       - run: ruff format --check .
-      - run: pytest
+      # con cobertura: el piso (pyproject.toml) avisa si algo deja de probarse
+      - run: pytest --cov
 
   ejemplo:
     name: construir el ejemplo con PDF
@@ -82,14 +83,22 @@ jobs:
       - run: npm run tipos
       # web/index.html se genera desde src/lector_anotaciones/web/: tiene que estar al día con sus fuentes
       - run: lector-anotaciones pagina --salida web/index.html --comprobar
-      - name: Núcleo de la página (node --test)
-        run: node --test 'tests/js/**/*.test.js'
+      # el núcleo con su cobertura; los pisos (package.json) salen de una medición real: 66,5 % de líneas, 84,5 % de
+      # ramas y 86,4 % de funciones (los importadores se prueban sobre todo en el navegador)
+      - name: Núcleo de la página (node --test, con cobertura)
+        run: npm run cobertura:js
       - run: lector-anotaciones construir ejemplo/fuentes --salida ejemplo/salida/libro.json --titulo "Libro de ejemplo" --estricto
       - run: npx playwright install --with-deps chromium
-      # tests/web/*.spec.mjs en paralelo; ante un fallo, el informe con capturas queda como artefacto
-      - run: npx playwright test
+      # tests/web/*.spec.mjs en paralelo, con la cobertura de la página por fragmento (piso: 92 %, medido 93,2 %); ante
+      # un fallo, el informe con capturas queda como artefacto, y el de cobertura siempre
+      - run: npm run cobertura:web
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: pruebas-navegador
           path: test-results/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-pagina
+          path: cobertura/web.md

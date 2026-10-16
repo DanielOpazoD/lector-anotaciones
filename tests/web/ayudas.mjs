@@ -28,16 +28,47 @@ import { fileURLToPath } from 'node:url';
 
 import { test as base, expect } from '@playwright/test';
 
+import { reducir, guardar as guardarCobertura } from './herramientas/cobertura.mjs';
+
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 // `test` de todas las pruebas: un error sin capturar en cualquier página de cualquier contexto que la prueba abra la
-// hace fallar, aunque la prueba no lo mire (cada una abre sus contextos con `browser.newContext`).
+// hace fallar, aunque la prueba no lo mire (cada una abre sus contextos con `browser.newContext`). Con COBERTURA=1,
+// además, cada página recoge su cobertura V8, que se reduce por fragmento de las fuentes (herramientas/cobertura.mjs).
+const COBERTURA = !!process.env.COBERTURA;
+async function recoger(paginas, cobertura) {
+  for (const p of paginas.splice(0)) {
+    try {
+      cobertura.push(...(await p.coverage.stopJSCoverage()));
+    } catch {
+      // la página ya se cerró: su cobertura se perdió con ella
+    }
+  }
+}
 export const test = base.extend({
   sinErroresDePagina: [
-    async ({ browser }, use) => {
-      const errores = [];
+    async ({ browser }, use, testInfo) => {
+      const errores = [],
+        cobertura = [],
+        abiertas = [];
       const original = browser.newContext;
       browser.newContext = async function (...args) {
         const ctx = await original.apply(this, args);
+        if (COBERTURA) {
+          const paginas = [],
+            nueva = ctx.newPage.bind(ctx),
+            cerrar = ctx.close.bind(ctx);
+          ctx.newPage = async () => {
+            const p = await nueva();
+            await p.coverage.startJSCoverage({ resetOnNavigation: false });
+            paginas.push(p);
+            return p;
+          };
+          ctx.close = async (...a) => {
+            await recoger(paginas, cobertura);
+            return cerrar(...a);
+          };
+          abiertas.push(paginas);
+        }
         // los guiones de inicio de las pruebas corren también en la página en blanco que precede a la navegación, donde
         // leer el almacenamiento está prohibido: sus errores (sin ninguna línea de la página servida) no son de la página
         ctx.on('weberror', (e) => {
@@ -52,6 +83,10 @@ export const test = base.extend({
         await use(errores);
       } finally {
         browser.newContext = original;
+        if (COBERTURA) {
+          for (const paginas of abiertas) await recoger(paginas, cobertura);
+          guardarCobertura(testInfo.titlePath.slice(1).join(' · '), reducir(cobertura));
+        }
       }
       expect(errores, 'errores de página sin capturar').toEqual([]);
     },

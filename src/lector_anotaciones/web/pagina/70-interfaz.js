@@ -4,6 +4,12 @@ var mqTactil = window.matchMedia ? window.matchMedia('(pointer: coarse)') : { ma
 function ocultarTb() {
   tb.style.display = 'none';
 }
+// ¿La selección toca algún bloque del texto? Lo que la barra de subrayado y los atajos aceptan.
+function selDeTexto(sel) {
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+  var ex = extremosDeRango(sel.getRangeAt(0));
+  return !!(ex.pA && ex.pB);
+}
 function mostrarTb() {
   var sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
@@ -465,8 +471,9 @@ document.addEventListener('keydown', function (ev) {
   }
   if (/TEXTAREA|SELECT/.test(tagName) || (tagName === 'INPUT' && !/checkbox|radio|button/.test(tg.type || ''))) return;
   if (ev.metaKey || ev.ctrlKey) return;
+  // hay selección que subrayar con la misma regla que la barra: que toque algún bloque (también si empieza en el título)
   var sel = window.getSelection(),
-    haySel = sel && sel.rangeCount && !sel.isCollapsed && ancestroPid(sel.getRangeAt(0).startContainer);
+    haySel = selDeTexto(sel);
   if (ev.key === 'ArrowRight' && ev.altKey) mover(1);
   else if (ev.key === 'ArrowLeft' && ev.altKey) mover(-1);
   else if (COLOR_TECLA[ev.key] && haySel) {

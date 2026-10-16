@@ -1,5 +1,8 @@
-// Carga los módulos del núcleo como lo hace la página: en orden, sobre un mismo espacio de nombres (LANucleo).
+// Carga los módulos del núcleo como lo hace la página: en orden, sobre un mismo espacio de nombres (LANucleo). Cada
+// archivo corre con su nombre (vm), así que la cobertura de `node --test --experimental-test-coverage` lo ve tal cual,
+// con sus mismas líneas.
 import { readFileSync, readdirSync } from 'node:fs';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -18,7 +21,8 @@ export function cargarNucleo() {
   for (const nombre of readdirSync(NUCLEO)
     .filter((n) => n.endsWith('.js'))
     .sort()) {
-    new Function('self', readFileSync(path.join(NUCLEO, nombre), 'utf8'))(raiz);
+    const ruta = path.join(NUCLEO, nombre);
+    vm.runInThisContext('(function (self) {' + readFileSync(ruta, 'utf8') + '\n})', { filename: ruta })(raiz);
   }
   return raiz.LANucleo;
 }

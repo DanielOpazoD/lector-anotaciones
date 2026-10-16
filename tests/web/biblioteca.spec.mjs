@@ -669,3 +669,94 @@ test('Biblioteca compartida (base simulada)', async ({ browser }) => {
   check(erroresB.length === 0, `sin errores de consola con base${erroresB.length ? ': ' + erroresB.join(' | ') : ''}`);
   await ctxB.close();
 });
+
+// Lo que la medición de cobertura de la 0.6 encontró sin probar: importar HTML y texto plano, y borrar un libro de la
+// biblioteca compartida.
+test('Importar un HTML y un texto plano', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(sinBase);
+  const page = await ctx.newPage();
+  await page.goto(base);
+  await page.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const html = path.join(tmp, 'cuento.html');
+  fs.writeFileSync(
+    html,
+    '<!doctype html><html><head><meta charset="utf-8"><title>Un cuento breve</title>' +
+      '<meta name="author" content="Autora Html"></head><body>' +
+      '<h1>Primera parte</h1><p>Era una vez un <em>hecho</em> observado.</p>' +
+      '<ul><li>Uno</li><li>Dos</li></ul>' +
+      '<h1>Segunda parte</h1><p>Y otro que se infirió.</p></body></html>'
+  );
+  const previa = await importar(page, [html]);
+  check(
+    previa.titulo === 'Un cuento breve' && previa.autor === 'Autora Html',
+    `el HTML da el título y el autor de su cabecera (${JSON.stringify({ t: previa.titulo, a: previa.autor })})`
+  );
+  const leidoHtml = await page.evaluate(() => ({
+    secciones: Array.from(document.querySelectorAll('nav a.sec')).map((a) => a.textContent.replace(/\d+$/, '')),
+    texto: document.querySelector('article.seccion:not([hidden])').textContent,
+    lista: document.querySelectorAll('article.seccion:not([hidden]) ul li').length,
+  }));
+  check(
+    leidoHtml.secciones.join('|') === 'Primera parte|Segunda parte' &&
+      /Era una vez un hecho observado/.test(leidoHtml.texto) &&
+      leidoHtml.lista === 2,
+    `cada h1 abre una sección, con sus párrafos y listas (${JSON.stringify(leidoHtml)})`
+  );
+  const txt = path.join(tmp, 'diario.txt');
+  fs.writeFileSync(
+    txt,
+    'Notas sueltas antes del primer capítulo.\n\nCAPÍTULO I\n\nLa primera línea del capítulo uno.\n\nCapítulo 2. El segundo\n\nTexto del segundo.\nEsta línea sigue el párrafo.\n'
+  );
+  await importar(page, [txt], { titulo: 'Un diario' });
+  const leidoTxt = await page.evaluate(() => ({
+    secciones: Array.from(document.querySelectorAll('nav a.sec')).map((a) => a.textContent.replace(/\d+$/, '')),
+    todo: Array.from(document.querySelectorAll('article.seccion'))
+      .map((a) => a.textContent)
+      .join(' | '),
+  }));
+  check(
+    leidoTxt.secciones.includes('CAPÍTULO I') &&
+      leidoTxt.secciones.includes('Capítulo 2. El segundo') &&
+      /Texto del segundo\. Esta línea sigue el párrafo\./.test(leidoTxt.todo),
+    `en un .txt, las líneas sueltas «CAPÍTULO …» abren secciones y el resto son párrafos (${JSON.stringify(leidoTxt.secciones)})`
+  );
+  await ctx.close();
+});
+
+test('Borrar un libro de la biblioteca compartida', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(conBase);
+  const page = await ctx.newPage();
+  await page.goto(base);
+  await page.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const md = path.join(tmp, 'efimero.md');
+  fs.writeFileSync(md, '# Libro efímero\n\n## Capítulo 1. Único\n\nUn párrafo que se va a borrar.\n');
+  await importar(page, [md], { donde: 'base' });
+  const antes = await page.evaluate(() => ({
+    ficha: !!(window.__cols.libros || {})['libro-efimero'],
+    partes: Object.keys(window.__cols['libros/libro-efimero/partes'] || {}).length,
+  }));
+  check(antes.ficha && antes.partes > 0, `el libro está en la base, con sus partes (${JSON.stringify(antes)})`);
+  await abrirBiblioteca(page);
+  await page.click('#bib-lista .bib-libro.abierto button:has-text("Borrar")');
+  check(
+    /sus anotaciones quedan en la base/.test(await page.textContent('#bib-lista .bib-libro.abierto .confirmar')),
+    'la confirmación dice que las anotaciones se quedan en la base'
+  );
+  await Promise.all([
+    page.waitForEvent('load', { timeout: 15000 }),
+    page.click('#bib-lista .bib-libro.abierto button:has-text("Sí, borrar")'),
+  ]);
+  await page.waitForSelector('article.seccion:not([hidden]) .bloque[data-pid]');
+  const despues = await page.evaluate(() => ({
+    ficha: !!(window.__cols.libros || {})['libro-efimero'],
+    partes: Object.keys(window.__cols['libros/libro-efimero/partes'] || {}).length,
+    sub: document.querySelector('#sub').textContent,
+  }));
+  check(
+    !despues.ficha && despues.partes === 0 && /Libro de ejemplo/.test(despues.sub),
+    `borrar el libro compartido abierto quita su ficha y sus partes y vuelve al de la página (${JSON.stringify(despues)})`
+  );
+  await ctx.close();
+});

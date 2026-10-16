@@ -29,6 +29,12 @@ lector-anotaciones construir ejemplo/fuentes --pdf ejemplo/salida/libro.pdf --sa
 npm run test:web             # npx playwright test: tests/web/*.spec.mjs en paralelo
 ```
 
+La cobertura se mide en las tres partes, como un detector de lo que ninguna prueba toca (no como un objetivo):
+`pytest --cov` (piso en `pyproject.toml`), `npm run cobertura:js` (el núcleo con `node --test`) y `npm run cobertura:web`
+(la página en el navegador: cada prueba recoge la cobertura V8 de sus páginas y `tests/web/herramientas/cobertura.mjs`
+la reparte por fragmento de `pagina/` y `nucleo/`, con las funciones que nunca se ejecutaron, en `cobertura/web.md`).
+Los pisos salen de una medición real; si una función nueva queda sin ejecutar, el informe lo dice.
+
 Son los mismos pasos que corre la integración continua. Las pruebas del navegador están en `tests/web/*.spec.mjs`
 (`@playwright/test`), con las ayudas comunes en `tests/web/ayudas.mjs`: cada prueba abre sus propios contextos y
 corren en paralelo. `check(cond, mensaje)` es una aserción blanda: si falla, la prueba termina en rojo con el mensaje

@@ -6,6 +6,8 @@
   "scripts": {
     "test:js": "node --test 'tests/js/**/*.test.js'",
     "test:web": "playwright test",
+    "cobertura:js": "node --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=65 --test-coverage-branches=83 --test-coverage-functions=85 'tests/js/**/*.test.js'",
+    "cobertura:web": "COBERTURA=1 playwright test && node tests/web/herramientas/cobertura.mjs --minimo 92",
     "formato": "prettier --check 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js' 'src/lector_anotaciones/web/tipos/*.d.ts'",
     "formatear": "prettier --write 'src/lector_anotaciones/web/nucleo/*.js' 'src/lector_anotaciones/web/pagina/*.js' 'tests/**/*.mjs' 'tests/js/*.js' 'src/lector_anotaciones/web/tipos/*.d.ts'",
     "estilos": "node tests/web/herramientas/comparar-estilos.mjs",
